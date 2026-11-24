@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="brand/tapas-logo-white.svg">
     <source media="(prefers-color-scheme: light)" srcset="brand/tapas-logo.svg">
-    <img src="brand/tapas-logo.svg" alt="Tapas" width="320">
+    <img src="brand/tapas-logo.svg" alt="Tapas" width="384">
   </picture>
 </p>
 
