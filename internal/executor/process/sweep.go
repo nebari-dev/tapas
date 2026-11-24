@@ -74,7 +74,7 @@ func reap(mark string) {
 		}
 		found := false
 		for _, p := range all {
-			// 0 and 1 are never a unit's, and Javo is not killed by itself.
+			// 0 and 1 are never a unit's, and Tapas is not killed by itself.
 			if !ours[p.pid] || p.pid <= 1 || p.pid == os.Getpid() {
 				continue
 			}
@@ -93,7 +93,7 @@ func (e *engine) forget(wd, unit string) {
 	_ = e.root.Remove(path.Join(wd, "pids", unit))
 }
 
-// sweep kills the processes an earlier Javo recorded and did not stop,
+// sweep kills the processes an earlier Tapas recorded and did not stop,
 // and what carries their marks. A record whose pid now belongs to another
 // process (its start time differs) is dropped and that pid is not
 // signalled.

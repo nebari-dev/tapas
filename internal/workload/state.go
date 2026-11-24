@@ -1,4 +1,4 @@
-// Package workload describes what Javo runs (an app, a job's run) and what
+// Package workload describes what Tapas runs (an app, a job's run) and what
 // was seen of it, in terms no one platform owns: the executors translate
 // to and from it.
 package workload

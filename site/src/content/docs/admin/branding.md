@@ -5,7 +5,7 @@ sidebar:
   order: 11.5
 ---
 
-An install can show its own name, logo, favicon and accent colour instead of Javo's. Everyone sees them, the sign-in page too. They are display only: Kubernetes objects, labels, cookies and environment variables keep the name `javo`.
+An install can show its own name, logo, favicon and accent colour instead of Tapas's. Everyone sees them, the sign-in page too. They are display only: Kubernetes objects, labels, cookies and environment variables keep the name `javo`.
 
 ```yaml
 branding:
@@ -29,4 +29,4 @@ Each image takes one of:
 
 `svg` and `base64` images go into the ConfigMap `javo-branding`; the gateway serves them at `/branding/logo-light`, `/branding/logo-dark` and `/branding/favicon`. Each file may be at most 256 KiB, and its type is told by its bytes: the gateway does not start with a file that is not one of those images. An SVG is served with a Content-Security-Policy that stops it from running script or loading anything.
 
-The logo is drawn 30 pixels high at the top left of the sidebar and on the sign-in page, next to the name. Without `dark`, the light logo shows in both themes. Leave a value empty to keep Javo's own. The UI reads the branding from `GET /api/branding`, which needs no sign-in.
+The logo is drawn 30 pixels high at the top left of the sidebar and on the sign-in page, next to the name. Without `dark`, the light logo shows in both themes. Leave a value empty to keep Tapas's own. The UI reads the branding from `GET /api/branding`, which needs no sign-in.

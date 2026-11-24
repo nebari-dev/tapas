@@ -6,7 +6,7 @@ import { agentTemplate, allReady, me, stepsAt, templates, ws } from '../../test/
 
 afterEach(() => vi.unstubAllGlobals())
 
-const HELP = 'Gives the app JAVO_URL and JAVO_TOKEN so it can call the Javo API as you.'
+const HELP = 'Gives the app JAVO_URL and JAVO_TOKEN so it can call the Tapas API as you.'
 const ACTS = 'This app can call the API as you. Anyone you share it with can make it act as you.'
 
 describe('New app API access', () => {

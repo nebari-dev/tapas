@@ -173,7 +173,7 @@ func TestAPlanForAHostNamesNoContainerPathAndNoOpenAddress(t *testing.T) {
 					t.Errorf("port = %d, want the executor's, %d", s.Port, hostPort)
 				}
 				if s.User.UID != testHost.UID || s.User.GID != testHost.GID || len(s.User.Groups) != 0 {
-					t.Errorf("user = %+v, want Javo's own uid and gid", s.User)
+					t.Errorf("user = %+v, want Tapas's own uid and gid", s.User)
 				}
 				folders := map[string]string{}
 				for _, v := range s.Volumes {

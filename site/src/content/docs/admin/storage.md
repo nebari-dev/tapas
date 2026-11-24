@@ -1,11 +1,11 @@
 ---
 title: Storage
-description: Home folders, group folders and scratch space, how Javo picks storage, and moving homes between storage modes.
+description: Home folders, group folders and scratch space, how Tapas picks storage, and moving homes between storage modes.
 sidebar:
   order: 6
 ---
 
-Javo looks at the storage the cluster offers and picks how to store home folders. Run `javo storage report` to see what it found and what is in use:
+Tapas looks at the storage the cluster offers and picks how to store home folders. Run `javo storage report` to see what it found and what is in use:
 
 ```sh
 kubectl -n javo-system exec deploy/javo -- /javo storage report
@@ -26,10 +26,10 @@ config:
 ```
 
 - **auto** picks **shared** only for a StorageClass known or checked to offer shared (ReadWriteMany) file storage with POSIX ownership; otherwise **perUser**.
-- `storageClassName` names the class for homes; by default Javo chooses from what the cluster offers.
+- `storageClassName` names the class for homes; by default Tapas chooses from what the cluster offers.
 - To grow one person's home: `javo storage home-size alice 20Gi` (the claim grows where the storage allows it).
 
-Javo cannot detect everything about a StorageClass. State facts it cannot see with `classOverrides`:
+Tapas cannot detect everything about a StorageClass. State facts it cannot see with `classOverrides`:
 
 ```yaml
 config:
@@ -64,7 +64,7 @@ kubectl -n javo-system exec deploy/javo -- /javo storage migrate schedule --at 2
 kubectl -n javo-system exec deploy/javo -- /javo storage migrate status
 ```
 
-People see a banner from the moment it is scheduled. At that time their apps stop, each home is copied to the new storage, checked, and only then switched. The old claim is kept for `config.storage.migration.keepOldFor` (7 days). `javo storage migrate retry` tries again for homes whose copy failed. The copy runs as `javo storage copy` in the Javo image itself, as the home's owner; it keeps links, hard links, modes, groups and times, then compares both copies file by file.
+People see a banner from the moment it is scheduled. At that time their apps stop, each home is copied to the new storage, checked, and only then switched. The old claim is kept for `config.storage.migration.keepOldFor` (7 days). `javo storage migrate retry` tries again for homes whose copy failed. The copy runs as `javo storage copy` in the Tapas image itself, as the home's owner; it keeps links, hard links, modes, groups and times, then compares both copies file by file.
 
 ## Group folders
 

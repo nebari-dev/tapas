@@ -107,7 +107,7 @@ func TestAProcessHostLetsAppsWithNoLoginStart(t *testing.T) {
 	}
 }
 
-// Running apps as processes isolates nothing, so Javo does not start as
+// Running apps as processes isolates nothing, so Tapas does not start as
 // root, beyond loopback, or for more than one person.
 func TestAProcessHostRefusesWhatItCannotKeepSafe(t *testing.T) {
 	t.Run("root", func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestAProcessHostRefusesWhatItCannotKeepSafe(t *testing.T) {
 
 // With the coding agents' lock on (workloads.landlock), a machine that
 // runs apps as processes must be able to lock them in: Landlock is
-// Linux's, so on a Mac Javo does not start rather than run the agents with
+// Linux's, so on a Mac Tapas does not start rather than run the agents with
 // every file of the person's in reach; on Linux it starts once the
 // javo-sandbox of the platform's files has locked a command in.
 func TestAProcessHostRefusesTheAgentLockItCannotApply(t *testing.T) {
@@ -188,7 +188,7 @@ func TestAProcessHostRefusesTheAgentLockItCannotApply(t *testing.T) {
 	})
 }
 
-// The folders Javo keeps homes, state and keys in must be its user's
+// The folders Tapas keeps homes, state and keys in must be its user's
 // alone: one that others can open is refused, not repaired.
 func TestAHostRefusesFoldersOpenToOthers(t *testing.T) {
 	for name, pick := range map[string]func(config.Platform) string{
@@ -228,7 +228,7 @@ type fakeDocker struct {
 	hostname string
 }
 
-// inside makes Javo take itself to run on a machine called name, until
+// inside makes Tapas take itself to run on a machine called name, until
 // the test ends.
 func inside(t *testing.T, name string) {
 	t.Helper()
@@ -279,9 +279,9 @@ func dockerConfig(t *testing.T, socket string) config.Platform {
 	}
 }
 
-// Javo does not start on a Docker daemon it cannot run apps safely on:
+// Tapas does not start on a Docker daemon it cannot run apps safely on:
 // one that does not answer or is too old, one without the runtime the
-// admin asked for, or one that does not have Javo's own container.
+// admin asked for, or one that does not have Tapas's own container.
 func TestADockerHostRefusesADaemonItCannotUse(t *testing.T) {
 	good := fakeDocker{api: "1.53", runtimes: map[string]any{"runc": nil}, gateway: "javo", hostname: "javo-1"}
 	inside(t, "javo-1")
@@ -303,15 +303,15 @@ func TestADockerHostRefusesADaemonItCannotUse(t *testing.T) {
 		gone.gateway = ""
 		wantRefused(t, dockerConfig(t, gone.socket(t)), hostInputs(t), `gateway container "javo"`)
 	})
-	t.Run("a Javo outside its gateway container", func(t *testing.T) {
+	t.Run("a Tapas outside its gateway container", func(t *testing.T) {
 		// Its readiness checks, the file helpers and the proxy all need
-		// Javo on the workloads' networks, where only that container is.
+		// Tapas on the workloads' networks, where only that container is.
 		inside(t, "a-laptop")
 		wantRefused(t, dockerConfig(t, good.socket(t)), hostInputs(t), `docker.gateway "javo"`, "a-laptop", "inside the container")
 	})
 	t.Run("a daemon it can use", func(t *testing.T) {
 		in := hostInputs(t)
-		// What a Javo on a cluster, or on another daemon, measured there.
+		// What a Tapas on a cluster, or on another daemon, measured there.
 		stale := &netprobe.Store{Facts: in.DB.Facts()}
 		if err := stale.Put(context.Background(), netprobe.Result{State: netprobe.Enforced}); err != nil {
 			t.Fatal(err)
@@ -324,7 +324,7 @@ func TestADockerHostRefusesADaemonItCannotUse(t *testing.T) {
 		if h.Runs == nil || h.Files == nil || h.Setup == nil || h.PlanFor != nil {
 			t.Fatalf("a docker host: %+v", h)
 		}
-		// Until this Javo's own probe has measured it, an app with no
+		// Until this Tapas's own probe has measured it, an app with no
 		// login of its own does not start.
 		res, err := h.NetworkPolicy().Get(context.Background())
 		if err != nil || !status.LoginlessBlocked("Disabled", res.State) {
@@ -333,9 +333,9 @@ func TestADockerHostRefusesADaemonItCannotUse(t *testing.T) {
 	})
 }
 
-// What one Javo makes on a daemon in one scope is never found in
+// What one Tapas makes on a daemon in one scope is never found in
 // another: the labels a scope's client puts on a thing do not match the
-// filter of any other scope's client, nor that of another Javo's.
+// filter of any other scope's client, nor that of another Tapas's.
 func TestTheScopesOfADockerHostAreApart(t *testing.T) {
 	scopes := []string{scopeWorkloads, scopeFiles, scopeHomes, scopeProbe}
 	type client struct{ scope, gateway string }

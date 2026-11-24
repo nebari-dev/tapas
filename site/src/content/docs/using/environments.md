@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-Javo does not build an image per framework. Apps and jobs run **upstream images, unmodified**: most templates run the [pixi](https://pixi.sh) image, and install a **pixi environment** into your home folder that holds Python, R or Julia and the template's packages. RStudio runs the Rocker project's image and static sites run nginx, both as published.
+Tapas does not build an image per framework. Apps and jobs run **upstream images, unmodified**: most templates run the [pixi](https://pixi.sh) image, and install a **pixi environment** into your home folder that holds Python, R or Julia and the template's packages. RStudio runs the Rocker project's image and static sites run nginx, both as published.
 
 ## Where an environment comes from
 
@@ -13,7 +13,7 @@ The first match wins:
 
 1. **A Nebi environment** picked on New app or New job, when your admin has [set up Nebi](/admin/nebi/).
 2. **Your repository's lockfile**: for an app that runs from Git, a `pixi.toml` and a `pixi.lock` at the root of the repository, when both are there.
-3. **The template's own environment**: conda-forge packages pinned by a committed `pixi.lock`, shipped with Javo.
+3. **The template's own environment**: conda-forge packages pinned by a committed `pixi.lock`, shipped with Tapas.
 
 Templates that run an image you name (Container image) have no environment.
 
@@ -55,7 +55,7 @@ Then run `pixi lock` and commit `pixi.lock` too. Things to know:
 
 ## Nebi environments
 
-With Nebi set up, New app and New job show an **Environment** card that lists your Nebi workspaces. Picking one copies its newest `pixi.toml` and `pixi.lock` into Javo with the app or job. To move to a newer version, create the app or job again. See [Nebi](/admin/nebi/) for the limits.
+With Nebi set up, New app and New job show an **Environment** card that lists your Nebi workspaces. Picking one copies its newest `pixi.toml` and `pixi.lock` into Tapas with the app or job. To move to a newer version, create the app or job again. See [Nebi](/admin/nebi/) for the limits.
 
 For every template except JupyterLab, the picked environment replaces the template's, so it must have the program the template starts (`streamlit`, `panel`, `python` for a custom command, and so on). If it does not, the app does not start and its page says, for example: `The environment smoke-pushed has no streamlit. Add streamlit to it in Nebi, or pick another environment.`
 

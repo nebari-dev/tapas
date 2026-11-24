@@ -21,7 +21,7 @@ const (
 const DefaultDockerSocket = "/var/run/docker.sock"
 
 // DefaultProxyPort is where the forward proxy of a Docker install listens
-// in the container Javo runs in, unless told otherwise.
+// in the container Tapas runs in, unless told otherwise.
 const DefaultProxyPort = 3128
 
 // DockerCfg is the Docker daemon apps run on as containers (executor:
@@ -29,8 +29,8 @@ const DefaultProxyPort = 3128
 type DockerCfg struct {
 	// Socket is the daemon's unix socket; default /var/run/docker.sock.
 	Socket string `json:"socket,omitempty"`
-	// Gateway is the name of the container Javo itself runs in: the only
-	// thing an app reaches, and what tells this Javo's apps from those of
+	// Gateway is the name of the container Tapas itself runs in: the only
+	// thing an app reaches, and what tells this Tapas's apps from those of
 	// another one on the same daemon. Required.
 	Gateway string `json:"gateway,omitempty"`
 	// Pool is the private address range the apps' networks are cut from,
@@ -38,10 +38,10 @@ type DockerCfg struct {
 	// when the host's own network lies in it.
 	Pool string `json:"pool,omitempty"`
 	// Runtime is the container runtime every app runs in, such as runsc
-	// (gVisor); empty is the daemon's own. Javo does not start when the
+	// (gVisor); empty is the daemon's own. Tapas does not start when the
 	// daemon lacks it.
 	Runtime string `json:"runtime,omitempty"`
-	// ProxyPort is the port of the container Javo runs in where apps find
+	// ProxyPort is the port of the container Tapas runs in where apps find
 	// the forward proxy that is their only way to the internet, HTTP and
 	// HTTPS (default 3128). It is one more port apps reach besides
 	// --listen, and must not be published to the host.
@@ -55,13 +55,13 @@ func (c DockerCfg) AddressPool() netip.Prefix {
 }
 
 // ProcessCfg is the machine apps run on as plain processes of the user
-// Javo runs as (executor: process): one person, their own machine, and
+// Tapas runs as (executor: process): one person, their own machine, and
 // nothing isolated from that account.
 type ProcessCfg struct {
-	// StateDir is where Javo keeps what the apps run with (their logs,
+	// StateDir is where Tapas keeps what the apps run with (their logs,
 	// ports and secret files) and HomesDir the folder each person's home
 	// is a folder of. Both are absolute paths of folders only the user
-	// Javo runs as can open (mode 0700); they are made when missing.
+	// Tapas runs as can open (mode 0700); they are made when missing.
 	// Required.
 	StateDir string `json:"stateDir,omitempty"`
 	HomesDir string `json:"homesDir,omitempty"`
@@ -124,7 +124,7 @@ func (p Platform) validateExecutor(bad func(key, format string, a ...any)) {
 		d := p.Docker
 		folder("docker.socket", d.Socket)
 		if d.Gateway == "" {
-			bad("docker.gateway", "required with executor docker: the name of the container Javo runs in")
+			bad("docker.gateway", "required with executor docker: the name of the container Tapas runs in")
 		}
 		if pool, err := netip.ParsePrefix(d.Pool); d.Pool != "" && (err != nil || !pool.Addr().Is4() || !pool.Addr().IsPrivate() || pool.Bits() > 28) {
 			bad("docker.pool", "%q is not a private IPv4 range of at least 16 addresses such as 10.213.0.0/16", d.Pool)

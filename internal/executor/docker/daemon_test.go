@@ -99,7 +99,7 @@ func logs(t *testing.T, c *Client, id string, o LogOptions) string {
 	return string(raw)
 }
 
-// gateway starts a container that stands in for Javo's gateway: on the
+// gateway starts a container that stands in for Tapas's gateway: on the
 // daemon's default network, so it reaches the internet, serving "gateway"
 // on port 9090 and running script beside that.
 func gateway(t *testing.T, c *Client, name, script string) string {

@@ -52,7 +52,7 @@ export interface Agent {
   where: string
 }
 
-// Agents whose names and logos Javo knows, by template kind and by the name
+// Agents whose names and logos Tapas knows, by template kind and by the name
 // they give themselves over MCP.
 const AGENTS: Record<string, string> = { pi: 'Pi', 'claude-code': 'Claude Code' }
 

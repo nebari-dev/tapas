@@ -102,11 +102,11 @@ type dockerFile struct {
 	} `json:"configs"`
 }
 
-// docker.yaml is one service, Javo with the Docker executor: it holds the
+// docker.yaml is one service, Tapas with the Docker executor: it holds the
 // Docker socket and nothing else of the host's but the chart's template
 // files, is not privileged, shares none of the host's namespaces,
 // publishes the gateway's port only, and its container has the name its
-// config gives docker.gateway, without which Javo does not start.
+// config gives docker.gateway, without which Tapas does not start.
 func TestDockerComposeFileRunsOneUnprivilegedJavo(t *testing.T) {
 	b, err := os.ReadFile("docker.yaml")
 	if err != nil {

@@ -100,7 +100,7 @@ HOME = Template("""<!doctype html>
        the logo is from the MIT-licensed FastAPI repository (docs/en/docs/img/icon-white.svg). -->
   <div class="logo"><svg viewBox="0 0 24 24" role="img" aria-label="FastAPI"><path d="M12 .0387C5.3729.0384.0003 5.3931 0 11.9988c-.001 6.6066 5.372 11.9628 12 11.9625 6.628.0003 12.001-5.3559 12-11.9625-.0003-6.6057-5.3729-11.9604-12-11.96m-.829 5.4153h7.55l-7.5805 5.3284h5.1828L5.279 18.5436q2.9466-6.5444 5.892-13.0896"/></svg></div>
   <h1>Your FastAPI app is running</h1>
-  <p>This is a sample app deployed with Javo. Edit <code>samples/fastapi/sample.py</code> in your home folder and restart the app to change it.</p>
+  <p>This is a sample app deployed with Tapas. Edit <code>samples/fastapi/sample.py</code> in your home folder and restart the app to change it.</p>
   <nav>
     <a href="docs">Interactive docs</a>
     <a href="openapi.json">OpenAPI schema</a>
@@ -112,7 +112,7 @@ HOME = Template("""<!doctype html>
   </dl>
   <footer>
     <svg viewBox="0 0 100 100" aria-hidden="true"><path fill-rule="evenodd" d="M22 0H78A22 22 0 0 1 100 22V78A22 22 0 0 1 78 100H22A22 22 0 0 1 0 78V22A22 22 0 0 1 22 0ZM28.8 80L49.2 20H63.2L42.8 80ZM54.8 80L68.4 40H82.4L68.8 80Z"/></svg>
-    <span>Deployed with Javo. <a href="https://javo.nebari.dev">Read the docs</a></span>
+    <span>Deployed with Tapas. <a href="https://javo.nebari.dev">Read the docs</a></span>
   </footer>
 </main>
 </body>

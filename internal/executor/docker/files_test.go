@@ -24,7 +24,7 @@ type host struct {
 	unpacked []string
 	// exists are the paths a container is said to hold; sandboxRuns is
 	// whether the workload's sandbox runs; foreign names things that do
-	// not carry Javo's label.
+	// not carry Tapas's label.
 	exists      map[string]bool
 	sandboxRuns bool
 	foreign     map[string]bool
@@ -243,7 +243,7 @@ func TestTeardownRemovesUnitsThenTheSandboxThenItsVolumes(t *testing.T) {
 	}
 }
 
-// Whatever a list returns, a thing without Javo's label stays.
+// Whatever a list returns, a thing without Tapas's label stays.
 func TestTeardownLeavesWhatIsNotJavos(t *testing.T) {
 	h := &host{foreign: map[string]bool{"app-id": true, "javo-javo-alice.notebook.scratch": true}}
 	c := fake(t, h.ServeHTTP)

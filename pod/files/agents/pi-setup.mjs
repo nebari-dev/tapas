@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pi-setup sets up the pi coding agent of a Javo coding-agent app (the pi
+// pi-setup sets up the pi coding agent of a Tapas coding-agent app (the pi
 // template's start script, pi-start.sh, runs it):
 //
 //   pi-setup.mjs              point pi at the app's model (JAVO_AGENT_MODE,
@@ -43,7 +43,7 @@ function wanted(env) {
   const mode = env.JAVO_AGENT_MODE
   if ((mode !== 'platform' && mode !== 'own') || !env.JAVO_AGENT_MODEL || !env.JAVO_AGENT_BASE_URL) return null
   const provider = {
-    name: 'Javo',
+    name: 'Tapas',
     baseUrl: env.JAVO_AGENT_BASE_URL,
     api: 'openai-completions',
     apiKey: HELPER_KEY,

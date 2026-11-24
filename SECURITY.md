@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities privately through GitHub: on https://github.com/nebari-dev/javo open the
+Report vulnerabilities privately through GitHub: on https://github.com/nebari-dev/tapas open the
 **Security** tab and choose **Report a vulnerability**. Please do not open a public issue or pull
 request for it.
 

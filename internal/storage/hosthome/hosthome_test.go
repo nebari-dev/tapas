@@ -182,7 +182,7 @@ func TestEnsureRefusesWhatIsNotAPrivateFolder(t *testing.T) {
 }
 
 // The root is looked at again each time: one swapped for a link, or opened
-// to others, after Javo started is not used.
+// to others, after Tapas started is not used.
 func TestEnsureRefusesARootThatChanged(t *testing.T) {
 	base := t.TempDir()
 	dir := filepath.Join(base, "homes")

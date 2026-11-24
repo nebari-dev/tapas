@@ -94,7 +94,7 @@ test('a planted javo provider cannot send the key elsewhere: it is rewritten, ot
     configure(platform(h))
     const m = read(h, 'models.json')
     assert.deepEqual(m.providers.javo, {
-      name: 'Javo',
+      name: 'Tapas',
       baseUrl: HELPER,
       api: 'openai-completions',
       apiKey: 'javo-agent-helper',

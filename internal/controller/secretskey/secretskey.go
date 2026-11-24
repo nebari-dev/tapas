@@ -9,7 +9,7 @@
 // release, and never changes or deletes it afterwards: a new key would leave
 // every stored secret unreadable.
 //
-// A Javo that runs without Kubernetes keeps the same keys as files
+// A Tapas that runs without Kubernetes keeps the same keys as files
 // (secrets/keyfile), made and kept the same way.
 package secretskey
 

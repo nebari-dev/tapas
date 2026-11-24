@@ -68,7 +68,7 @@ func TestReleaseNamespaceAdmitsTheGatewayAndHealthPortsOnly(t *testing.T) {
 			}
 			pod := deploymentOf(t, out, engine, "controller").Spec.Template.Labels
 			if !sel.Matches(labels.Set(pod)) || sel.Matches(labels.Set{"app": "postgres"}) {
-				t.Errorf("%s: selector %v must select Javo's pods only, not others in the namespace", engine, pol.Spec.PodSelector)
+				t.Errorf("%s: selector %v must select Tapas's pods only, not others in the namespace", engine, pol.Spec.PodSelector)
 			}
 			want := map[string][]string{"*": {"8080", "8082"}}
 			if c.namespace != "" {

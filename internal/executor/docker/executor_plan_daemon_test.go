@@ -17,7 +17,7 @@ import (
 )
 
 // ownedHome makes the Docker volume that is the home s mounts, owned by
-// s's user: on Docker, a home is a volume of Javo's.
+// s's user: on Docker, a home is a volume of Tapas's.
 func ownedHome(t *testing.T, c *Client, s workload.Spec) string {
 	t.Helper()
 	ctx := testContext(t)

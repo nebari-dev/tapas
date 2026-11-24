@@ -60,7 +60,7 @@ func (o *gatewayOptions) sessionsKeyOf(ctx context.Context, c client.Client, nam
 }
 
 // clusterParts is what the gateway takes from the cluster the kubeconfig
-// names: a client, its nodes, the file picker pods and Javo's keys, which
+// names: a client, its nodes, the file picker pods and Tapas's keys, which
 // are Secrets of the release namespace.
 func (o *gatewayOptions) clusterParts(ctx context.Context, common *commonFlags, platform config.Platform, db *store.Store, pl placement.Placement) (gatewayParts, error) {
 	var none gatewayParts

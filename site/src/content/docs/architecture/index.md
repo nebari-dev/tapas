@@ -1,13 +1,13 @@
 ---
 title: Architecture
-description: Every piece of Javo as it runs on Kubernetes, how an app is created step by step, where data lives, and how requests, jobs, sign-in, storage and backups fit together.
+description: Every piece of Tapas as it runs on Kubernetes, how an app is created step by step, where data lives, and how requests, jobs, sign-in, storage and backups fit together.
 sidebar:
   order: 0
 ---
 
-Javo is one Go program, `javo`, shipped in one image. It runs as two parts, the **gateway** and the **controller**, which never call each other: they share a **database**, and the database is the source of truth. The gateway writes what people ask for; the controller reads it and makes Kubernetes run it.
+Tapas is one Go program, `javo`, shipped in one image. It runs as two parts, the **gateway** and the **controller**, which never call each other: they share a **database**, and the database is the source of truth. The gateway writes what people ask for; the controller reads it and makes Kubernetes run it.
 
-![Javo on Kubernetes: the browser reaches the gateway through an Ingress or Envoy Gateway; the gateway and the controller share the database; the controller creates app pods, job runs and helper Jobs in javo-apps through the Kubernetes API; backups go to an S3 bucket](../../../../diagrams/architecture.png)
+![Tapas on Kubernetes: the browser reaches the gateway through an Ingress or Envoy Gateway; the gateway and the controller share the database; the controller creates app pods, job runs and helper Jobs in javo-apps through the Kubernetes API; backups go to an S3 bucket](../../../../diagrams/architecture.png)
 
 Solid arrows are always there; dotted ones only when that feature is on.
 
@@ -17,12 +17,12 @@ Solid arrows are always there; dotted ones only when that feature is on.
 |---|---|---|
 | **Gateway** | namespace `javo-system` | Serves the web UI, the REST API under `/api/`, the MCP endpoint at `/mcp`, sign-in and the app proxy. Checks every request and writes rows to the database. |
 | **Controller** | namespace `javo-system` | Turns rows into Kubernetes objects: app pods and Services, a Job per run of a job, which it starts by hand or when the job's schedule comes due, home volumes, group folders, preview apps, backups, idle stops, namespaces and their NetworkPolicies. |
-| **Database** | a file on the volume `javo-data` (SQLite), or your Postgres | Everything Javo knows: people, apps, templates, sharing, sessions, tokens, jobs, run history, audit log, and the status of each app. |
+| **Database** | a file on the volume `javo-data` (SQLite), or your Postgres | Everything Tapas knows: people, apps, templates, sharing, sessions, tokens, jobs, run history, audit log, and the status of each app. |
 | **App pods** | namespace `javo-apps` | One bare Pod and one Service per running app, in an upstream image (most templates use the pixi image). |
 | **Home volumes** | namespace `javo-apps` | One claim per person, mounted at `/home/user` in their apps and jobs. Their pixi environments live in it too. |
 | **Job runs** | namespace `javo-apps` | A Job per run, running `javo runner` in the job's image. |
 | **Files pods** | namespace `javo-apps` | A small rclone pod per person, running as them, that mounts their home (writable) and group folders (read-only) so the gateway can list folders for the file picker, serve files and save files edited in the UI. rclone asks for a random password made for each pod, which only the gateway uses, so the home stays closed even where the network plugin does not enforce NetworkPolicy. Removed after 10 idle minutes. |
-| **Helper Jobs** | namespace `javo-apps` | Short Jobs in Javo's own image: ready a new home once, move a home between storage modes, back up or restore a home with restic. |
+| **Helper Jobs** | namespace `javo-apps` | Short Jobs in Tapas's own image: ready a new home once, move a home between storage modes, back up or restore a home with restic. |
 
 **One pod or two Deployments.** With SQLite (the default) the gateway and the controller run in one process (`javo server`) in one pod, Deployment `javo`, one replica. With Postgres they are two Deployments, `javo-gateway` and `javo-controller`, each with as many replicas as you set. Either way the Service `javo-gateway` points at the gateway.
 
@@ -39,7 +39,7 @@ Solid arrows are always there; dotted ones only when that feature is on.
 1. The browser goes to the UI host or the apps host. An Ingress (from the chart) or an HTTPRoute on Envoy Gateway (from the Nebari pack) sends both to the Service `javo-gateway`.
 2. The gateway's app proxy finds the app from the address: `/u/<owner>/<app>/` on the apps host, or `<app>.<apps domain>` with subdomains.
 3. It checks the visitor's session against the app's sharing on every request, and again every 30 seconds for an open websocket, which it closes once the answer is no. On a separate apps host a signed-in person first passes through a one-use ticket from the UI host, which sets a cookie for that app only. Public apps need no sign-in.
-4. It strips Javo's own cookies and tokens, then forwards to the app's Service, `<app>.<namespace>.svc`, on the app's port.
+4. It strips Tapas's own cookies and tokens, then forwards to the app's Service, `<app>.<namespace>.svc`, on the app's port.
 
 Apps have no login of their own. The NetworkPolicy the controller keeps in every apps namespace lets in only the gateway's pods, so the proxy is the only way in. Every 6 hours (and at start) the controller starts two small probe pods to check that the cluster really enforces it.
 
@@ -74,7 +74,7 @@ A job is a row like an app. The controller fires schedules itself: when a job's 
 
 | Data | Where |
 |---|---|
-| Everything Javo knows | the database (SQLite file on `javo-data`, or Postgres) |
+| Everything Tapas knows | the database (SQLite file on `javo-data`, or Postgres) |
 | People's files and their pixi environments | their home volume in `javo-apps` (or their own namespace) |
 | Group folders | one claim per folder |
 | What is running | Kubernetes only; the controller can rebuild every pod and Service from the database, and fires job schedules from it |
@@ -86,7 +86,7 @@ Namespaces: by default every app runs in `javo-apps`. `config.namespaces.mode` c
 
 The gateway signs people in itself: local accounts, or OpenID Connect with the authorization code flow and PKCE at `/auth/oidc/callback`. Groups come from the ID token and map to roles. Sessions live in the database and are rechecked against the provider. Coding agents and scripts use personal API tokens, on the API and on `/mcp`.
 
-**With the Nebari pack**, the pack adds two `NebariApp` objects, one for the UI host and one for the apps host. The nebari-operator turns them into HTTPRoutes on the shared Envoy Gateway with TLS, and provisions Javo's Keycloak client and the Secret holding it. Envoy does not log anyone in; Javo still does that itself, so anonymous visitors can still reach public apps.
+**With the Nebari pack**, the pack adds two `NebariApp` objects, one for the UI host and one for the apps host. The nebari-operator turns them into HTTPRoutes on the shared Envoy Gateway with TLS, and provisions Tapas's Keycloak client and the Secret holding it. Envoy does not log anyone in; Tapas still does that itself, so anonymous visitors can still reach public apps.
 
 ## Nebi
 

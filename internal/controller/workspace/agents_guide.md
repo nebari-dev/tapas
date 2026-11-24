@@ -1,10 +1,10 @@
-# Using the Javo API from this app
+# Using the Tapas API from this app
 
-Javo runs apps (web apps, notebooks, any published container image) and jobs
+Tapas runs apps (web apps, notebooks, any published container image) and jobs
 (one-off or scheduled) for the person who owns this app. You act as that
-person through the Javo API.
+person through the Tapas API.
 
-- `$JAVO_URL` is the Javo web address, for example https://javo.example.com.
+- `$JAVO_URL` is the Tapas web address, for example https://javo.example.com.
 - `$JAVO_TOKEN` is the token. Never print it, write it to a file or commit it.
   A coding-agent app has no `$JAVO_TOKEN`: its token stays in a helper beside
   the app (`$JAVO_API_SOCKET`), which adds it to each call `javo-api` makes.
@@ -198,7 +198,7 @@ with `{"env":[...]}` (the list replaces the one before), and
 ```sh
 javo-api /api/workspaces/NAME                  # .phase: Pending, Starting, Running, Stopped, Failed; .url; .steps[]
 javo-api "/api/workspaces/NAME/logs?tail=200"  # .lines[]; add &previous=true after a crash
-javo-api /api/workspaces/NAME/diagnosis        # the cause Javo found and what may fix it
+javo-api /api/workspaces/NAME/diagnosis        # the cause Tapas found and what may fix it
 javo-api /api/workspaces/NAME/events           # Kubernetes events (image pulls, scheduling)
 javo-api POST /api/workspaces/NAME/restart
 javo-api DELETE /api/workspaces/NAME           # the home folder is kept
@@ -246,7 +246,7 @@ Leave `schedule` out for a job that only runs on demand. A command job runs
 in the home folder without a shell; a notebook job names its `source` (a path
 in the home) with an engine such as `papermill`. Change a job with
 `PUT /api/jobs/NAME` (the whole job), its size with `PUT /api/jobs/NAME/size`
-and its plain environment with `PUT /api/jobs/NAME/env`. Javo can notify
+and its plain environment with `PUT /api/jobs/NAME/env`. Tapas can notify
 about failed runs where the admin set that up; it does not send email.
 
 ## Secrets an app needs
@@ -272,6 +272,6 @@ propose plans for that too. A secret cannot be asked for for this app itself.
 
 ## MCP
 
-Agents outside Javo reach the same API at `$JAVO_URL/mcp` with a personal
+Agents outside Tapas reach the same API at `$JAVO_URL/mcp` with a personal
 token: reads, and changes only as plans the person approves. Inside this app,
 use `javo-api`.

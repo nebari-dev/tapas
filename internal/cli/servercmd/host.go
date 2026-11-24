@@ -64,7 +64,7 @@ var listenerFlags = []string{"metrics-bind-address", "health-probe-bind-address"
 // refuseClusterFlags is an error for each flag given that the executor
 // (one that is not Kubernetes) has no use for. A second listener is
 // refused whatever its address: on Docker, apps reach every port of the
-// container Javo runs in.
+// container Tapas runs in.
 func refuseClusterFlags(f *pflag.FlagSet, executor string) error {
 	var errs []error
 	for _, name := range clusterFlags {
@@ -79,7 +79,7 @@ func refuseClusterFlags(f *pflag.FlagSet, executor string) error {
 	}
 	for _, name := range listenerFlags {
 		if fl := f.Lookup(name); fl != nil && fl.Changed && fl.Value.String() != "0" {
-			errs = append(errs, fmt.Errorf("--%s %s: with executor %s Javo listens on --listen only, which answers /healthz and /readyz; another listener is one more port its apps could reach", name, fl.Value, executor))
+			errs = append(errs, fmt.Errorf("--%s %s: with executor %s Tapas listens on --listen only, which answers /healthz and /readyz; another listener is one more port its apps could reach", name, fl.Value, executor))
 		}
 	}
 	return errors.Join(errs...)
@@ -138,7 +138,7 @@ type gatewayParts struct {
 	// homes and usage read people's files.
 	homes gwstorage.Homes
 	usage gwstorage.HomeUsages
-	// sessionsKey and fingerprinter are Javo's own keys.
+	// sessionsKey and fingerprinter are Tapas's own keys.
 	sessionsKey   tink.AEAD
 	fingerprinter *secrets.Fingerprinter
 	people        authn.People

@@ -11,7 +11,7 @@ import (
 )
 
 // llmsRoute is the guide a coding agent on a laptop follows to deploy a
-// folder to Javo, with only curl and tar.
+// folder to Tapas, with only curl and tar.
 const llmsRoute = "/llms.txt"
 
 //go:embed llms.txt.tmpl

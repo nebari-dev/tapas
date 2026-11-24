@@ -53,7 +53,7 @@ func TestDaemonAFreshVolumeIsRootsUntilOwned(t *testing.T) {
 
 // Prepare makes the workload's own volumes and the folders its mounts
 // name, so every unit can write what it mounts. A volume that is not
-// Javo's is never mounted.
+// Tapas's is never mounted.
 func TestDaemonPrepareMakesVolumesAndFolders(t *testing.T) {
 	c, _ := daemon(t)
 	ctx := testContext(t)
@@ -103,7 +103,7 @@ func TestDaemonPrepareMakesVolumesAndFolders(t *testing.T) {
 		t.Errorf("a subpath through a symlink: err = %v", err)
 	}
 
-	// A volume of someone else's: made here without Javo's label.
+	// A volume of someone else's: made here without Tapas's label.
 	if err := c.VolumeCreate(ctx, foreignVolume, nil); !errors.Is(err, ErrForeign) {
 		t.Fatalf("creating an unlabelled volume: %v", err)
 	}

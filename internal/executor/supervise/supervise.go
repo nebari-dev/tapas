@@ -7,7 +7,7 @@
 // something they cannot outlive (Grounded), it starts the workload over
 // when that ends.
 //
-// What it knows is kept in memory. An engine whose units outlive Javo
+// What it knows is kept in memory. An engine whose units outlive Tapas
 // (containers) says what still runs, and the next Supervisor adopts it
 // (Adopt) after the last one left (Leave).
 //
@@ -44,7 +44,7 @@ type Engine interface {
 	// Adopt finds the workloads an earlier Supervisor left running on the
 	// engine (Leave), for this one to keep. What it finds half started it
 	// ends, so that it is started again whole. An engine whose units end
-	// with Javo has none.
+	// with Tapas has none.
 	Adopt(ctx context.Context) ([]Found, error)
 	// Addr is the host:port that reaches the workload's port.
 	Addr(ctx context.Context, ref workload.Ref, port int32) (string, error)

@@ -36,7 +36,7 @@ describe('Letting a coding agent act without asking', () => {
 
     const dialog = screen.getByRole('alertdialog', { name: 'Let Pi act without asking?' })
     const text = dialog.textContent ?? ''
-    expect(text).toContain('It can do anything you can do in Javo')
+    expect(text).toContain('It can do anything you can do in Tapas')
     expect(text).toContain('start, stop and delete apps')
     expect(text).toContain('read and attach your secrets')
     expect(text).toContain('share apps')
@@ -54,7 +54,7 @@ describe('Letting a coding agent act without asking', () => {
 
     await waitFor(() => expect(api.calls.find((c) => c.method === 'PUT')?.body).toEqual({ trusted: true, hours: 8 }))
     const banner = await screen.findByRole('alert', { name: 'Pi acts without asking until 14:30' })
-    expect(banner.textContent).toContain('It can do anything you can do in Javo')
+    expect(banner.textContent).toContain('It can do anything you can do in Tapas')
     expect(screen.queryByRole('alertdialog')).toBeNull()
 
     await userEvent.click(within(banner).getByRole('button', { name: 'Turn off' }))

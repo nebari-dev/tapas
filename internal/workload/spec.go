@@ -234,7 +234,7 @@ type Host struct {
 	// InstallPath is the PATH of the step that installs an environment:
 	// the folder with pixi, sha256sum and flock, then the machine's own.
 	InstallPath string
-	// UID and GID are who everything on the machine runs as: Javo itself.
+	// UID and GID are who everything on the machine runs as: Tapas itself.
 	UID, GID int64
 	// Platform is what pixi calls the machine (osx-arm64, linux-64): an
 	// environment runs on it only when it is locked for that platform.

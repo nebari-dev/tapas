@@ -94,8 +94,8 @@ func TestRunsRefuseWhatAppsRefuse(t *testing.T) {
 	}
 }
 
-// A run that was going when Javo ended has lost that attempt: its
-// processes do not outlive Javo. The next Javo tries it again while it
+// A run that was going when Tapas ended has lost that attempt: its
+// processes do not outlive Tapas. The next Tapas tries it again while it
 // has retries left, in the same folder.
 func TestRunsARunGoingAtARestartIsTriedAgain(t *testing.T) {
 	dir, secrets := filepath.Join(t.TempDir(), "state"), &executortest.Secrets{}

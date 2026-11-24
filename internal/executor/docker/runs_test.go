@@ -183,8 +183,8 @@ func TestDaemonRunsRunConfinedAndApartFromApps(t *testing.T) {
 	}
 }
 
-// A run that is going when Javo restarts goes on: its containers outlive
-// Javo, and the next executor waits for the same attempt.
+// A run that is going when Tapas restarts goes on: its containers outlive
+// Tapas, and the next executor waits for the same attempt.
 func TestDaemonRunsARunGoingAtARestartGoesOn(t *testing.T) {
 	c, _ := daemon(t)
 	ctx := testContext(t)

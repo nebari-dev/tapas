@@ -1,12 +1,12 @@
 ---
-title: Use Javo
+title: Use Tapas
 description: Apps, jobs, sharing, environments, secrets, Ask AI and the API, from a person's point of view.
 sidebar:
   order: 0
   label: Overview
 ---
 
-Everything you do in Javo happens in the web UI, and everything the web UI does is also in the [API](/using/api/).
+Everything you do in Tapas happens in the web UI, and everything the web UI does is also in the [API](/using/api/).
 
 - [Apps](/using/apps/): notebooks, editors, dashboards and web services, from your home folder or a Git repository.
 - [Pull request previews](/using/previews/): one preview app per open pull request.

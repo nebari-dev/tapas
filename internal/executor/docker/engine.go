@@ -28,7 +28,7 @@ const labelSpec = "javo.spec"
 type engine struct {
 	c       *Client
 	secrets executor.Secrets
-	// gateway is the container Javo's gateway runs in.
+	// gateway is the container Tapas's gateway runs in.
 	gateway string
 	// pause is the program of a sandbox; its image is also what volumes
 	// are prepared through.
@@ -114,7 +114,7 @@ func (e *engine) Ground(ctx context.Context, s workload.Spec) (supervise.Unit, e
 }
 
 // removeContainers removes every container of the workload ref but the
-// one that holds a run's record. Each is checked for Javo's label before
+// one that holds a run's record. Each is checked for Tapas's label before
 // it goes (ContainerRemove).
 func (e *engine) removeContainers(ctx context.Context, ref workload.Ref) error {
 	all, err := e.c.ContainerList(ctx, Selector(ref)...)

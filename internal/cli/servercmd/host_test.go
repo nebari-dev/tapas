@@ -51,7 +51,7 @@ func refused(t *testing.T, cmd *cobra.Command, args ...string) string {
 	return err.Error()
 }
 
-// On Docker, apps reach every port of the container Javo runs in, and as
+// On Docker, apps reach every port of the container Tapas runs in, and as
 // processes they share its machine: the only listener is the gateway's
 // own, and a metrics or health listener asked for is refused at start
 // rather than opened or silently left out. So is every other flag that

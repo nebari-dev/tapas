@@ -412,7 +412,7 @@ describe('App status page', () => {
     // The launcher links to its source at the running release.
     await waitFor(() =>
       expect(within(card).getByRole('link', { name: '/opt/javo/pod-user.sh' }).getAttribute('href')).toBe(
-        'https://github.com/nebari-dev/javo/blob/v0.2.22/pod/files/pod-user.sh',
+        'https://github.com/nebari-dev/tapas/blob/v0.2.22/pod/files/pod-user.sh',
       ),
     )
   })

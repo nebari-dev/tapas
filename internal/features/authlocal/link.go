@@ -14,7 +14,7 @@ import (
 // LinkPath is where a sign-in link is opened.
 const LinkPath = "/signin"
 
-// Link signs one local account in without a password, for a Javo that
+// Link signs one local account in without a password, for a Tapas that
 // serves one person on their own machine (`javo local`): whoever opens
 // LinkPath with the token it holds gets a session of that account, as
 // the password form gives one. The pattern is Jupyter's, made stricter:
@@ -24,9 +24,9 @@ const LinkPath = "/signin"
 //   - it works once. Using it makes the next one, which is told to
 //     announce only when someone opens LinkPath without a token that
 //     works: so the person gets a new link by opening that page, and
-//     nobody can make Javo print more links than were used.
+//     nobody can make Tapas print more links than were used.
 //
-// The link is announced to the person who started Javo, in their
+// The link is announced to the person who started Tapas, in their
 // terminal, and nowhere else: not in a log line and not in a file.
 // Whoever can read that terminal is that person. A link that was opened
 // stays in the browser's history and is worth nothing there.
@@ -40,7 +40,7 @@ type Link struct {
 }
 
 // NewLink is a sign-in link for the account username. announce is told
-// each link once, as the path and query to open on this Javo's address.
+// each link once, as the path and query to open on this Tapas's address.
 func NewLink(username string, announce func(link string)) *Link {
 	return &Link{username: username, announce: announce, token: rand.Text()}
 }
@@ -76,7 +76,7 @@ func (p *Provider) signInByLink(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	if !p.link.spend(r.URL.Query().Get("token")) {
 		p.link.Announce()
-		http.Error(w, "This sign-in link does not work: each one works once. Look for a new one in the terminal Javo was started in.", http.StatusForbidden)
+		http.Error(w, "This sign-in link does not work: each one works once. Look for a new one in the terminal Tapas was started in.", http.StatusForbidden)
 		return
 	}
 	u, err := p.users.Lookup(r.Context(), p.link.username)

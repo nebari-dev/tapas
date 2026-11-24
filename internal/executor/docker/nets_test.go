@@ -27,7 +27,7 @@ func TestReadNetsMapsRangesToWorkloads(t *testing.T) {
 			{"Name": "compose_default", "IPAM": subnet("192.0.2.0/24")},
 			{"Name": "host"},
 			{"Name": "javo-alice.notebook", "IPAM": subnet("10.213.0.16/28"), "Labels": Labels(ref)},
-			// Another Javo's, and a network that only claims a name.
+			// Another Tapas's, and a network that only claims a name.
 			{"Name": "javo-bob.other", "IPAM": subnet("10.213.0.32/28"), "Labels": map[string]string{LabelManaged: "true", LabelNamespace: "bob", LabelName: "other", "javo.instance": "two"}},
 			{"Name": "javo-eve.fake", "IPAM": subnet("198.51.100.0/24"), "Labels": map[string]string{LabelNamespace: "eve", LabelName: "fake"}},
 		})

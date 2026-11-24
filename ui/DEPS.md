@@ -60,7 +60,7 @@ Notes
   Maintainers unchanged since epallerols began publishing 2.0.0 in 2025-07. About 680k weekly downloads; name matches the repo.
 - cronstrue 3.32.0 (added 2026-10-31, cron expression to words in the Jobs screens): 3.32.0 is the newest release at least 14 days old (3.33.0 to 3.38.0 were published 2026-10-19 to 2026-10-21 and skipped). OSV empty; MIT; no dependencies; no install scripts (installed with `--ignore-scripts`; lockfile has no `requiresBuild`); `pnpm audit --audit-level=low` clean; lockfile adds only this package. Registry history: v3.11 to v3.14 published by bradymholt, then a gap to 2026-06-18 when releases moved to GitHub Actions trusted publishing (provenance attached), then a run of releases in Oct 2026 each with a GitHub release; a single-maintainer project, so noted. Name matches the repo's package.json (cRonstrue, 1.6k stars, owner bradymholt).
 - Log syntax highlighting (added 2026-10-31): Shiki 4.5.0 (`@shikijs/core`, `@shikijs/engine-javascript`, and only the `log`
-  grammar from `@shikijs/langs`) tokenizes log lines with VS Code's log grammar plus a small Javo grammar; anser 2.3.5 turns
+  grammar from `@shikijs/langs`) tokenizes log lines with VS Code's log grammar plus a small Tapas grammar; anser 2.3.5 turns
   ANSI colour codes into runs. 4.5.0 is the newest Shiki release, 30 days old, with a GitHub release and npm provenance; releases
   since 4.2.0 (2026-06-03) come roughly monthly with matching GitHub releases. anser 2.3.5 is the newest
   release, 10 months old, no dependencies, about 22M weekly downloads; 2.3.4 and 2.3.5 share gitHead d300b23 (a republish

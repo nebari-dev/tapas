@@ -1,8 +1,8 @@
-# Deploy an app to Javo from this computer
+# Deploy an app to Tapas from this computer
 
-Javo runs web apps, notebooks and published container images for a
+Tapas runs web apps, notebooks and published container images for a
 person, at {{.URL}}. You deploy the app in the person's folder for them with only curl
-and tar, through the Javo API, acting as that person.
+and tar, through the Tapas API, acting as that person.
 
 Rules for every step:
 
@@ -35,7 +35,7 @@ First check for a saved login:
 
 - `200`: you are logged in. Go to step 2.
 - `401` or `no login`: log in as below.
-- Anything else: Javo is not reachable. Tell the person.
+- Anything else: Tapas is not reachable. Tell the person.
 
 If `$D/device` exists, a login is already waiting: go straight to the
 poll below. Otherwise start a login. It needs no token:
@@ -87,7 +87,7 @@ It prints one of:
 - An answer with `expired_token`: the login expired. Start a new login,
   show the person the new link and code, and poll again.
 - `no login waiting`: start a new login.
-- `error: no answer`: Javo is not reachable. Run the poll again; if it
+- `error: no answer`: Tapas is not reachable. Run the poll again; if it
   keeps failing, tell the person.
 - Anything else is an error: tell the person.
 
@@ -141,7 +141,7 @@ tell the person.
 Pick a short name for the app: lower case letters, digits and dashes. Run
 this in the app's folder. It sends the folder, without `.git`,
 `node_modules`, `.venv`, `.pixi`, `.env*` files and other build output, to
-`deploys/<short-name>` in the person's home folder on Javo. Add `--exclude`
+`deploys/<short-name>` in the person's home folder on Tapas. Add `--exclude`
 for any other build output or large data the app does not need to run (for
 example `dist`, `build`, `__pycache__`, `.next`), and for any other file
 holding secrets (keys, `*.pem`, credentials): ask the person to add those
@@ -193,7 +193,7 @@ When create does not answer 201:
 - 409: something clashes, as `detail` says. Change that and create again,
   or tell the person.
 - 422: a field is wrong: `errors` names it. Fix it and create again.
-- 503: Javo is not ready yet. Wait a few seconds and try again; if it
+- 503: Tapas is not ready yet. Wait a few seconds and try again; if it
   keeps answering 503, tell the person.
 
 ## 6. Wait, read the logs, fix and retry
@@ -212,7 +212,7 @@ When `phase` is `Failed` or a step in `steps` stays `False`, read that
 step's `title`, `what` and `todo`, its log at
 `/api/workspaces/NAME/steps/STEP/log` (STEP is the step's `type`), the
 app's logs (add `&previous=true` after a crash) and `diagnosis`, the cause
-Javo found and what may fix it.
+Tapas found and what may fix it.
 
 - `Started` failed or keeps restarting: read the logs. A permission error
   means it wants root or a folder it cannot write. Only the home folder,

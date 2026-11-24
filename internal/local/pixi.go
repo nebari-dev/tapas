@@ -11,7 +11,7 @@ import (
 // FindPixi is the pixi binary that installs the apps' environments, as an
 // absolute path, or empty when there is none: the one beside javo's own
 // binary (self), which is where a bundle that ships both puts it, and
-// else the one on PATH. Javo carries no pixi and downloads none. The one
+// else the one on PATH. Tapas carries no pixi and downloads none. The one
 // beside the binary is taken only from a folder, and as a file, that the
 // group and others cannot write: javo may have been started from a
 // folder anyone can put a program in.

@@ -29,7 +29,7 @@ import (
 )
 
 // machine is this machine set up to run shipped templates for real: an
-// executor with the repository's pod files, the real pixi and a Javo
+// executor with the repository's pod files, the real pixi and a Tapas
 // binary built from this tree, and one home that every app of a test
 // shares, as one person's apps do.
 type machine struct {
@@ -60,7 +60,7 @@ func newMachine(t *testing.T) *machine {
 			t.Fatal(err)
 		}
 	}
-	// The Javo binary the platform's steps and tools run.
+	// The Tapas binary the platform's steps and tools run.
 	javo := filepath.Join(tmp, "javo")
 	m.run(t, repo, nil, "go", "build", "-o", javo, "./cmd/javo")
 	m.x, err = New(Options{
@@ -297,7 +297,7 @@ func sizeOf(dir string) int64 {
 // An environment picked for an app, as one from Nebi is: the custom
 // template is planned for this machine with python alone, locked for it
 // by the test, installed by the install step with the real pixi and
-// Javo's own sha256sum and flock, its command started by pod-user.sh, and
+// Tapas's own sha256sum and flock, its command started by pod-user.sh, and
 // the app answers on loopback until it is stopped, which leaves nothing
 // behind.
 func TestAPickedEnvironmentRunsAsProcesses(t *testing.T) {

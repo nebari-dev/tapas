@@ -89,7 +89,7 @@ func TestTheOwnersUseKeepsTheAppsNebiTokenFresh(t *testing.T) {
 }
 
 // Only the owner's own session mints the owner's token: someone the app is
-// shared with never makes Javo ask Nebi as them, nor as the owner. Nothing
+// shared with never makes Tapas ask Nebi as them, nor as the owner. Nothing
 // happens for a template that does not ask, or a preview.
 func TestOnlyTheOwnerOfAnAppThatAsksGetsANebiToken(t *testing.T) {
 	t.Parallel()

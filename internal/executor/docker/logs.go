@@ -49,7 +49,7 @@ func (c *Client) ContainerLogs(ctx context.Context, id string, o LogOptions) (io
 }
 
 // demux reads the daemon's log stream of a container without a terminal
-// (Javo starts none with one): frames of an 8 byte header, which names the
+// (Tapas starts none with one): frames of an 8 byte header, which names the
 // stream (0 input, 1 output, 2 errors) and, in its last 4 bytes, how long
 // the frame is, followed by that many bytes of output.
 type demux struct {

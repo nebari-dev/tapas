@@ -11,7 +11,7 @@ import (
 // DefaultBrandName is the product name the UI shows when branding.name is
 // unset. It is display text only: object names, labels, cookies and env vars
 // keep model.ProductName.
-const DefaultBrandName = "Javo"
+const DefaultBrandName = "Tapas"
 
 // MaxBrandNameRunes caps branding.name, so it fits the sidebar and a tab title.
 const MaxBrandNameRunes = 64
@@ -25,13 +25,13 @@ type BrandingCfg struct {
 	// empty keeps the built-in accents.
 	Accent string `json:"accent,omitempty"`
 	// Logo is the mark at the top left of the sidebar and on the sign-in
-	// page; unset keeps the Javo mark.
+	// page; unset keeps the Tapas mark.
 	Logo struct {
 		Light BrandImage `json:"light"`
 		// Dark is used in the dark theme; unset uses Light there too.
 		Dark BrandImage `json:"dark"`
 	} `json:"logo"`
-	// Favicon is the browser tab's icon; unset keeps the Javo icon.
+	// Favicon is the browser tab's icon; unset keeps the Tapas icon.
 	Favicon BrandImage `json:"favicon"`
 }
 
@@ -66,7 +66,7 @@ func (c BrandingCfg) validate(bad func(key, format string, a ...any)) {
 	c.Logo.Dark.validate("branding.logo.dark", bad)
 	c.Favicon.validate("branding.favicon", bad)
 	if c.Logo.Dark.Set() && !c.Logo.Light.Set() {
-		bad("branding.logo.dark", "needs branding.logo.light: the light theme would show the Javo mark")
+		bad("branding.logo.dark", "needs branding.logo.light: the light theme would show the Tapas mark")
 	}
 }
 

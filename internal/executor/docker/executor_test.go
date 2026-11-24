@@ -39,7 +39,7 @@ func (c *execConn) SetDeadline(time.Time) error      { return nil }
 func (c *execConn) SetReadDeadline(time.Time) error  { return nil }
 func (c *execConn) SetWriteDeadline(time.Time) error { return nil }
 
-// dialThrough connects from inside the container gw, with its nc. Javo
+// dialThrough connects from inside the container gw, with its nc. Tapas
 // runs in the gateway container and connects from there itself; a test
 // runs on the host, which no workload's network reaches.
 func dialThrough(c *Client, gw string) func(context.Context, string, string) (net.Conn, error) {
@@ -76,9 +76,9 @@ func dialThrough(c *Client, gw string) func(context.Context, string, string) (ne
 	}
 }
 
-// javoGateway starts a container that stands in for the one Javo's
+// javoGateway starts a container that stands in for the one Tapas's
 // gateway runs in: on the daemon's default network, and, unlike the
-// workloads, not carrying Javo's labels.
+// workloads, not carrying Tapas's labels.
 func javoGateway(t *testing.T, c *Client, name string) string {
 	t.Helper()
 	ctx := testContext(t)

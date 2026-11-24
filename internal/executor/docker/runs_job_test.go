@@ -33,10 +33,10 @@ import (
 func TestDaemonRunsRunAPlannedJob(t *testing.T) {
 	d := dockerlive.New(t)
 	c, ctx := d.Client, homesContext(t)
-	// The platform's image, as far as a run uses it: the Javo binary of
+	// The platform's image, as far as a run uses it: the Tapas binary of
 	// this tree at /javo.
 	runner := d.Image(t, map[string]string{"/javo": "./cmd/javo"})
-	// What stands in for the container Javo's gateway runs in.
+	// What stands in for the container Tapas's gateway runs in.
 	var made struct {
 		ID string `json:"Id"`
 	}
@@ -78,7 +78,7 @@ func TestDaemonRunsRunAPlannedJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// On Docker a home is a volume of Javo's, owned by the person.
+	// On Docker a home is a volume of Tapas's, owned by the person.
 	home := s.Volumes[0].Source
 	must(t, c.VolumeCreate(ctx, home, docker.Labels(workload.Ref{Namespace: namespace, Owner: job.Owner})))
 	must(t, docker.Own(ctx, c, s, dockerlive.Busybox, home, 0o700))

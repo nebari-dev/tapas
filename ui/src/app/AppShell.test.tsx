@@ -108,7 +108,7 @@ describe('AppShell', () => {
     setup()
     const foot = screen.getByRole('navigation', { name: 'Settings and help' })
     const version = await screen.findByRole('link', { name: 'v0.2.22' })
-    expect(version.getAttribute('href')).toBe('https://github.com/nebari-dev/javo/releases/tag/v0.2.22')
+    expect(version.getAttribute('href')).toBe('https://github.com/nebari-dev/tapas/releases/tag/v0.2.22')
     expect(foot.contains(version)).toBe(false)
     expect(version.compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
@@ -116,12 +116,12 @@ describe('AppShell', () => {
   it('shows a dev build by its short commit, linking to the commit', async () => {
     setup('/', me, { apiDocs: false, version: 'dev', commit: sha })
     const version = await screen.findByRole('link', { name: 'dev+0123456' })
-    expect(version.getAttribute('href')).toBe(`https://github.com/nebari-dev/javo/commit/${sha}`)
+    expect(version.getAttribute('href')).toBe(`https://github.com/nebari-dev/tapas/commit/${sha}`)
   })
 
   it('goes home from the logo and product name', async () => {
     setup('/apps')
-    await userEvent.click(screen.getByRole('link', { name: 'Javo home' }))
+    await userEvent.click(screen.getByRole('link', { name: 'Tapas home' }))
     expect(screen.getByText('Home placeholder')).toBeTruthy()
   })
 
@@ -155,10 +155,10 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: 'Storage' })).toBeNull()
   })
 
-  it('shows the Javo name and mark without branding', () => {
+  it('shows the Tapas name and mark without branding', () => {
     setup()
-    const home = screen.getByRole('link', { name: 'Javo home' })
-    expect(within(home).getByText('Javo')).toBeTruthy()
+    const home = screen.getByRole('link', { name: 'Tapas home' })
+    expect(within(home).getByText('Tapas')).toBeTruthy()
     expect(home.querySelector('svg.brand-mark')).toBeTruthy()
     expect(home.querySelector('img')).toBeNull()
   })

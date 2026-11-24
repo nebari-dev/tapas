@@ -14,7 +14,7 @@ describe('brand', () => {
     expect(await loadBrand()).toEqual({ name: 'Acme Lab', accent: '#0a7d55' })
   })
 
-  it('falls back to Javo when the server cannot answer', async () => {
+  it('falls back to Tapas when the server cannot answer', async () => {
     mockApi({ 'GET /api/branding': { status: 503 } })
     expect(await loadBrand()).toEqual(DEFAULT_BRAND)
   })
@@ -34,7 +34,7 @@ describe('brand', () => {
     document.head.innerHTML = '<link rel="icon" href="/favicon.svg">'
     applyBrand({ name: 'Acme Lab', accent: '#0a7d55' })
     applyBrand(DEFAULT_BRAND)
-    expect(document.title).toBe('Javo')
+    expect(document.title).toBe('Tapas')
     expect(icons()).toEqual(['/favicon.svg'])
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('')
   })

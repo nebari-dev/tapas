@@ -46,7 +46,7 @@ func NewLocal() *cobra.Command {
 		Short: localShort,
 		Long: localShort + ".\n\n" +
 			"Apps and jobs run as processes of this machine, as you: nothing is isolated from your account. " +
-			"Javo listens on 127.0.0.1 only and prints a link that signs you in. Its database, keys, " +
+			"Tapas listens on 127.0.0.1 only and prints a link that signs you in. Its database, keys, " +
 			"your home folder and the apps' environments are kept in one folder only you can open. " +
 			"Environments are installed by pixi, found beside this binary or on PATH; without it the UI works " +
 			"and an app that needs an environment says so.",
@@ -96,7 +96,7 @@ func runLocal(ctx context.Context, out io.Writer, port int, dir string) error {
 	}
 	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
-		return fmt.Errorf("%w (is Javo running already? name another port with --port)", err)
+		return fmt.Errorf("%w (is Tapas running already? name another port with --port)", err)
 	}
 	defer listener.Close()
 	addr := listener.Addr().String()
@@ -120,7 +120,7 @@ func runLocal(ctx context.Context, out io.Writer, port int, dir string) error {
 		return err
 	}
 	// The link is written to the terminal of the person who started
-	// Javo, who is the one it signs in, and works once. It is a secret
+	// Tapas, who is the one it signs in, and works once. It is a secret
 	// until it is used, so it goes to out and never to the log.
 	link := authlocal.NewLink(local.Username, func(link string) {
 		fmt.Fprintf(out, "\nSign in with this link (it works once):\n\n    http://%s%s\n\n", addr, link)
@@ -128,12 +128,12 @@ func runLocal(ctx context.Context, out io.Writer, port int, dir string) error {
 	s.gw.carried = &carried{
 		listener: listener, ui: files.UI(), templates: files.Templates(), link: link,
 		ready: func(h http.Handler) http.Handler {
-			fmt.Fprintf(out, "Javo is at http://%s and keeps its files in %s\n", addr, dirs.Root)
+			fmt.Fprintf(out, "Tapas is at http://%s and keeps its files in %s\n", addr, dirs.Root)
 			if !hasPixi {
 				fmt.Fprintln(out, "pixi was not found beside javo or on PATH: apps and jobs that need an environment will not start until it is installed.")
 			}
 			link.Announce()
-			fmt.Fprintf(out, "For another link, open http://%s%s and look here again. Ctrl-C stops Javo and its apps.\n", addr, authlocal.LinkPath)
+			fmt.Fprintf(out, "For another link, open http://%s%s and look here again. Ctrl-C stops Tapas and its apps.\n", addr, authlocal.LinkPath)
 			return local.Guard(addr, h)
 		},
 	}

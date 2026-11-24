@@ -17,24 +17,24 @@ export default defineConfig({
   vite: { server: { fs: { allow: ['..'] } } },
   integrations: [
     starlight({
-      title: 'Javo',
+      title: 'Tapas',
       description:
-        'Javo runs notebooks, web apps and scheduled jobs on Kubernetes, from one place.',
+        'Tapas runs notebooks, web apps and scheduled jobs on Kubernetes, from one place.',
       favicon: '/brand/favicon.svg',
-      editLink: { baseUrl: 'https://github.com/nebari-dev/javo/edit/main/site/' },
+      editLink: { baseUrl: 'https://github.com/nebari-dev/tapas/edit/main/site/' },
       // Last-updated dates come from git history; off so builds of a shallow
       // clone or a tarball match.
       lastUpdated: false,
-      // Javo's own footer on the splash pages (the theme's names Nebari).
+      // Tapas's own footer on the splash pages (the theme's names Nebari).
       components: { Footer: './src/components/Footer.astro' },
       customCss: ['./src/styles/custom.css'],
       plugins: [
         nebari({
-          githubHref: 'https://github.com/nebari-dev/javo',
+          githubHref: 'https://github.com/nebari-dev/tapas',
           logo: {
-            light: '/brand/javo-logo.svg',
-            dark: '/brand/javo-logo-white.svg',
-            alt: 'Javo',
+            light: '/brand/tapas-logo.svg',
+            dark: '/brand/tapas-logo-white.svg',
+            alt: 'Tapas',
           },
           nav: [
             { label: 'Get started', href: '/getting-started/' },
@@ -48,7 +48,7 @@ export default defineConfig({
       ],
       sidebar: [
         section('Get started', 'getting-started'),
-        section('Use Javo', 'using'),
+        section('Use Tapas', 'using'),
         section('Administer', 'admin'),
         section('Architecture', 'architecture'),
         section('Reference', 'reference'),

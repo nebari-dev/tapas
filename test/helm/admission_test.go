@@ -41,7 +41,7 @@ func kindNames(t *testing.T, out, kind string) []string {
 // The policies need admissionregistration.k8s.io/v1 (Kubernetes 1.30+), and
 // the chart refuses to render without it in every mode: in per-user and
 // per-team modes they keep the controller's cluster-wide RoleBinding rights
-// to Javo's namespaces, and in every mode they keep the components from
+// to Tapas's namespaces, and in every mode they keep the components from
 // creating privileged namespaces and token Secrets, and the gateway from
 // creating any pod but a file pod. Shared mode makes no RoleBindings, so its
 // RoleBinding policy is not rendered.
@@ -335,8 +335,8 @@ func TestControllerBindsAppRolesOnlyToTheChartsAccounts(t *testing.T) {
 }
 
 // RBAC lets the controller create any namespace. The policy keeps creation to
-// the names Javo's placement produces, always managed and Pod Security
-// restricted, with Javo's own labels and annotations only: a namespace it
+// the names Tapas's placement produces, always managed and Pod Security
+// restricted, with Tapas's own labels and annotations only: a namespace it
 // made privileged would let it bind its app role there and start a root pod
 // on a node.
 func TestControllerCreatesOnlyRestrictedJavoNamespaces(t *testing.T) {
@@ -365,7 +365,7 @@ func TestControllerCreatesOnlyRestrictedJavoNamespaces(t *testing.T) {
 		allow bool
 	}{
 		{"a person's namespace", ns(own("javo-carol"), nil), true},
-		{"with a Javo label and annotation", ns(own("javo-dave"), func(l, a map[string]string) {
+		{"with a Tapas label and annotation", ns(own("javo-dave"), func(l, a map[string]string) {
 			l["javo.nebari.dev/team"] = "blue"
 			a["javo.nebari.dev/x"] = "y"
 		}), true},
@@ -380,7 +380,7 @@ func TestControllerCreatesOnlyRestrictedJavoNamespaces(t *testing.T) {
 		{"not managed", ns("javo-erin", func(l, _ map[string]string) { delete(l, "javo.nebari.dev/managed") }), false},
 		{"a foreign label", ns("javo-erin", func(l, _ map[string]string) { l["team"] = "red" }), false},
 		{"a foreign annotation", ns("javo-erin", func(_, a map[string]string) { a["example.com/x"] = "y" }), false},
-		{"a name not Javo's", ns("evil", nil), false},
+		{"a name not Tapas's", ns("evil", nil), false},
 	} {
 		err := ctl.Create(ctx, c.ns)
 		if c.allow && err != nil {
@@ -470,7 +470,7 @@ func patchAnnotation(c client.Client, name, key, value string) error {
 }
 
 // RBAC lets the controller patch any namespace; the policy keeps it to
-// managed namespaces (or ones named for Javo, which it adopts) and to Javo's
+// managed namespaces (or ones named for Tapas, which it adopts) and to Tapas's
 // own keys and the restricted Pod Security level. SQLite runs the controller
 // in the one pod's account, which the policy must match too.
 func TestControllerPatchesOnlyJavoKeysOnItsNamespaces(t *testing.T) {
@@ -506,20 +506,20 @@ func TestControllerPatchesOnlyJavoKeysOnItsNamespaces(t *testing.T) {
 				allow bool
 			}{
 				{"harden a managed namespace", patchLabels(ctl, mine, restricted), true},
-				{"Javo label on a managed namespace", patchLabels(ctl, mine, map[string]string{"javo.nebari.dev/x": "y"}), true},
-				{"Javo annotation on a managed namespace", patchAnnotation(ctl, mine, "javo.nebari.dev/x", "y"), true},
+				{"Tapas label on a managed namespace", patchLabels(ctl, mine, map[string]string{"javo.nebari.dev/x": "y"}), true},
+				{"Tapas annotation on a managed namespace", patchAnnotation(ctl, mine, "javo.nebari.dev/x", "y"), true},
 				// A namespace someone else made is never taken over, even
-				// one named like Javo's: it may hold their Secrets.
-				{"adopt a namespace named for Javo", patchLabels(ctl, theirs, restricted), false},
+				// one named like Tapas's: it may hold their Secrets.
+				{"adopt a namespace named for Tapas", patchLabels(ctl, theirs, restricted), false},
 				{"loosen Pod Security", patchLabels(ctl, mine, map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}), false},
 				{"foreign label on a managed namespace", patchLabels(ctl, mine, map[string]string{"team": "red"}), false},
 				{"foreign annotation on a managed namespace", patchAnnotation(ctl, mine, "example.com/x", "y"), false},
-				{"adopt a namespace not named for Javo", patchLabels(ctl, other, restricted), false},
-				// javo-system is named like a Javo namespace but is the
+				{"adopt a namespace not named for Tapas", patchLabels(ctl, other, restricted), false},
+				// javo-system is named like a Tapas namespace but is the
 				// release's own: adopting it would let the controller bind
 				// app roles next to the components' Secrets.
 				{"adopt the release namespace", patchLabels(ctl, "javo-system", restricted), false},
-				{"Javo label on kube-system", patchLabels(ctl, "kube-system", map[string]string{"javo.nebari.dev/x": "y"}), false},
+				{"Tapas label on kube-system", patchLabels(ctl, "kube-system", map[string]string{"javo.nebari.dev/x": "y"}), false},
 				{"admin is not limited", patchLabels(admin, "kube-system", map[string]string{"team": "red"}), true},
 			} {
 				if c.allow && c.err != nil {

@@ -92,8 +92,8 @@ func (c *Client) NetworkDisconnect(ctx context.Context, network, container strin
 	return gone(c.post(ctx, "/networks/"+url.PathEscape(network)+"/disconnect", nil, map[string]any{"Container": container, "Force": true}, nil))
 }
 
-// NetworkRemove removes one of Javo's networks. One that is gone is not an
-// error; one that does not carry Javo's label is ErrForeign and stays.
+// NetworkRemove removes one of Tapas's networks. One that is gone is not an
+// error; one that does not carry Tapas's label is ErrForeign and stays.
 func (c *Client) NetworkRemove(ctx context.Context, name string) error {
 	have, err := c.NetworkInspect(ctx, name)
 	if err != nil {

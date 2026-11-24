@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// processInstall is the files of a Javo that runs apps as processes, in a
+// processInstall is the files of a Tapas that runs apps as processes, in a
 // folder of the test: its config, an empty database with one account, a
 // fixture template and the stand-ins for pixi and the platform's files.
 type processInstall struct {
@@ -168,7 +168,7 @@ func TestServerRunsAnAppAsAProcess(t *testing.T) {
 		t.Errorf("back up every home now: %d, want 501", code)
 	}
 
-	// Stopping Javo stops the app: nothing serves on its port any more.
+	// Stopping Tapas stops the app: nothing serves on its port any more.
 	var ready string
 	for _, step := range app.Steps {
 		if step.Type == "Ready" && len(step.Evidence) > 0 {

@@ -15,7 +15,7 @@ Model features are off until an admin [connects a model](/admin/ai/). With them 
 - **Ask AI** in the search palette (Cmd+K or Ctrl+K): ask for a change. The answer is a plan you approve, or a draft that opens New app.
 - **Ask about this cluster** in the palette, for platform admins: questions about the cluster report. The answer cites its rows and changes nothing.
 
-Each person has a daily allowance of model tokens (per UTC day). Every token a call uses counts, including a retried answer. When it is used up, Javo says when it resets. Up to 20 proposed changes may wait for your approval at once (your admin [sets the limit](/admin/limits/)); approve or reject some to propose more.
+Each person has a daily allowance of model tokens (per UTC day). Every token a call uses counts, including a retried answer. When it is used up, Tapas says when it resets. Up to 20 proposed changes may wait for your approval at once (your admin [sets the limit](/admin/limits/)); approve or reject some to propose more.
 
 ## Build with pi
 
@@ -23,7 +23,7 @@ When your admin gives coding agents a model, or you stored your own key in **Set
 
 ## Coding agents (MCP)
 
-Agents such as Claude Code or Cursor can work with Javo through its MCP endpoint at `/mcp` on the Javo address. MCP needs no model and is on unless your admin turned it off.
+Agents such as Claude Code or Cursor can work with Tapas through its MCP endpoint at `/mcp` on the Tapas address. MCP needs no model and is on unless your admin turned it off.
 
 1. Create a [personal API token](/using/api/#api-tokens) with the **Propose** scope. A read-and-write token would also work, but then the agent could skip MCP and make any change directly through the API, so the approval step would protect nothing.
 2. Configure the agent with the MCP address, `https://<javo address>/mcp`, and the token as a bearer token.

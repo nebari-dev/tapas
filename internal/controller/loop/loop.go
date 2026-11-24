@@ -3,7 +3,7 @@
 // election (loop/managed). Without a cluster it is a Loop: a work queue
 // per reconciler (back off, one call at a time per row) fed by the
 // database's change feed and the executor's Watch, with no manager, no API
-// server and no leader to elect, because one Javo process is then the only
+// server and no leader to elect, because one Tapas process is then the only
 // controller there is. Nothing here knows of a cluster, so a reconciler
 // set up on a Driver, and a binary that runs only Loops, need no client of
 // one.

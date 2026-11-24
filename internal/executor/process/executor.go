@@ -63,11 +63,11 @@ type Executor struct {
 
 var _ executor.Executor = (*Executor)(nil)
 
-// euid is the user Javo runs as.
+// euid is the user Tapas runs as.
 var euid = os.Geteuid
 
 // New makes an Executor that keeps its state in o.Dir, and kills what an
-// earlier Javo left running there. It refuses to run as root.
+// earlier Tapas left running there. It refuses to run as root.
 func New(o Options) (*Executor, error) {
 	if euid() == 0 {
 		return nil, errors.New("process executor: refusing to run apps as root (uid 0)")
@@ -154,7 +154,7 @@ func (x *Executor) Close() {
 
 // Host is what a workload of ref is planned with to run here: its own
 // folders, the platform's files, the PATH of the step that installs an
-// environment (the folder of tools.go first) and Javo's own uid and gid.
+// environment (the folder of tools.go first) and Tapas's own uid and gid.
 func (x *Executor) Host(ref workload.Ref) workload.Host {
 	return workload.Host{
 		Volumes:     filepath.Dir(x.VolumeDir(ref, "v")),

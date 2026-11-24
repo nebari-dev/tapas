@@ -2,7 +2,7 @@
 // real Docker daemon: every test process stamps what it creates with a
 // label holding an id of its own, names things after that id, and removes
 // what carries the id and nothing else. Two test runs against one daemon
-// never see or remove each other's things. It imports nothing of Javo, so
+// never see or remove each other's things. It imports nothing of Tapas, so
 // the docker package's own tests and the helper for tests outside it
 // (dockerlive) both stand on it.
 package testrun

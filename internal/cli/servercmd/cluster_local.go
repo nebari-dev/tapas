@@ -10,7 +10,7 @@ import (
 	"github.com/nebari-dev/javo/internal/store"
 )
 
-// What runs Javo on a cluster, in a binary built with the tag local:
+// What runs Tapas on a cluster, in a binary built with the tag local:
 // nothing. These stand in for what the *_cluster.go files hold in every
 // other build, and each answers that it is left out. The files that hold
 // the real ones are not compiled here, so nothing in this binary can

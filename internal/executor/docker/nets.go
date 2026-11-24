@@ -14,8 +14,8 @@ type Nets struct {
 	// Ranges are the ranges of all the daemon's networks, whoever made
 	// them, and the pool workloads' networks are cut from.
 	Ranges []netip.Prefix
-	// Workloads are the ranges of the networks this client's Javo made
-	// for workloads (they carry Javo's labels and the client's own). A
+	// Workloads are the ranges of the networks this client's Tapas made
+	// for workloads (they carry Tapas's labels and the client's own). A
 	// workload's network holds its sandbox, whose address all its units
 	// share, and the gateway.
 	Workloads map[netip.Prefix]workload.Ref

@@ -66,7 +66,7 @@ func dials(host string, port int) bool {
 	return true
 }
 
-// note adds a line of Javo's own to the closed log of the unit of the
+// note adds a line of Tapas's own to the closed log of the unit of the
 // workload in wd.
 func (e *engine) note(wd, unit, line string) {
 	f, err := e.root.OpenFile(path.Join(wd, "logs", unit+".log"), os.O_WRONLY|os.O_APPEND, 0o600)

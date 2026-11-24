@@ -1,6 +1,6 @@
 ---
 title: Helm
-description: Install the Javo Helm chart on a Kubernetes cluster you already run.
+description: Install the Tapas Helm chart on a Kubernetes cluster you already run.
 sidebar:
   order: 2
 ---
@@ -24,12 +24,12 @@ The chart lives in `deploy/helm/javo` in the repository. It installs one image, 
 1. Build and push the image from the repository root. The default target of the `Dockerfile` is the `javo` image.
 
    ```sh
-   git clone https://github.com/nebari-dev/javo.git && cd javo
+   git clone https://github.com/nebari-dev/tapas.git && cd tapas
    docker build -t registry.example.com/javo/javo:0.1.0 .
    docker push registry.example.com/javo/javo:0.1.0
    ```
 
-2. Write a values file. This one serves Javo at `javo.example.com` through an Ingress with TLS, and makes members of the group `javo-admins` platform admins.
+2. Write a values file. This one serves Tapas at `javo.example.com` through an Ingress with TLS, and makes members of the group `javo-admins` platform admins.
 
    ```yaml title="values.yaml"
    image:
@@ -81,7 +81,7 @@ The chart lives in `deploy/helm/javo` in the repository. It installs one image, 
 </Steps>
 
 <Aside title="On Nebari">
-Install the [Javo pack](https://github.com/nebari-dev/javo-pack) instead: the nebari-operator routes both hosts, issues their certificates and creates the Keycloak client. Its values are the cluster's domain:
+Install the [Tapas pack](https://github.com/nebari-dev/tapas-pack) instead: the nebari-operator routes both hosts, issues their certificates and creates the Keycloak client. Its values are the cluster's domain:
 
 ```yaml
 global:

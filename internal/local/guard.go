@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Guard answers only what a browser sends to this Javo from this Javo's
+// Guard answers only what a browser sends to this Tapas from this Tapas's
 // own pages, on the loopback address addr (127.0.0.1 and a port). Other
 // users of the machine, and every page open in the person's browser, can
 // reach a loopback port, so two kinds of request are refused before
@@ -22,7 +22,7 @@ import (
 //   - one a page of another origin started: any Sec-Fetch-Site but
 //     same-origin and none (a typed address, a bookmark) unless it is a
 //     top-level GET (a link), and, from a browser that sends no such
-//     header, any Origin but this Javo's. Another port of 127.0.0.1 is
+//     header, any Origin but this Tapas's. Another port of 127.0.0.1 is
 //     another origin and the same site: the browser sends it the session
 //     cookie, so SameSite does not stop a page served there, such as an
 //     app reached at its own port.
@@ -39,9 +39,9 @@ func Guard(addr string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case !hosts[strings.ToLower(r.Host)]:
-			http.Error(w, "This Javo answers at http://"+addr+" only.", http.StatusForbidden)
+			http.Error(w, "This Tapas answers at http://"+addr+" only.", http.StatusForbidden)
 		case fromAnotherOrigin(r, hosts):
-			http.Error(w, "This Javo answers its own pages only, not requests another site's page sends.", http.StatusForbidden)
+			http.Error(w, "This Tapas answers its own pages only, not requests another site's page sends.", http.StatusForbidden)
 		default:
 			next.ServeHTTP(w, r)
 		}

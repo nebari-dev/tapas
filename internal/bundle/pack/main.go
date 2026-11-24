@@ -48,7 +48,7 @@ type sources struct {
 // without them cannot do. The terminal and the coding agents then start,
 // and whoever opens one reads why there is no terminal in the browser.
 const noTerminalPage = `<!doctype html><meta charset="utf-8"><title>No terminal page</title>
-<p>This Javo was built without the terminal page, so the terminal cannot be shown here.
+<p>This Tapas was built without the terminal page, so the terminal cannot be shown here.
 Build it again with <code>make local TERMINAL_PAGE=&lt;terminal.html&gt;</code>; the configuration page of the documentation says how the page is made.</p>
 `
 

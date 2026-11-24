@@ -1,10 +1,10 @@
-# javo on one Docker host without Kubernetes: one container, Javo itself,
+# javo on one Docker host without Kubernetes: one container, Tapas itself,
 # with executor docker. It runs every app, job run and file helper as a
 # hardened container of this Docker daemon, each on a network of its own
 # that reaches only this container. See "Docker Compose" in README.md.
 #
 # The risk that stays: whoever holds the Docker socket is root on the
-# host. Javo mounts the socket, so a remote code execution in Javo is root
+# host. Tapas mounts the socket, so a remote code execution in Tapas is root
 # on this host. Its Docker executor is the only code that uses the socket,
 # and what it creates is fixed in code (never privileged, no host network,
 # pid or ipc, no path of the host, no published port). Rootless Docker is
@@ -21,13 +21,13 @@
 #   JAVO_PORT        host port of the gateway (default 8080), the only one published
 #   JAVO_PUBLIC_HOST host and port browsers use (default localhost:${JAVO_PORT})
 #   JAVO_DOCKER_GID  group of the Docker socket as a container sees it (default 0):
-#                    Javo runs as uid 65532 and joins that group to use the socket.
+#                    Tapas runs as uid 65532 and joins that group to use the socket.
 #                    On a Linux host: stat -c %g /var/run/docker.sock
-#   JAVO_CONTAINER   name of Javo's container (default javo); two installs on
+#   JAVO_CONTAINER   name of Tapas's container (default javo); two installs on
 #                    one daemon need two names
 #   JAVO_IMAGE_TAG   tag of the javo image (default compose)
 #
-# `docker compose down` leaves what Javo made on the daemon: people's home
+# `docker compose down` leaves what Tapas made on the daemon: people's home
 # volumes (labelled javo.gateway.homes=<JAVO_CONTAINER>) always stay, and
 # so do apps that were running (labelled javo.gateway=<JAVO_CONTAINER>);
 # stop the apps in the UI first.
@@ -38,7 +38,7 @@ services:
     build: {context: ../..}
     image: javo:${JAVO_IMAGE_TAG:-compose}
     # docker.gateway in the config below names this container: apps reach
-    # it by this name, and Javo refuses to start anywhere else.
+    # it by this name, and Tapas refuses to start anywhere else.
     container_name: ${JAVO_CONTAINER:-javo}
     restart: unless-stopped
     command:
@@ -57,8 +57,8 @@ services:
     configs:
       - {source: config, target: /etc/javo/config.yaml}
     volumes:
-      # The database, Javo's keys and nothing else. The image's home
-      # folder belongs to the user Javo runs as, and so does a new volume
+      # The database, Tapas's keys and nothing else. The image's home
+      # folder belongs to the user Tapas runs as, and so does a new volume
       # mounted there.
       - data:/home/nonroot
       - /var/run/docker.sock:/var/run/docker.sock

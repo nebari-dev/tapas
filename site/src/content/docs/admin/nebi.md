@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-[Nebi](https://github.com/nebari-dev/nebi) manages pixi environments. With the integration on, New app and New job show an **Environment** card that lists the person's Nebi environments (workspaces they own or that are shared with them, in the ready state). Picking one copies the `pixi.toml` and `pixi.lock` of its newest version into Javo with the app or job; every start installs that lockfile as described in [Environments](/using/environments/). Nebi is asked only while the form is filled in: a running app or a scheduled run never calls Nebi.
+[Nebi](https://github.com/nebari-dev/nebi) manages pixi environments. With the integration on, New app and New job show an **Environment** card that lists the person's Nebi environments (workspaces they own or that are shared with them, in the ready state). Picking one copies the `pixi.toml` and `pixi.lock` of its newest version into Tapas with the app or job; every start installs that lockfile as described in [Environments](/using/environments/). Nebi is asked only while the form is filled in: a running app or a scheduled run never calls Nebi.
 
 Off (the default), nothing talks to Nebi, `GET /api/environments` answers `available: false` and no form shows the card.
 
@@ -28,7 +28,7 @@ config:
 - `environments.pixiImage`: the image that installs every environment, the templates' own too. Any image with `pixi`, `sh`, `flock`, `sha256sum`, `base64` and `gunzip` works; it runs as the pod's own user. The chart sets the upstream `ghcr.io/prefix-dev/pixi`, pinned by digest.
 - `nebi.enabled` needs `nebi.url`, `environments.pixiImage` and `auth.oidc`; the controller and the gateway refuse to start otherwise.
 
-## How Javo signs in to Nebi
+## How Tapas signs in to Nebi
 
 As the person, with their own OpenID Connect ID token. The gateway keeps each browser session's ID token (it renews it with the refresh token when the session is revalidated, and before it expires) and sends it to Nebi's `POST /api/v1/auth/device-token`, which checks it and answers with a Nebi token for the Nebi user bound to the token's issuer and subject. Nebi then lists and serves only what that person may see.
 
@@ -36,8 +36,8 @@ A shared service token is not used: Nebi tokens expire after 24 hours, and Nebi 
 
 This needs:
 
-1. Nebi and Javo trust the same OIDC issuer: Nebi's `oidc_issuer_url` is exactly Javo's `auth.oidc.issuer`.
-2. The ID tokens Javo receives name Nebi's client in their audience (Nebi checks that `aud` contains its own `oidc_client_id`). In Keycloak, add an **Audience** mapper to Javo's client: Included Client Audience is Nebi's client, Add to ID token on. Without it, the card says Nebi did not accept the sign-in.
+1. Nebi and Tapas trust the same OIDC issuer: Nebi's `oidc_issuer_url` is exactly Tapas's `auth.oidc.issuer`.
+2. The ID tokens Tapas receives name Nebi's client in their audience (Nebi checks that `aud` contains its own `oidc_client_id`). In Keycloak, add an **Audience** mapper to Tapas's client: Included Client Audience is Nebi's client, Add to ID token on. Without it, the card says Nebi did not accept the sign-in.
 
 People signed in with a local account, and calls made with an API token, have no ID token: the card says so and the API refuses an environment on create.
 
@@ -56,7 +56,7 @@ The app acts as its **owner** in Nebi. The token reaches it like this:
 1. When the owner creates, starts or restarts the app, and again when they open it in the browser, the gateway trades the ID token of the owner's own sign-in for a Nebi token (the same `POST /api/v1/auth/device-token` as the Environment card), before the pod is built, with 5 seconds for Nebi to answer. So the token is there when the app first starts. Someone the app is shared with never mints one.
 2. The gateway seals the token with the public half of the secrets key (as for [secrets](/using/secrets/)) bound to the app, and stores only the sealed value (table `app_nebi_tokens`). The gateway has no Kubernetes Secret rights and cannot read the token back; the database never holds it in clear.
 3. The controller opens it and writes it to the Secret `<app object>.app-nebi` (labelled with the app, deleted with it). The pod mounts it read-only and sees it as the file `/var/run/javo/nebi/token` (`JAVO_NEBI_TOKEN_FILE`), never as an environment variable or in the pod spec. The mount is optional, so a pod made before the first token starts without it; the kubelet adds the file later and replaces it on renewal, without a restart. Nebi's address is `NEBI_REMOTE_URL`.
-4. The `nebi-cli` init step copies the nebi binary out of the Javo image (`/opt/javo-nebi-files`, the nebi 0.16 release binary) to `/opt/javo-nebi`. `/opt/javo/bin/nebi` and the kernel list read the token file at every use and pass it to that one process only. The gateway renews the token once less than 12 of its 24 hours are left, while the owner keeps using the app.
+4. The `nebi-cli` init step copies the nebi binary out of the Tapas image (`/opt/javo-nebi-files`, the nebi 0.16 release binary) to `/opt/javo-nebi`. `/opt/javo/bin/nebi` and the kernel list read the token file at every use and pass it to that one process only. The gateway renews the token once less than 12 of its 24 hours are left, while the owner keeps using the app.
 
 So the token outlives the owner's last use of the app (or their sign-out) by at most a day. Only the owner's own use renews it.
 
@@ -68,7 +68,7 @@ People who sign in with a local account have no ID token, so their apps get no N
 
 ### Network
 
-Apps reach Nebi at `nebi.url` too: it must be an address both the gateway and the apps' pods can reach (an in-cluster Service address works for both). Apps' outbound traffic is not limited by Javo's NetworkPolicies.
+Apps reach Nebi at `nebi.url` too: it must be an address both the gateway and the apps' pods can reach (an in-cluster Service address works for both). Apps' outbound traffic is not limited by Tapas's NetworkPolicies.
 
 ## Limits
 

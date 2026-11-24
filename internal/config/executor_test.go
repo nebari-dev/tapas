@@ -70,7 +70,7 @@ func TestTheAgentLockIsForEveryExecutor(t *testing.T) {
 
 // Each executor that is not Kubernetes needs to know where it is: the
 // Docker one its own container, the process one its folders, both where
-// Javo's keys are kept.
+// Tapas's keys are kept.
 func TestAnExecutorNeedsItsSettings(t *testing.T) {
 	process := localAuth + "executor: process\nkeysDir: /h/keys\nprocess:\n  stateDir: /h/state\n  homesDir: /h/homes\n"
 	if _, err := load(t, process); err != nil {

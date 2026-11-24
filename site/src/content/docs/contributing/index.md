@@ -1,11 +1,11 @@
 ---
 title: Contributing
-description: Build and test Javo, run it locally, and the conventions for changes.
+description: Build and test Tapas, run it locally, and the conventions for changes.
 sidebar:
   order: 0
 ---
 
-Issues and pull requests are welcome at [github.com/nebari-dev/javo](https://github.com/nebari-dev/javo). For a large change, open an issue first so the approach can be agreed before you write it. The full guide is [CONTRIBUTING.md](https://github.com/nebari-dev/javo/blob/main/CONTRIBUTING.md).
+Issues and pull requests are welcome at [github.com/nebari-dev/tapas](https://github.com/nebari-dev/tapas). For a large change, open an issue first so the approach can be agreed before you write it. The full guide is [CONTRIBUTING.md](https://github.com/nebari-dev/tapas/blob/main/CONTRIBUTING.md).
 
 ## Build and test
 
@@ -93,4 +93,4 @@ Releases published before signing was added to the workflow carry no signature, 
 
 ## License
 
-Javo is licensed under the [Apache License 2.0](https://github.com/nebari-dev/javo/blob/main/LICENSE). By opening a pull request you agree that your contribution is licensed under it. A Developer Certificate of Origin sign-off is not required.
+Tapas is licensed under the [Apache License 2.0](https://github.com/nebari-dev/tapas/blob/main/LICENSE). By opening a pull request you agree that your contribution is licensed under it. A Developer Certificate of Origin sign-off is not required.

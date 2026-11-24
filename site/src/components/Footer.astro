@@ -1,5 +1,5 @@
 ---
-// Replaces the theme's footer so the splash pages (home, 404) carry Javo's
+// Replaces the theme's footer so the splash pages (home, 404) carry Tapas's
 // own mark and links instead of the Nebari project's. Doc pages keep
 // Starlight's default footer (edit link, pagination) only, as in the theme.
 import Default from '@astrojs/starlight/components/Footer.astro';
@@ -8,14 +8,14 @@ import config from 'virtual:starlight/user-config';
 const { hasSidebar } = Astro.locals.starlightRoute;
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 const local = (href: string) => `${base}${href}`;
-const repo = 'https://github.com/nebari-dev/javo';
+const repo = 'https://github.com/nebari-dev/tapas';
 
 const columns = [
   {
     title: 'Documentation',
     links: [
       { label: 'Get started', href: local('/getting-started/') },
-      { label: 'Use Javo', href: local('/using/') },
+      { label: 'Use Tapas', href: local('/using/') },
       { label: 'Administer', href: local('/admin/') },
       { label: 'Reference', href: local('/reference/') },
     ],
@@ -35,8 +35,8 @@ const columns = [
 <div class="javo-footer">
   <div class="javo-footer__top">
     <div class="javo-footer__brand">
-      <img src={local('/brand/javo-logo.svg')} alt="Javo" class="javo-footer__mark--light" />
-      <img src={local('/brand/javo-logo-white.svg')} alt="Javo" class="javo-footer__mark--dark" />
+      <img src={local('/brand/tapas-logo.svg')} alt="Tapas" class="javo-footer__mark--light" />
+      <img src={local('/brand/tapas-logo-white.svg')} alt="Tapas" class="javo-footer__mark--dark" />
       {config.description && <p>{config.description}</p>}
     </div>
     <div class="javo-footer__cols">

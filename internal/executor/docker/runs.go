@@ -34,7 +34,7 @@ const (
 // run stays to be observed. A run that has ended it lets go of, and all
 // that was made for the run is removed.
 //
-// A run's containers outlive Javo, and so does what is kept of the run:
+// A run's containers outlive Tapas, and so does what is kept of the run:
 // Close leaves all of it, and the next Runs on the same daemon goes on
 // waiting for a run that is going and still shows one that is done.
 type Runs struct {

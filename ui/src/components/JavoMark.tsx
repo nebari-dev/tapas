@@ -1,4 +1,4 @@
-/** The Javo mark from brand/javo-mark.svg, drawn in the text colour so it suits light and dark. */
+/** The Tapas mark from brand/tapas-mark.svg, drawn in the text colour so it suits light and dark. */
 export function JavoMark() {
   return (
     <svg className="brand-mark" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">

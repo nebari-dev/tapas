@@ -261,7 +261,7 @@ true
 - --log-format={{ .Values.telemetry.logFormat }}
 - --log-level={{ .Values.telemetry.logLevel }}
 {{- end -}}
-{{/* Where every Javo container sends traces and metrics (telemetry). */}}
+{{/* Where every Tapas container sends traces and metrics (telemetry). */}}
 {{- define "javo.telemetryEnv" -}}
 {{- with .Values.telemetry.otlpEndpoint }}
 - name: OTEL_EXPORTER_OTLP_ENDPOINT

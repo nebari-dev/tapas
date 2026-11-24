@@ -1,6 +1,6 @@
-/** Links into Javo's GitHub repository at the build the server runs (GET /api/info). */
+/** Links into Tapas's GitHub repository at the build the server runs (GET /api/info). */
 
-const REPO = 'https://github.com/nebari-dev/javo'
+const REPO = 'https://github.com/nebari-dev/tapas'
 const RELEASE = /^v\d+\.\d+\.\d+$/
 
 /** The running build: its release tag (or "dev") and full commit. */
