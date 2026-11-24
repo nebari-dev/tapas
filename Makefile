@@ -169,7 +169,7 @@ e2e-github:
 # compiled inside the tests (javo local among them: built by
 # scripts/build/local-javo.sh and started with no flags; JAVO_E2E_UI_DIST
 # names a built UI for it to carry). Needs a Docker daemon, pixi on PATH and the
-# network. Run on demand, not on every push: go test ./... proves Javo's own
+# network. Run on demand, not on every push: go test ./... proves Tapas's own
 # logic with stand-ins.
 E2E_EXECUTOR_PKGS := ./internal/executor/... ./internal/netprobe/dockerprobe/ ./internal/egressproxy/ ./internal/cli/
 e2e-executors:

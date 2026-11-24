@@ -44,7 +44,7 @@ func (c *Client) Daemon(ctx context.Context) (Daemon, error) {
 		return Daemon{}, err
 	}
 	if !atLeast(v.ApiVersion, MinAPI) {
-		return Daemon{}, fmt.Errorf("%w: Docker %s speaks API %q, and Javo needs %s (Docker 28.0)", ErrTooOld, v.Version, v.ApiVersion, MinAPI)
+		return Daemon{}, fmt.Errorf("%w: Docker %s speaks API %q, and Tapas needs %s (Docker 28.0)", ErrTooOld, v.Version, v.ApiVersion, MinAPI)
 	}
 	var info struct {
 		SecurityOptions []string

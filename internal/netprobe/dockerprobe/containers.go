@@ -111,7 +111,7 @@ func (p *Prober) remove(c *docker.Client, refs ...workload.Ref) {
 	}
 }
 
-// mine is the label filter for what this prober made: Javo's label, the
+// mine is the label filter for what this prober made: Tapas's label, the
 // probe's, and the labels of its client.
 func mine(c *docker.Client, more ...string) []string {
 	filter := append([]string{docker.Managed, docker.LabelNamespace + "=" + namespace}, more...)
@@ -144,7 +144,7 @@ func (p *Prober) teardown(ctx context.Context, c *docker.Client, ref workload.Re
 	}
 }
 
-// sweep removes what an earlier probe left behind (Javo was stopped
+// sweep removes what an earlier probe left behind (Tapas was stopped
 // part-way). Nothing but what mine finds is looked at.
 func (p *Prober) sweep(c *docker.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

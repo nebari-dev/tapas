@@ -82,7 +82,7 @@ func TestWaitReturnsTheExitCode(t *testing.T) {
 	}
 }
 
-// Nothing is removed that does not carry Javo's label, whatever asks.
+// Nothing is removed that does not carry Tapas's label, whatever asks.
 func TestOnlyJavosContainersAreRemoved(t *testing.T) {
 	var seen calls
 	c := fake(t, func(w http.ResponseWriter, r *http.Request) {

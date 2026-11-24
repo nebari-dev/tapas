@@ -1,4 +1,4 @@
-// Package executor is what Javo needs from whatever runs its workloads:
+// Package executor is what Tapas needs from whatever runs its workloads:
 // Kubernetes, Docker or local processes. The packages below it implement
 // these interfaces; nothing above it knows which one is in use.
 package executor

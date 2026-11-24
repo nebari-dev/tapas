@@ -95,9 +95,9 @@ func (c *Client) ContainerWait(ctx context.Context, id string) (int, error) {
 	return out.StatusCode, err
 }
 
-// ContainerRemove kills and removes one of Javo's containers, with the
+// ContainerRemove kills and removes one of Tapas's containers, with the
 // unnamed volumes its image declared. One that is gone is not an error; one
-// that does not carry Javo's label is ErrForeign and stays.
+// that does not carry Tapas's label is ErrForeign and stays.
 func (c *Client) ContainerRemove(ctx context.Context, id string) error {
 	have, err := c.ContainerInspect(ctx, id)
 	if err != nil {

@@ -16,7 +16,7 @@ func envValue(c corev1.Container, name string) (string, bool) {
 }
 
 // The OpenTelemetry collector named in telemetry.otlpEndpoint reaches every
-// Javo container, the gateway's and the controller's alike; with none named
+// Tapas container, the gateway's and the controller's alike; with none named
 // no container is told one, so nothing is sent.
 func TestTheCollectorReachesEveryJavoContainerOnlyWhenNamed(t *testing.T) {
 	t.Parallel()

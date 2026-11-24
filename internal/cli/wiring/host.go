@@ -47,7 +47,7 @@ import (
 )
 
 // Host is where apps run when there is no cluster: one Docker daemon, or
-// the machine Javo itself runs on. It is built once per process, by
+// the machine Tapas itself runs on. It is built once per process, by
 // NewHost, and the gateway and the controller share it: the executor that
 // starts an app is the one asked where it listens and what it printed.
 type Host struct {
@@ -121,7 +121,7 @@ func (h *Host) Serve(ctx context.Context) {
 // Reader of a machine that runs apps as processes: it answers Enforced,
 // always, and nothing is probed.
 //
-// What holds there instead: Javo listens on loopback only and serves one
+// What holds there instead: Tapas listens on loopback only and serves one
 // person (onePersonsMachine), every app is told to listen on loopback,
 // and one that opens a port to the network is killed (the process
 // executor's guard). So no other machine reaches such an app, and through
@@ -195,12 +195,12 @@ const (
 	fingerprintKeyFile = "secret-fingerprint-key"
 )
 
-// The scopes of one Javo on a Docker daemon. Each is a label whose value
-// is the name of Javo's own container, put on everything made in that
+// The scopes of one Tapas on a Docker daemon. Each is a label whose value
+// is the name of Tapas's own container, put on everything made in that
 // scope (docker.Client.Labels) and asked for whenever it is listed,
 // watched, adopted or swept. No thing carries two of them, so none of
 // the four ever finds, adopts or removes what another made, and two
-// Javos on one daemon never touch each other's.
+// Tapas instances on one daemon never touch each other's.
 const (
 	// scopeWorkloads is apps and job runs. Within it a run also carries
 	// docker.LabelRun, which is how the two executors keep apart.
@@ -216,7 +216,7 @@ const (
 	scopeProbe = "javo.gateway.probe"
 )
 
-// scoped is a client of the daemon at socket for one scope of the Javo
+// scoped is a client of the daemon at socket for one scope of the Tapas
 // in the container called gateway.
 func scoped(socket, scope, gateway string) *docker.Client {
 	c := docker.New(socket)
@@ -224,7 +224,7 @@ func scoped(socket, scope, gateway string) *docker.Client {
 	return c
 }
 
-// euid is the user Javo runs as, and hostname the name of the machine
+// euid is the user Tapas runs as, and hostname the name of the machine
 // (inside a container, the container's) it runs on.
 var (
 	euid     = os.Geteuid
@@ -235,8 +235,8 @@ var (
 // Kubernetes, where the cluster does. It is the only place that asks which
 // executor is configured. It refuses to start what it cannot keep safe:
 // keys or folders that others can open, a Docker daemon that does not
-// answer, is too old, lacks the configured runtime or Javo's own
-// container, a Javo that does not run in that container, and, for apps as
+// answer, is too old, lacks the configured runtime or Tapas's own
+// container, a Tapas that does not run in that container, and, for apps as
 // processes, root, a listener beyond loopback and more than one person.
 func NewHost(ctx context.Context, cfg config.Platform, in HostInputs) (*Host, error) {
 	if cfg.OnKubernetes() {
@@ -306,9 +306,9 @@ func NewHost(ctx context.Context, cfg config.Platform, in HostInputs) (*Host, er
 }
 
 // onDocker fills h in for apps that run as containers of the daemon the
-// config names. Javo must itself run in the container docker.gateway
+// config names. Tapas must itself run in the container docker.gateway
 // names: that container is on every workload's network, which is how
-// Javo checks an app's port, reaches the file helpers and serves the
+// Tapas checks an app's port, reaches the file helpers and serves the
 // forward proxy. port is the gateway's own.
 func (h *Host) onDocker(ctx context.Context, cfg config.Platform, in HostInputs, port string) error {
 	d := cfg.Docker
@@ -377,7 +377,7 @@ func (h *Host) onDocker(ctx context.Context, cfg config.Platform, in HostInputs,
 	}}, h.closing...)
 
 	// The way out: a forward proxy on a port of this container, for the
-	// workloads of this Javo only. Its port is the one listener besides
+	// workloads of this Tapas only. Its port is the one listener besides
 	// --listen; apps reach every port of this container anyway.
 	proxy, err := egressproxy.New(egressproxy.Options{Rules: in.Egress, Networks: egressproxy.Docker(workloads, d.AddressPool())})
 	if err != nil {
@@ -395,10 +395,10 @@ func (h *Host) onDocker(ctx context.Context, cfg config.Platform, in HostInputs,
 	}}
 
 	// The gate of apps with no login of their own: the probe's result,
-	// measured anew by every Javo that starts. What an earlier one stored
+	// measured anew by every Tapas that starts. What an earlier one stored
 	// (on another daemon, or a cluster) proves nothing here.
 	policy := &netprobe.Store{Facts: in.DB.Facts()}
-	if err := policy.Put(ctx, netprobe.Result{State: netprobe.Unknown, Evidence: []string{"not measured yet since Javo started"}}); err != nil {
+	if err := policy.Put(ctx, netprobe.Result{State: netprobe.Unknown, Evidence: []string{"not measured yet since Tapas started"}}); err != nil {
 		return err
 	}
 	h.policy = policy
@@ -427,7 +427,7 @@ func (h *Host) onDocker(ctx context.Context, cfg config.Platform, in HostInputs,
 	return nil
 }
 
-// helpersEnd is how long stopping the file helpers may take when Javo
+// helpersEnd is how long stopping the file helpers may take when Tapas
 // ends.
 const helpersEnd = 30 * time.Second
 
@@ -436,9 +436,9 @@ const helpersEnd = 30 * time.Second
 // answer yet.
 const probeRetry = 5 * time.Second
 
-// inGateway refuses a Javo that does not run in the container called
+// inGateway refuses a Tapas that does not run in the container called
 // gateway, by that container's host name, which is this machine's inside
-// it. From anywhere else Javo is on no workload's network: no app would
+// it. From anywhere else Tapas is on no workload's network: no app would
 // ever be seen ready, no file helper reached and no app would find the
 // proxy.
 func inGateway(ctx context.Context, c *docker.Client, gateway string) error {
@@ -451,12 +451,12 @@ func inGateway(ctx context.Context, c *docker.Client, gateway string) error {
 		return err
 	}
 	if have.Config.Hostname != self {
-		return fmt.Errorf("docker.gateway %q is a container whose host name is %q, and Javo runs on %q: with executor docker Javo must run inside the container docker.gateway names, which is on every app's network (see deploy/compose/docker.yaml)", gateway, have.Config.Hostname, self)
+		return fmt.Errorf("docker.gateway %q is a container whose host name is %q, and Tapas runs on %q: with executor docker Tapas must run inside the container docker.gateway names, which is on every app's network (see deploy/compose/docker.yaml)", gateway, have.Config.Hostname, self)
 	}
 	return nil
 }
 
-// loadKeys reads Javo's own keys from dir, making each on the first
+// loadKeys reads Tapas's own keys from dir, making each on the first
 // start. A key that does not open the secrets already stored is refused:
 // every app's values are sealed with it.
 func (h *Host) loadKeys(ctx context.Context, dir string, db *store.Store) error {
@@ -482,8 +482,8 @@ func (h *Host) loadKeys(ctx context.Context, dir string, db *store.Store) error 
 	return nil
 }
 
-// onePersonsMachine is why Javo may not run apps as processes here: they
-// run as Javo's own user with nothing between them, so it must not be
+// onePersonsMachine is why Tapas may not run apps as processes here: they
+// run as Tapas's own user with nothing between them, so it must not be
 // root, must not be reachable from another machine, and must serve one
 // person only.
 func onePersonsMachine(ctx context.Context, in HostInputs) error {
@@ -504,7 +504,7 @@ func onePersonsMachine(ctx context.Context, in HostInputs) error {
 	return nil
 }
 
-// goos is the system Javo runs on.
+// goos is the system Tapas runs on.
 var goos = runtime.GOOS
 
 // agentLockWorks is why this machine cannot start the coding agents
@@ -513,7 +513,7 @@ var goos = runtime.GOOS
 // processes of this machine, so the lock is this machine's kernel's:
 // Landlock is Linux's, and on Linux the javo-sandbox of the platform's
 // files (process.filesDir, bin/javo-sandbox) must lock a command in now.
-// Javo does not start otherwise: an agent would either never start or,
+// Tapas does not start otherwise: an agent would either never start or,
 // worse, be thought locked in.
 func agentLockWorks(ctx context.Context, cfg config.Platform) error {
 	if !LockAgents(cfg) {

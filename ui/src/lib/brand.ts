@@ -5,8 +5,8 @@ import './http'
 /** The install's white-label look, from GET /api/branding. */
 export type Brand = BrandingView
 
-/** The built-in look: the Javo name, mark, favicon and accent. */
-export const DEFAULT_BRAND: Brand = { name: 'Javo' }
+/** The built-in look: the Tapas name, mark, favicon and accent. */
+export const DEFAULT_BRAND: Brand = { name: 'Tapas' }
 
 let current: Brand = DEFAULT_BRAND
 

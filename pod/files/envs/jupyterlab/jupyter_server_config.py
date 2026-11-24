@@ -3,7 +3,7 @@
 # environment. nb_nebi_kernels installs itself as the KernelSpecManager; it
 # lists the Nebi workspaces of `nebi workspace list` (the person's pulled
 # ones) and, with NEBI_REMOTE_URL and NEBI_AUTH_TOKEN, those on the Nebi
-# server, each as a kernel. Javo gives an app the owner's token only as the
+# server, each as a kernel. Tapas gives an app the owner's token only as the
 # file JAVO_NEBI_TOKEN_FILE, which it renews while the owner uses the app
 # (internal/controller/workspace/nebi.go). So:
 #   - without that file's path, the app has no Nebi access: Jupyter's own

@@ -26,7 +26,7 @@ import (
 )
 
 // Label marks every container and network of the Docker probe, on
-// top of Javo's own labels. The probe removes nothing without both.
+// top of Tapas's own labels. The probe removes nothing without both.
 const Label = "javo.netprobe"
 
 const (
@@ -60,7 +60,7 @@ const (
 type Prober struct {
 	// Client talks to the Docker daemon.
 	Client *docker.Client
-	// Gateway is the name or id of the container Javo's gateway runs in,
+	// Gateway is the name or id of the container Tapas's gateway runs in,
 	// as the executor has it.
 	Gateway string
 	// Image is the javo image both workloads run.

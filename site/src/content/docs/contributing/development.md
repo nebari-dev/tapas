@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Details for working on Javo. See [Contributing](/contributing/) for the short version.
+Details for working on Tapas. See [Contributing](/contributing/) for the short version.
 
 ## Local cluster
 
@@ -16,7 +16,7 @@ Run the tests (envtest binaries are downloaded into `bin/`):
 Run it locally (kubeconfig `.dev/kubeconfig`; needs docker with Compose v2, kubectl, helm and Go):
 
     make up          # cluster, images and release; prints the URL (http://javo.localhost:8080 in the main checkout)
-    make reload      # after a Go or UI change: rebuild the Javo image and roll the release
+    make reload      # after a Go or UI change: rebuild the Tapas image and roll the release
     make e2e-quick   # up, then the core end-to-end suites (no Keycloak)
     make e2e-full    # every suite, with the dev Keycloak (also: make e2e)
     make down        # delete the cluster and its volumes

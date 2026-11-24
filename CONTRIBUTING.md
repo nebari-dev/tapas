@@ -1,4 +1,4 @@
-# Contributing to Javo
+# Contributing to Tapas
 
 Issues and pull requests are welcome. For a large change, open an issue first so the approach can be agreed
 before you write it.

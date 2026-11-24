@@ -21,7 +21,7 @@ type Options struct {
 	Client *Client
 	// Secrets is where the values workloads read come from. Required.
 	Secrets executor.Secrets
-	// Gateway is the name or id of the container Javo's gateway runs in.
+	// Gateway is the name or id of the container Tapas's gateway runs in.
 	// It is put on every workload's network, and is the only thing a
 	// workload reaches. Required.
 	Gateway string
@@ -67,7 +67,7 @@ var ErrBatch = errors.New("docker executor: a job run is not an app")
 // sandbox on a network of its own and one container per unit beside it.
 // It is an executor.Executor, built on internal/executor/supervise.
 //
-// The containers outlive Javo: Close leaves them running, and the next
+// The containers outlive Tapas: Close leaves them running, and the next
 // Executor on the same daemon adopts them.
 type Executor struct {
 	*supervise.Supervisor
@@ -211,7 +211,7 @@ func (x *Executor) Close() {
 }
 
 // List names every app that has something on the daemon (a container or
-// a network carrying Javo's labels) or is being started.
+// a network carrying Tapas's labels) or is being started.
 func (x *Executor) List(ctx context.Context) ([]workload.Ref, error) {
 	return x.eng.list(ctx, x.Supervisor)
 }
@@ -256,7 +256,7 @@ func (e *engine) list(ctx context.Context, sup *supervise.Supervisor) ([]workloa
 var watched = []string{"create", "start", "die", "oom", "destroy"}
 
 // Watch reports the app of each change the supervisor makes or sees, and
-// of each change the daemon reports for a container of Javo's: one made
+// of each change the daemon reports for a container of Tapas's: one made
 // behind the executor's back shows too. A daemon that ends its event
 // stream is asked again.
 func (x *Executor) Watch(ctx context.Context, changed func(workload.Ref)) error {

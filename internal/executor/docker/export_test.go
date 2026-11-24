@@ -22,7 +22,7 @@ var TestPool = testPool
 // TestPause stands in for the runner image's "javo pause".
 var TestPause = testPause
 
-// DialThrough connects from inside the container gw, as Javo does from
+// DialThrough connects from inside the container gw, as Tapas does from
 // the gateway container.
 func DialThrough(c *Client, gw string) func(context.Context, string, string) (net.Conn, error) {
 	return dialThrough(c, gw)

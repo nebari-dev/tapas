@@ -18,7 +18,7 @@ type Volume struct {
 // VolumeCreate makes a plain volume on the host's disk, or finds the one
 // of that name. A fresh one belongs to root (Own). There is no way to ask
 // for driver options here: they can turn a volume into a path of the
-// host. A volume of that name that is not Javo's is ErrForeign.
+// host. A volume of that name that is not Tapas's is ErrForeign.
 func (c *Client) VolumeCreate(ctx context.Context, name string, labels map[string]string) error {
 	return c.volumeCreate(ctx, name, labels, nil)
 }
@@ -66,8 +66,8 @@ func (c *Client) VolumeList(ctx context.Context, labels ...string) ([]Volume, er
 	return out.Volumes, err
 }
 
-// VolumeRemove removes one of Javo's volumes and what it holds. One that
-// is gone is not an error; one that does not carry Javo's label is
+// VolumeRemove removes one of Tapas's volumes and what it holds. One that
+// is gone is not an error; one that does not carry Tapas's label is
 // ErrForeign and stays; one a container still uses is ErrConflict.
 func (c *Client) VolumeRemove(ctx context.Context, name string) error {
 	have, err := c.VolumeInspect(ctx, name)

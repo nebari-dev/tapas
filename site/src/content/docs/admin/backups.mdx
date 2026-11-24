@@ -7,7 +7,7 @@ sidebar:
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-All of Javo's data (people, accounts, apps, templates, sharing, sessions, tokens, jobs, run history, audit log) is in its database. A complete backup is a copy of the database plus the home folders. Platform admins see both under **Settings, Backups**: the database backups and their health, whether home folders are backed up, a restore preview, and restored apps waiting to start.
+All of Tapas's data (people, accounts, apps, templates, sharing, sessions, tokens, jobs, run history, audit log) is in its database. A complete backup is a copy of the database plus the home folders. Platform admins see both under **Settings, Backups**: the database backups and their health, whether home folders are backed up, a restore preview, and restored apps waiting to start.
 
 Home folders are backed up by turning on backups to an S3-compatible **backup bucket** (`backupTarget` in the Helm values), on any disk: every database backup is copied there and every home folder and shared folder is backed up there each night, so losing the machine loses nothing. Without a bucket, home folders are in no backup.
 
@@ -25,7 +25,7 @@ database:
 
 | Engine | Who takes the copy | File |
 |---|---|---|
-| SQLite | The Javo server, on the schedule (`VACUUM INTO`: a consistent copy while it keeps running) | `javo-<UTC time>.db` |
+| SQLite | The Tapas server, on the schedule (`VACUUM INTO`: a consistent copy while it keeps running) | `javo-<UTC time>.db` |
 | Postgres | CronJob `javo-db-backup`, `pg_dump --format=custom` in the pinned postgres image, connection string from the Secret named by `database.postgres.dsnSecret` | `javo-<UTC time>.dump` |
 
 Copies go to the claim `javo-backups` in the release namespace, which is kept on uninstall. A copy on the same cluster does not survive losing the cluster, so also use a bucket (or copy the files off). On a managed Postgres you can set `schedule: ""` and use its own backups.
@@ -70,7 +70,7 @@ kubectl -n javo-system get secret javo-backup-password -o jsonpath='{.data.passw
 ```
 </Aside>
 
-A bucket on the same machine or cluster as Javo (an in-cluster MinIO, say) is not an off-site copy.
+A bucket on the same machine or cluster as Tapas (an in-cluster MinIO, say) is not an off-site copy.
 
 ## 3. Set up the backup job
 
@@ -94,7 +94,7 @@ Each namespace's repositories (`homes/<namespace>/...` and `folders/<namespace>/
 What this does not protect, so plan around it:
 
 - **Shared mode.** With `config.namespaces.mode: shared` (the default) every home is in one namespace, so every home's repository has the same password and one `javo-backup` Secret opens all of them. Nobody without Secret read rights in that namespace can read it (apps get no service account token), but an admin who delegates Secret read there to someone hands them every home's backups. Use `per-user` or `per-team` mode where people must not be able to read each other's backups even with namespace rights.
-- **The bucket's access key** is copied into `javo-backup` of every namespace with homes, because the step Jobs run there as the home's owner. Whoever reads it can delete or overwrite any repository, the database's included (they still cannot decrypt another namespace's). Javo cannot make a key per prefix on every S3 service; where yours can (an IAM policy or a MinIO policy per prefix), limit the key to the bucket's prefix, and turn on versioning or object lock.
+- **The bucket's access key** is copied into `javo-backup` of every namespace with homes, because the step Jobs run there as the home's owner. Whoever reads it can delete or overwrite any repository, the database's included (they still cannot decrypt another namespace's). Tapas cannot make a key per prefix on every S3 service; where yours can (an IAM policy or a MinIO policy per prefix), limit the key to the bucket's prefix, and turn on versioning or object lock.
 - **The gateway** also mounts the bucket key and the backup password (it lists home snapshots and the database's copies with restic). A file-read or code-execution flaw in the internet-facing gateway therefore exposes both. Moving those reads to the controller is planned; until then keep the gateway patched and, where you can, use Postgres so the gateway and the controller run as separate pods.
 - **Moving a repository to its namespace password keeps its data key.** `restic key add` and `key remove` change which passwords open the repository, not the key the data is encrypted with. On a bucket with versioning, the removed key file is still there as an older version, so someone who copied a namespace's old Secret (when it held the backup password) and can read the bucket can still decrypt that repository, new snapshots included. If that may have happened, copy each affected repository into a fresh one and delete the old one with all its versions:
 
@@ -123,7 +123,7 @@ The run's log (the job run's log viewer, or `kubectl logs` of its pod) has one t
 
 It ends with a summary table (each step, who, files, size, what was uploaded, how long, where) and one line: N home folders of people, M home volumes with no account, K group folders and the database.
 
-**Home volumes with no account.** Every home volume Javo made is backed up, also one that has no home row: a volume from before the database, or one whose person was removed with their row. The controller finds such a claim (named like a home and labelled with an owner) and gives it a home row; the Backups page lists it as "Home volume with no account: `<claim>`". Its backup first reads who owns its files (a Job that only looks, as nobody) and then runs as that uid, read-only. Decide what to do with it: delete the claim and run `javo home prune --orphans --yes` to forget it.
+**Home volumes with no account.** Every home volume Tapas made is backed up, also one that has no home row: a volume from before the database, or one whose person was removed with their row. The controller finds such a claim (named like a home and labelled with an owner) and gives it a home row; the Backups page lists it as "Home volume with no account: `<claim>`". Its backup first reads who owns its files (a Job that only looks, as nobody) and then runs as that uid, read-only. Decide what to do with it: delete the claim and run `javo home prune --orphans --yes` to forget it.
 
 **Back up now** on the Backups page starts a run of the backup job at once. `javo backup status` in the server pod says how each part stands:
 
@@ -245,7 +245,7 @@ Everything comes back from the bucket, the backup password and the secrets key.
 
 1. On the new cluster, before installing, make the Secrets from your copies: the bucket's access key (`javo-backup-s3`), the backup password as `javo-backup-password-old` (key `password`) and the secrets key as `javo-secrets-key-old` (key `kek`).
 
-2. Install the chart with the same values (`backupTarget` pointing at the same bucket and prefix, `database.backup.schedule` set) plus the lines below. Javo starts with an empty database.
+2. Install the chart with the same values (`backupTarget` pointing at the same bucket and prefix, `database.backup.schedule` set) plus the lines below. Tapas starts with an empty database.
 
    ```yaml
    backupTarget:

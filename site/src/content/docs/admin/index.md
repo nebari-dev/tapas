@@ -1,12 +1,12 @@
 ---
-title: Administer Javo
-description: Configure, secure, back up and upgrade a Javo install.
+title: Administer Tapas
+description: Configure, secure, back up and upgrade a Tapas install.
 sidebar:
   order: 0
   label: Overview
 ---
 
-Javo is configured through the values of its Helm chart (the Docker Compose install uses the same chart). Change a value, then `helm upgrade` the release.
+Tapas is configured through the values of its Helm chart (the Docker Compose install uses the same chart). Change a value, then `helm upgrade` the release.
 
 - [Configuration](/admin/configuration/): how values are organised, and the ones most installs set.
 - [Sign-in and roles](/admin/sign-in/): local accounts, OpenID Connect (Keycloak and others), groups to roles.

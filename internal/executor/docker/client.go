@@ -17,7 +17,7 @@ import (
 // a context and ends with it.
 type Client struct {
 	// Labels are added to every container, network and volume the client
-	// creates, on top of Javo's own.
+	// creates, on top of Tapas's own.
 	Labels map[string]string
 
 	http *http.Client

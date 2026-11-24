@@ -18,7 +18,7 @@ import (
 )
 
 // Dirs is where `javo local` keeps everything: one folder, Root, that only
-// the person can open, and in it the database, Javo's keys, what the apps
+// the person can open, and in it the database, Tapas's keys, what the apps
 // run with (their logs, ports, secret files and environments), each
 // person's home, and the platform's files as the binary unpacked them.
 type Dirs struct {
@@ -38,12 +38,12 @@ func DefaultRoot() (string, error) {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("where to keep Javo's files: %w (name a folder with --dir)", err)
+		return "", fmt.Errorf("where to keep Tapas's files: %w (name a folder with --dir)", err)
 	}
 	return filepath.Join(home, ".local", "share", "javo"), nil
 }
 
-// euid is the user Javo runs as.
+// euid is the user Tapas runs as.
 var euid = os.Geteuid
 
 // Prepare makes root, mode 0700, with the folders above it when they are
@@ -55,7 +55,7 @@ var euid = os.Geteuid
 // the database and every script apps run are in it.
 func Prepare(root string) (Dirs, error) {
 	if euid() == 0 {
-		return Dirs{}, errors.New("refusing to run as root (uid 0): apps run as the user Javo runs as, with nothing between them")
+		return Dirs{}, errors.New("refusing to run as root (uid 0): apps run as the user Tapas runs as, with nothing between them")
 	}
 	if !filepath.IsAbs(root) {
 		return Dirs{}, fmt.Errorf("the folder %q is not an absolute path", root)
@@ -88,7 +88,7 @@ func private(dir string) error {
 		return err
 	}
 	if st, ok := info.Sys().(*syscall.Stat_t); !info.IsDir() || info.Mode().Perm()&0o077 != 0 || !ok || int(st.Uid) != euid() {
-		return fmt.Errorf("%s must be a folder of this user that no one else can open (mode 0700): it holds Javo's keys and the scripts apps run", dir)
+		return fmt.Errorf("%s must be a folder of this user that no one else can open (mode 0700): it holds Tapas's keys and the scripts apps run", dir)
 	}
 	return nil
 }

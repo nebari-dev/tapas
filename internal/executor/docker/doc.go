@@ -25,7 +25,7 @@
 // own, in order, and the steps that stay and the main unit are kept
 // running: one that exits is made again after a growing wait. A
 // readiness check with a command runs inside its unit's container; one
-// of the port is made from Javo itself, which runs in the gateway
+// of the port is made from Tapas itself, which runs in the gateway
 // container and so is on the workload's network. When the sandbox dies,
 // its network namespace dies with it, so every container of the
 // workload is removed and the workload starts over.
@@ -34,7 +34,7 @@
 // the daemon resolves on the workload's network. Nothing has to exist
 // for that name to be known.
 //
-// Containers outlive Javo. Close stops none, and the next Executor
+// Containers outlive Tapas. Close stops none, and the next Executor
 // adopts each workload whose sandbox, staying steps and main unit all
 // run, from the Spec on the sandbox; anything less is torn down and
 // started again by its caller. Only what was made through a Client with

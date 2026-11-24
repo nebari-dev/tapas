@@ -1,4 +1,4 @@
-// Package keyfile keeps one of Javo's keys as a file, for a Javo that runs
+// Package keyfile keeps one of Tapas's keys as a file, for a Tapas that runs
 // without Kubernetes: the key-encryption key of people's secrets, the
 // sessions key and the secrets' fingerprint key. On Kubernetes each is a
 // Secret (controller/secretskey), made and kept the same way.
@@ -19,11 +19,11 @@ import (
 	"github.com/nebari-dev/javo/internal/secrets"
 )
 
-// File is a key kept as a file, for a Javo that runs without Kubernetes:
+// File is a key kept as a file, for a Tapas that runs without Kubernetes:
 // the file Name, mode 0600, in the folder Dir, mode 0700. Like secretskey.Secret,
 // it makes the key on the first start and never changes it afterwards.
 type File struct {
-	// Dir is the folder holding Javo's keys.
+	// Dir is the folder holding Tapas's keys.
 	Dir string
 	// Name is the key's file in Dir: a file name, not a path.
 	Name string
@@ -150,7 +150,7 @@ func private(named, opened fs.FileInfo, kind, want fs.FileMode) error {
 		return fmt.Errorf("has mode %04o, so its group or others can use it; it must be %04o", opened.Mode().Perm(), want)
 	}
 	if st, ok := opened.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != euid() {
-		return fmt.Errorf("is not owned by the user Javo runs as (uid %d)", euid())
+		return fmt.Errorf("is not owned by the user Tapas runs as (uid %d)", euid())
 	}
 	return nil
 }
@@ -202,5 +202,5 @@ func (f File) create(root *os.Root) ([]byte, error) {
 	return f.read(root)
 }
 
-// euid is the user Javo runs as.
+// euid is the user Tapas runs as.
 var euid = os.Geteuid

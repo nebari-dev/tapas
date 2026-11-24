@@ -1,13 +1,13 @@
 ---
 title: Docker Compose
-description: Run Javo on one machine with Docker Compose, a single-node k3s cluster in a container plus a one-shot installer.
+description: Run Tapas on one machine with Docker Compose, a single-node k3s cluster in a container plus a one-shot installer.
 sidebar:
   order: 1
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-`deploy/compose/compose.yaml` runs Javo on one Docker host. It starts a single-node [k3s](https://k3s.io) cluster in a privileged container, then a one-shot installer applies the same Helm chart every other install uses, with the values in `deploy/compose/values.yaml`.
+`deploy/compose/compose.yaml` runs Tapas on one Docker host. It starts a single-node [k3s](https://k3s.io) cluster in a privileged container, then a one-shot installer applies the same Helm chart every other install uses, with the values in `deploy/compose/values.yaml`.
 
 What you get:
 
@@ -42,8 +42,8 @@ What that means for security:
 1. Get the code.
 
    ```sh
-   git clone https://github.com/nebari-dev/javo.git
-   cd javo/deploy/compose
+   git clone https://github.com/nebari-dev/tapas.git
+   cd tapas/deploy/compose
    ```
 
 2. Build and install. The `build` profile builds the `javo` image from the checkout first.

@@ -145,7 +145,7 @@ func TestDockerProbeIsUnknownWithoutItsControl(t *testing.T) {
 }
 
 // The probe removes what an earlier probe left, and nothing else: a
-// network of Javo's without the probe's label stays.
+// network of Tapas's without the probe's label stays.
 func TestDockerProbeSweepsOnlyItsOwn(t *testing.T) {
 	d, p := dockerProber(t)
 	ctx := context.Background()

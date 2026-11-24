@@ -40,7 +40,7 @@ The container's own writable layer (files written anywhere but the home, `/tmp` 
 
 ## Process count
 
-Javo sets no limit on how many processes a pod may start. The kubelet's `podPidsLimit` (in the kubelet configuration of each node, `--pod-max-pids` on its command line) does: set it, for example to `4096`, so a fork bomb in one app cannot exhaust the node's process table. With k3s that is `--kubelet-arg=pod-max-pids=4096`.
+Tapas sets no limit on how many processes a pod may start. The kubelet's `podPidsLimit` (in the kubelet configuration of each node, `--pod-max-pids` on its command line) does: set it, for example to `4096`, so a fork bomb in one app cannot exhaust the node's process table. With k3s that is `--kubelet-arg=pod-max-pids=4096`.
 
 ## Quotas of per-person and per-team namespaces
 
@@ -55,4 +55,4 @@ config:
       containerDefaultRequests: {ephemeral-storage: 1Gi}
 ```
 
-A quota on a resource makes Kubernetes refuse every pod there that does not ask for it, and some of Javo's own helper containers (such as the one that installs the job runner) name no CPU, memory or disk of their own. Give a `containerDefaultRequests` (or `containerDefaults`) entry for each resource the quota names. In per-team mode the storage allowance (`teamStorage`) is a separate quota, `javo-storage`.
+A quota on a resource makes Kubernetes refuse every pod there that does not ask for it, and some of Tapas's own helper containers (such as the one that installs the job runner) name no CPU, memory or disk of their own. Give a `containerDefaultRequests` (or `containerDefaults`) entry for each resource the quota names. In per-team mode the storage allowance (`teamStorage`) is a separate quota, `javo-storage`.

@@ -4,7 +4,7 @@
 // agent calls the helper without credentials (javo-api on a unix socket, the
 // agent's model client on a local TCP address); the helper drops whatever
 // credentials the request carries and adds its own. It reaches only the
-// Javo API (paths under /api/) and the model's base URL (under ModelPrefix),
+// Tapas API (paths under /api/) and the model's base URL (under ModelPrefix),
 // nothing else, so it is no open proxy. It logs each request's method and
 // path, never a header or a body.
 package agenthelper
@@ -31,7 +31,7 @@ const apiPrefix = "/api/"
 
 // Config is what the helper forwards to and with which credentials.
 type Config struct {
-	// API is the Javo gateway's origin; Token is the app's API token.
+	// API is the Tapas gateway's origin; Token is the app's API token.
 	API   *url.URL
 	Token string
 	// Model is the model's OpenAI-compatible base URL (nil: no model
@@ -52,7 +52,7 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		api = getenv("JAVO_URL")
 	}
 	var err error
-	if c.API, err = absURL("the Javo API", api); err != nil {
+	if c.API, err = absURL("the Tapas API", api); err != nil {
 		return Config{}, err
 	}
 	if m := getenv("JAVO_AGENT_BASE_URL"); m != "" {

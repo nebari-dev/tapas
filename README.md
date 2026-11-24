@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="brand/javo-logo-white.svg">
-    <source media="(prefers-color-scheme: light)" srcset="brand/javo-logo.svg">
-    <img src="brand/javo-logo.svg" alt="Javo" width="320">
+    <source media="(prefers-color-scheme: dark)" srcset="brand/tapas-logo-white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="brand/tapas-logo.svg">
+    <img src="brand/tapas-logo.svg" alt="Tapas" width="320">
   </picture>
 </p>
 
@@ -11,16 +11,16 @@
 <p align="center">Notebooks, apps and jobs that you and your AI agents run through the API or MCP.</p>
 
 <p align="center">
-  <a href="https://github.com/nebari-dev/javo/actions/workflows/go.yml"><img src="https://github.com/nebari-dev/javo/actions/workflows/go.yml/badge.svg?branch=main" alt="Go"></a>
-  <a href="https://github.com/nebari-dev/javo/actions/workflows/ui.yml"><img src="https://github.com/nebari-dev/javo/actions/workflows/ui.yml/badge.svg?branch=main" alt="UI"></a>
-  <a href="https://github.com/nebari-dev/javo/actions/workflows/docs.yml"><img src="https://github.com/nebari-dev/javo/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs"></a>
+  <a href="https://github.com/nebari-dev/tapas/actions/workflows/go.yml"><img src="https://github.com/nebari-dev/tapas/actions/workflows/go.yml/badge.svg?branch=main" alt="Go"></a>
+  <a href="https://github.com/nebari-dev/tapas/actions/workflows/ui.yml"><img src="https://github.com/nebari-dev/tapas/actions/workflows/ui.yml/badge.svg?branch=main" alt="UI"></a>
+  <a href="https://github.com/nebari-dev/tapas/actions/workflows/docs.yml"><img src="https://github.com/nebari-dev/tapas/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/github/go-mod/go-version/nebari-dev/javo" alt="Go version">
 </p>
 
-Javo runs notebooks, web apps and scheduled jobs on Kubernetes, from one place.
+Tapas runs notebooks, web apps and scheduled jobs on Kubernetes, from one place.
 
-![The Javo home page: a list of apps (a container image, an app built by a coding agent, Pluto.jl, Dash, VS Code, Claude Code) with their status, and scheduled jobs below](site/screenshots/home.png)
+![The Tapas home page: a list of apps (a container image, an app built by a coding agent, Pluto.jl, Dash, VS Code, Claude Code) with their status, and scheduled jobs below](site/screenshots/home.png)
 
 ## Who it's for
 
@@ -30,7 +30,7 @@ Javo runs notebooks, web apps and scheduled jobs on Kubernetes, from one place.
 - **Platform teams**: run all of it on your own Kubernetes, with GPU sizes, idle shutdown and backups built in.
 
 > [!WARNING]
-> **Javo is experimental.** It is under active development: the API, the Helm values and the Kubernetes resources it creates may change between releases without a migration path, and it has not been run in production yet. Try it on a test cluster, and expect to reinstall when you upgrade.
+> **Tapas is experimental.** It is under active development: the API, the Helm values and the Kubernetes resources it creates may change between releases without a migration path, and it has not been run in production yet. Try it on a test cluster, and expect to reinstall when you upgrade.
 
 ## Features
 
@@ -60,7 +60,7 @@ On an existing Kubernetes cluster, install the Helm chart in `deploy/helm/javo` 
 
 The quick start above is `deploy/compose/compose.yaml`: single-node k3s in a privileged container, and the Helm chart installed into it.
 
-`deploy/compose/docker.yaml` runs Javo without Kubernetes instead: one container, which starts every app and job as a hardened container of the same Docker daemon (`executor: docker`, see [configuration](site/src/content/docs/admin/configuration.md)).
+`deploy/compose/docker.yaml` runs Tapas without Kubernetes instead: one container, which starts every app and job as a hardened container of the same Docker daemon (`executor: docker`, see [configuration](site/src/content/docs/admin/configuration.md)).
 
 ```sh
 cd deploy/compose
@@ -68,7 +68,7 @@ docker compose -f docker.yaml up -d --build
 docker compose -f docker.yaml exec javo /javo user add admin --group javo-admins --password-file - --database-path /home/nonroot/javo.db
 ```
 
-The second command prints the password of `admin`; sign in at http://localhost:8080. Javo runs as uid 65532 and uses the Docker socket through the socket's group: when that is not group 0, set `JAVO_DOCKER_GID` first (on a Linux host, `stat -c %g /var/run/docker.sock`). Whoever holds the Docker socket is root on the host, so a remote code execution in Javo is root on that host; rootless Docker is recommended. Group folders, home backups, home sizes and pull request previews need Kubernetes.
+The second command prints the password of `admin`; sign in at http://localhost:8080. Tapas runs as uid 65532 and uses the Docker socket through the socket's group: when that is not group 0, set `JAVO_DOCKER_GID` first (on a Linux host, `stat -c %g /var/run/docker.sock`). Whoever holds the Docker socket is root on the host, so a remote code execution in Tapas is root on that host; rootless Docker is recommended. Group folders, home backups, home sizes and pull request previews need Kubernetes.
 
 ### On your own machine
 
@@ -97,9 +97,9 @@ make down        # delete the local cluster
 
 The gateway serves the UI, the API and the apps; the controller turns database changes into pods. They share only the database (SQLite in one pod, or Postgres with a Deployment each). The [architecture page](site/src/content/docs/architecture/index.md) walks through every piece.
 
-Javo builds one image, `javo`. Apps and jobs run upstream images as they are published: the templates run the pixi image in a pixi environment of their own (`pod/files/envs`: conda-forge packages pinned by a committed `pixi.lock`), installed into the person's home on the first start and reused after. An app can bring its own environment instead, with a `pixi.toml` and `pixi.lock` at the root of its Git repository or a Nebi environment. RStudio runs the Rocker project's image and static sites run nginx, both unmodified. Samples and other files pods need come from the `javo` image (`pod/files`).
+Tapas builds one image, `javo`. Apps and jobs run upstream images as they are published: the templates run the pixi image in a pixi environment of their own (`pod/files/envs`: conda-forge packages pinned by a committed `pixi.lock`), installed into the person's home on the first start and reused after. An app can bring its own environment instead, with a `pixi.toml` and `pixi.lock` at the root of its Git repository or a Nebi environment. RStudio runs the Rocker project's image and static sites run nginx, both unmodified. Samples and other files pods need come from the `javo` image (`pod/files`).
 
-![Javo architecture](site/diagrams/architecture.png)
+![Tapas architecture](site/diagrams/architecture.png)
 
 How an app is created, from the New app form to Open:
 

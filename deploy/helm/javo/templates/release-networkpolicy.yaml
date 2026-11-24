@@ -1,5 +1,5 @@
 {{- if .Values.networkPolicy.enabled }}
-# Javo's own pods in the release namespace: anyone may reach the gateway's
+# Tapas's own pods in the release namespace: anyone may reach the gateway's
 # HTTP port (the ingress, apps calling the API, the network probe) and the
 # controller's health port (kubelet probes), nothing else. The controller's
 # metrics are reachable only from the namespaces in controller.metricsFrom;

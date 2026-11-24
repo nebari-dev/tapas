@@ -37,9 +37,9 @@ type Runs struct {
 var _ executor.Executor = (*Runs)(nil)
 
 // Runs is the executor for job runs on the machine x runs apps on, in
-// the same state directory. It finds the runs an earlier Javo kept there:
+// the same state directory. It finds the runs an earlier Tapas kept there:
 // one that is done stays to be observed, and one that was going has lost
-// that attempt, since no process outlives Javo. Close it before x.
+// that attempt, since no process outlives Tapas. Close it before x.
 func (x *Executor) Runs(ctx context.Context) (*Runs, error) {
 	c := x.timing
 	c.Engine = runEngine{x.eng}
@@ -94,7 +94,7 @@ type runEngine struct{ *engine }
 
 var _ supervise.Keeper = runEngine{}
 
-// Adopt finds the runs whose record an earlier Javo kept. None has a
+// Adopt finds the runs whose record an earlier Tapas kept. None has a
 // unit that runs: New killed what was left of them (sweep).
 func (e runEngine) Adopt(context.Context) ([]supervise.Found, error) {
 	records, err := fs.Glob(e.root.FS(), path.Join("w", "*", "*", recordFile))
@@ -140,7 +140,7 @@ func (e runEngine) Release(_ context.Context, ref workload.Ref) error {
 }
 
 // MessageDir is a folder of the run's own. It is closed to other users
-// and to nothing that runs as Javo's: this executor isolates nothing.
+// and to nothing that runs as Tapas's: this executor isolates nothing.
 func (e runEngine) MessageDir(s workload.Spec) string {
 	return filepath.Join(e.dir, "w", s.Ref.Namespace, s.Ref.Name, messageDir)
 }

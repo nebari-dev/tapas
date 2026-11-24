@@ -7,7 +7,7 @@ sidebar:
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-Javo signs people in with **local accounts**, an **OpenID Connect** (OIDC) provider, or both. At least one must be on.
+Tapas signs people in with **local accounts**, an **OpenID Connect** (OIDC) provider, or both. At least one must be on.
 
 ```yaml
 config:
@@ -23,7 +23,7 @@ gateway:
 
 ## Local accounts
 
-Local accounts live in Javo's database. Create one with the [`javo user add`](/reference/cli/#javo-user-add) command inside the pod that holds the database. It generates a random password, stores only its hash and writes the password to a file (or standard output with `-`); it never prints it in a log.
+Local accounts live in Tapas's database. Create one with the [`javo user add`](/reference/cli/#javo-user-add) command inside the pod that holds the database. It generates a random password, stores only its hash and writes the password to a file (or standard output with `-`); it never prints it in a log.
 
 ```sh
 kubectl -n javo-system exec deploy/javo -- \
@@ -39,19 +39,19 @@ With Postgres, run these in `deploy/javo-controller` (container `controller`) wi
 
 ## OpenID Connect
 
-Javo uses the authorization code flow with PKCE and a nonce. Settings under `config.auth.oidc`:
+Tapas uses the authorization code flow with PKCE and a nonce. Settings under `config.auth.oidc`:
 
 | Key | Default | What it does |
 |---|---|---|
 | `issuer` | required | The provider's issuer URL. |
-| `clientID` | required | The client registered for Javo. |
+| `clientID` | required | The client registered for Tapas. |
 | `clientSecretFile` | the Secret named by `gateway.oidcClientSecret` | The client secret. Empty: a public client. |
 | `displayName` | | The provider's name on the sign-in page. |
 | `scopes` | `profile`, `email` | Requested scopes; `openid` is always added. |
 | `usernameClaim` | `preferred_username` | The claim shown as the person's name. The `email` claim is used only when `email_verified` is true, so a provider that does not send it shows no emails. |
 | `groupsClaim` | `groups` | A dotted path to the claim that lists the person's groups. |
 | `rolesClaim` | | A dotted path to a claim that lists the person's roles at the provider, such as `resource_access.javo.roles` (a Keycloak client's roles) or `realm_access.roles`. Empty reads none. Templates and sizes can be limited to these roles; see [Limit templates and sizes by provider role](#limit-templates-and-sizes-by-provider-role). |
-| `revalidateInterval` | `5m` | How often Javo checks the person with the refresh token. The groups come from the refreshed ID token, or the UserInfo endpoint when the provider sends none; a provider that offers neither cannot confirm them, so its sessions end after `outageGrace`. |
+| `revalidateInterval` | `5m` | How often Tapas checks the person with the refresh token. The groups come from the refreshed ID token, or the UserInfo endpoint when the provider sends none; a provider that offers neither cannot confirm them, so its sessions end after `outageGrace`. |
 | `outageGrace` | `15m` | How long sessions keep working while the provider cannot be reached. |
 
 Register this callback address with the provider:
@@ -60,7 +60,7 @@ Register this callback address with the provider:
 https://<ui host>/auth/oidc/callback
 ```
 
-`<ui host>` is `config.urls.uiHost`, which defaults to `ingress.host`; OIDC needs one of them set (the address is never taken from a request's `Host` header). The scheme is `config.urls.scheme`, `https` unless set, also behind a proxy that ends TLS. Sign-out sends the person to the provider's end-session endpoint; it returns them to Javo when `config.urls.uiHost` is set.
+`<ui host>` is `config.urls.uiHost`, which defaults to `ingress.host`; OIDC needs one of them set (the address is never taken from a request's `Host` header). The scheme is `config.urls.scheme`, `https` unless set, also behind a proxy that ends TLS. Sign-out sends the person to the provider's end-session endpoint; it returns them to Tapas when `config.urls.uiHost` is set.
 
 ### Keycloak
 
@@ -130,15 +130,15 @@ customSize:
 ```
 
 - A person may use the template or size when they are in one of its `allowedGroups` **or** hold one of its `allowedProviderRoles` (or, for a template, are in `allowedUsers`). With all of them empty, every member may. Platform admins may always; template admins may use every template.
-- Provider roles are not Javo's roles (`platform-admin`, `template-admin`, `member`). Those still come from groups through `config.roles`, and a custom size rule's `roles` still means them.
+- Provider roles are not Tapas's roles (`platform-admin`, `template-admin`, `member`). Those still come from groups through `config.roles`, and a custom size rule's `roles` still means them.
 - Values must match exactly what the provider sends. A group and a role with the same name are different things.
-- Javo reads the roles at sign-in and on each refresh, and keeps the last ones for scheduled runs and API tokens, as it does for groups.
+- Tapas reads the roles at sign-in and on each refresh, and keeps the last ones for scheduled runs and API tokens, as it does for groups.
 
-In Keycloak, the client's roles reach the ID token through a **User Client Role** mapper: in the `javo` client's dedicated scope, add a mapper by configuration of type **User Client Role**, choose the client `javo`, set **Token Claim Name** to `resource_access.${client_id}.roles`, turn on **Add to ID token** and **Multivalued**. Keycloak's built-in `roles` scope adds the same claim to the access token only, which Javo does not read.
+In Keycloak, the client's roles reach the ID token through a **User Client Role** mapper: in the `javo` client's dedicated scope, add a mapper by configuration of type **User Client Role**, choose the client `javo`, set **Token Claim Name** to `resource_access.${client_id}.roles`, turn on **Add to ID token** and **Multivalued**. Keycloak's built-in `roles` scope adds the same claim to the access token only, which Tapas does not read.
 
 ### Coming from the data science pack
 
-The data science pack can limit a profile with `access: keycloak`: a person sees it when they hold the `jupyterlab-profiles` client role whose `profiles` attribute lists the profile's slug. Javo does not read role attributes. Make one client role per profile instead (for example `gpu-users`), give it to the same people, and list it in `allowedProviderRoles` on the template or size that replaces the profile. Profiles gated by groups (`access: yaml` with groups) map to `allowedGroups`.
+The data science pack can limit a profile with `access: keycloak`: a person sees it when they hold the `jupyterlab-profiles` client role whose `profiles` attribute lists the profile's slug. Tapas does not read role attributes. Make one client role per profile instead (for example `gpu-users`), give it to the same people, and list it in `allowedProviderRoles` on the template or size that replaces the profile. Profiles gated by groups (`access: yaml` with groups) map to `allowedGroups`.
 
 <Aside type="tip">
 Personal API tokens act with the groups and provider roles the identity provider last confirmed for their owner: at sign-in, and again each time the owner's browser session is revalidated (every `revalidateInterval`), so a group removed at the provider leaves the tokens once the owner next uses the web UI. A token stops (until the owner signs in again) `config.api.tokens.groupsMaxAge` (7 days by default) after the last confirmation, and an admin token acts as a member one day after it. When a revalidation hears from the provider that the person is gone (disabled, deleted or their consent revoked), their session ends and every token of theirs stops at once, until they sign in again. Someone disabled at the provider who has no session left to revalidate keeps member-only tokens, and their scheduled jobs keep their group folders, until `groupsMaxAge` runs out. `javo user remove` ends their sessions and tokens at once. Lowering `groupsMaxAge` shortens that for everyone, at a cost: each person then has to sign in at least that often, or their CI, app and job tokens pause and their scheduled jobs run without group folders (at `24h`, over a weekend).

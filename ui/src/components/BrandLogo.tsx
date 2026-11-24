@@ -1,7 +1,7 @@
 import { brand } from '../lib/brand'
 import { JavoMark } from './JavoMark'
 
-/** The install's logo, with the dark theme's own when it has one; the Javo mark without branding. */
+/** The install's logo, with the dark theme's own when it has one; the Tapas mark without branding. */
 export function BrandLogo() {
   const { logoLight, logoDark } = brand()
   if (!logoLight) return <JavoMark />

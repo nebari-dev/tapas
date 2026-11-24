@@ -20,7 +20,7 @@ import (
 	"github.com/nebari-dev/javo/internal/store"
 )
 
-// HostHomeReconciler gives every Home a folder of the machine Javo runs
+// HostHomeReconciler gives every Home a folder of the machine Tapas runs
 // on, where apps run as plain processes (the process executor). It stands
 // in for HomeReconciler there: no claim, no prepare Job, no size. The
 // folder's path is recorded where a claim's name is on Kubernetes

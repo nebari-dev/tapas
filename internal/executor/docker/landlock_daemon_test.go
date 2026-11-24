@@ -44,7 +44,7 @@ func TestDaemonLocksACodingAgentIn(t *testing.T) {
 		must(t, os.WriteFile(f, []byte("#!/bin/sh\n"+script+"\n"), 0o755))
 		return f
 	}
-	// The platform's image, as far as an agent uses it: the Javo binary
+	// The platform's image, as far as an agent uses it: the Tapas binary
 	// that copies the platform's files, and of those files the lock and
 	// the sandbox it runs.
 	runner := d.ImageWith(t, map[string]string{
@@ -105,7 +105,7 @@ exec httpd -f -p {{.Port}} -h {{.File}}`},
 		if lock != (s.Main.Command[0] == "/opt/javo/agents/agent-lock.sh") {
 			t.Fatalf("lock %v: the plan runs %q", lock, s.Main.Command)
 		}
-		// On Docker a home is a volume of Javo's, owned by the person.
+		// On Docker a home is a volume of Tapas's, owned by the person.
 		for _, v := range s.Volumes {
 			if v.Source != "" {
 				must(t, c.VolumeCreate(ctx, v.Source, docker.Labels(workload.Ref{Namespace: namespace, Owner: app.Owner})))

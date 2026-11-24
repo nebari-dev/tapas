@@ -83,7 +83,7 @@ func TestDefaultRenderHasNoBrandingFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render: %v\n%s", err, out)
 	}
-	if b := loadedConfig(t, out).Branding; b.Name != "Javo" || b.Logo.Light.Set() || b.Favicon.Set() || b.Accent != "" {
+	if b := loadedConfig(t, out).Branding; b.Name != "Tapas" || b.Logo.Light.Set() || b.Favicon.Set() || b.Accent != "" {
 		t.Fatalf("default branding = %+v", b)
 	}
 	if object(t, out, "ConfigMap", "javo-branding", &corev1.ConfigMap{}) {

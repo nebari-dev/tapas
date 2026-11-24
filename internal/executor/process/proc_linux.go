@@ -12,7 +12,7 @@ import (
 )
 
 // procAttr makes a child the leader of its own process group, and has the
-// kernel kill it when Javo dies.
+// kernel kill it when Tapas dies.
 func procAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 }

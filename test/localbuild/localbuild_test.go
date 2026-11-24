@@ -2,7 +2,7 @@
 
 // Package localbuild checks what a javo built with the tag local
 // (make local) leaves out, so that it stays small: the Kubernetes client
-// and what runs Javo on a cluster, the model providers' clients, the
+// and what runs Tapas on a cluster, the model providers' clients, the
 // secret scanner, the failure-notice engine, the MCP endpoint, the OpenID
 // Connect client and the Postgres driver. Each is in files the tag leaves
 // out, or in a package only such files import, so none is imported at
@@ -43,7 +43,7 @@ var notImported = []leftOut{
 	{path: "k8s.io/apiextensions-apiserver"},
 	{path: "github.com/google/gnostic-models"},
 	{path: "github.com/prometheus"},
-	// What runs Javo on a cluster.
+	// What runs Tapas on a cluster.
 	{path: javo + "executor/kube"},
 	{path: javo + "controller/namespace"},
 	{path: javo + "controller/storage", but: []string{javo + "controller/storage/rows", javo + "controller/storage/onhost"}},

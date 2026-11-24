@@ -11,7 +11,7 @@ import (
 	"github.com/nebari-dev/javo/internal/workload"
 )
 
-// Body is what a container is created from. It has a field for what Javo
+// Body is what a container is created from. It has a field for what Tapas
 // sets and for nothing else: there is none for privileges, added
 // capabilities, a namespace of the host, a device, a published port, a
 // bind mount or a sysctl, so no caller can send one.

@@ -32,7 +32,7 @@ func TestDaemonAWorkloadReachesOnlyItselfAndTheGateway(t *testing.T) {
 	a, b := testSpec("net-a"), testSpec("net-b")
 	sandboxB, _ := SandboxName(b.Ref)
 
-	// The gateway keeps trying to fetch workload b's port, as Javo's
+	// The gateway keeps trying to fetch workload b's port, as Tapas's
 	// proxy would.
 	gw := gateway(t, c, "net-gw", "until wget -q -T 2 -O - http://"+sandboxB+":8080/; do sleep 0.3; done")
 	sandbox(t, c, a, gw)
@@ -159,7 +159,7 @@ echo "addresses=$(ip -o -4 addr show | grep -c -v ' lo ')"
 }
 
 // A teardown cut short after the gateway was taken off a workload's
-// network (Javo stopped at that moment) is finished by the next one: the
+// network (Tapas stopped at that moment) is finished by the next one: the
 // network is removed although the gateway is no longer on it.
 func TestDaemonReleaseFinishesWhatAnEarlierOneLeft(t *testing.T) {
 	c, _ := daemon(t)

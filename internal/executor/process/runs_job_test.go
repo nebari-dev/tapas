@@ -22,7 +22,7 @@ import (
 )
 
 // A job, for real: the job planner's plan of a run for this machine
-// (jobs.PlanRun with Inputs.Host) runs as processes. The Javo binary installs
+// (jobs.PlanRun with Inputs.Host) runs as processes. The Tapas binary installs
 // the runner, the runner runs the job's command in the owner's home, and
 // what the executor then shows of the run is recorded as a run that
 // succeeded, with its folder and its parameters.

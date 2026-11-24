@@ -94,7 +94,7 @@ func (d *Daemon) Put(name string, labels map[string]string) {
 	d.volumes[name] = &Volume{Labels: labels, Mode: 0o755}
 }
 
-// Remove takes the volume called name away behind Javo's back.
+// Remove takes the volume called name away behind Tapas's back.
 func (d *Daemon) Remove(name string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

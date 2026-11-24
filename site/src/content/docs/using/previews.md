@@ -31,4 +31,4 @@ A preview of a pull request from the same repository copies its parent's [sharin
 
 ## Faster updates with a webhook
 
-Without a webhook, Javo asks GitHub for the list of pull requests every few minutes (the admin's `source.previews.pollInterval`, 2 minutes by default). For updates within seconds, open **Set up webhook** on the Previews card. It shows a webhook address and secret once; add them to the repository's webhooks on GitHub. A delivery only tells Javo to check again; Javo never trusts its contents. A new address and secret replace the current ones, and the secret on GitHub stops working until you paste the new one.
+Without a webhook, Tapas asks GitHub for the list of pull requests every few minutes (the admin's `source.previews.pollInterval`, 2 minutes by default). For updates within seconds, open **Set up webhook** on the Previews card. It shows a webhook address and secret once; add them to the repository's webhooks on GitHub. A delivery only tells Tapas to check again; Tapas never trusts its contents. A new address and secret replace the current ones, and the secret on GitHub stops working until you paste the new one.

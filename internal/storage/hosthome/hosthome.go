@@ -1,11 +1,11 @@
-// Package hosthome makes a person's home a folder of the machine Javo
+// Package hosthome makes a person's home a folder of the machine Tapas
 // runs on, for the process executor: one person, their own machine, with
-// Javo and their apps running as them.
+// Tapas and their apps running as them.
 //
 // Every home is a folder directly in one root folder, named after its
 // owner as a home's claim is on Kubernetes (naming.HomeClaimName). The
 // root and each home must be a real folder (never a symbolic link) that
-// the user Javo runs as owns and that nobody else can read, write or
+// the user Tapas runs as owns and that nobody else can read, write or
 // list; anything else is refused, not repaired. There is one folder per
 // person and none per group: nothing mounts a group folder into an app
 // that runs as plain processes (podstorage.Local).
@@ -98,7 +98,7 @@ func open(dir string) (*os.Root, error) {
 }
 
 // private is nil when fi, what dir names without following a link, is a
-// folder of the user Javo runs as that no one else can read, write or
+// folder of the user Tapas runs as that no one else can read, write or
 // list.
 func private(dir string, fi os.FileInfo) error {
 	st, ok := fi.Sys().(*syscall.Stat_t)
@@ -108,7 +108,7 @@ func private(dir string, fi os.FileInfo) error {
 	case !fi.IsDir():
 		return fmt.Errorf("hosthome: %s is not a folder", dir)
 	case !ok || int(st.Uid) != os.Geteuid():
-		return fmt.Errorf("hosthome: %s is not owned by the user Javo runs as", dir)
+		return fmt.Errorf("hosthome: %s is not owned by the user Tapas runs as", dir)
 	case fi.Mode().Perm()&0o077 != 0:
 		return fmt.Errorf("hosthome: %s is open to others (mode %04o); it must be 0700", dir, fi.Mode().Perm())
 	}

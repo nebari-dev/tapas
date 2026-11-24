@@ -1,6 +1,6 @@
 // Command proxyd runs the egress proxy alone, for the daemon test: in a
-// container that stands in for Javo's gateway, with the Docker socket,
-// as Javo has it.
+// container that stands in for Tapas's gateway, with the Docker socket,
+// as Tapas has it.
 package main
 
 import (

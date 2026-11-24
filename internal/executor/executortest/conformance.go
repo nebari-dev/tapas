@@ -34,7 +34,7 @@ type Target struct {
 	// names one of its own.
 	Namespace string
 	// Again, for an executor of runs, ends Executor and returns one made
-	// anew on what it left behind, as when Javo restarts.
+	// anew on what it left behind, as when Tapas restarts.
 	Again func() executor.Executor
 	// Fit, unless nil, gives a workload what this executor asks of every
 	// one and the suite does not care about: a user, a memory limit.

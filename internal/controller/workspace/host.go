@@ -205,7 +205,7 @@ func hostProblem(in Inputs) error {
 }
 
 // layout is the storage of an app on a host: the home, and a temporary
-// and a scratch folder of the workload's own, as Javo itself.
+// and a scratch folder of the workload's own, as Tapas itself.
 func (p places) layout() podstorage.Layout {
 	return podstorage.Local(p.home, p.volume(podspec.TmpVolume), p.volume(podstorage.ScratchVolume),
 		workload.User{UID: p.host.UID, GID: p.host.GID})

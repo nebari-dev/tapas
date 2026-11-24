@@ -9,7 +9,7 @@ import (
 
 // Docker reads the platform's networks from the Docker daemon behind c,
 // the client the Docker executor uses (its labels say which networks are
-// this Javo's), with the executor's pool. The daemon is asked for each
+// this Tapas's), with the executor's pool. The daemon is asked for each
 // connection: a network made a moment ago counts at once, and one that
 // is gone no longer does.
 func Docker(c *docker.Client, pool netip.Prefix) NetworksFunc {

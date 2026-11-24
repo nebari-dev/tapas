@@ -29,7 +29,7 @@ func llmsTxt(t *testing.T) string {
 	return w.Body.String()
 }
 
-// commandPlaceholder is what an app's command may hold for Javo to fill:
+// commandPlaceholder is what an app's command may hold for Tapas to fill:
 // the only {{ the guide may show.
 var commandPlaceholder = regexp.MustCompile(`\{\{\.(Port|BaseURL|Home)\}\}`)
 

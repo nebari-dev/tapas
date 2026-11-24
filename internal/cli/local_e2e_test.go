@@ -33,7 +33,7 @@ type localJavo struct {
 }
 
 var (
-	localAddress = regexp.MustCompile(`Javo is at (http://127\.0\.0\.1:\d+) `)
+	localAddress = regexp.MustCompile(`Tapas is at (http://127\.0\.0\.1:\d+) `)
 	localLink    = regexp.MustCompile(`http://127\.0\.0\.1:\d+/signin\?token=\S+`)
 )
 
@@ -234,7 +234,7 @@ func TestJavoLocalStartsWithNothingPrepared(t *testing.T) {
 	if appURL != "" {
 		if resp, err := http.Get(appURL); err == nil {
 			resp.Body.Close()
-			t.Error("the app still answers on its own port after Javo stopped")
+			t.Error("the app still answers on its own port after Tapas stopped")
 		}
 	}
 

@@ -218,7 +218,7 @@ func TestRefusesImagesAndRuns(t *testing.T) {
 	}
 }
 
-// A step of the platform's own image that runs /javo runs the binary Javo
+// A step of the platform's own image that runs /javo runs the binary Tapas
 // itself runs from.
 func TestPlatformStepsRunTheRunningBinary(t *testing.T) {
 	x, _ := build(t, process.Options{RunnerImage: "registry.example.com/javo:1"})
@@ -311,22 +311,22 @@ func TestVolumesAreFoldersAndMountsMustNameThem(t *testing.T) {
 	refused(t, x, bad, "", "not a folder of this machine")
 }
 
-// A workload runs as Javo: one that names another user is refused.
+// A workload runs as Tapas: one that names another user is refused.
 func TestRefusesAnotherUser(t *testing.T) {
 	x, _ := build(t, process.Options{})
 	s := app("sleep 300")
 	s.User = workload.User{UID: int64(os.Getuid()), GID: int64(os.Getgid())}
 	if err := x.Start(t.Context(), s); err != nil {
-		t.Fatalf("as Javo's own user: %v", err)
+		t.Fatalf("as Tapas's own user: %v", err)
 	}
 	_ = x.Stop(t.Context(), ref)
 	s.User.UID++
-	refused(t, x, s, "", "runs as Javo itself")
+	refused(t, x, s, "", "runs as Tapas itself")
 }
 
 // The values of a bundle reach a unit as variables and as files only the
 // user can read, and are written nowhere else under the state directory.
-// The rest of Javo's environment does not reach a unit.
+// The rest of Tapas's environment does not reach a unit.
 func TestSecretsReachTheUnitAndNothingElse(t *testing.T) {
 	const value = "v3ry-s3cr3t-2206"
 	t.Setenv("JAVO_DATABASE_URL", "postgres://example.com/"+value)
@@ -395,7 +395,7 @@ func TestRefusesAnOpenStateDirectory(t *testing.T) {
 	}
 }
 
-// A workload's port is its own, the same for a Javo started again on the
+// A workload's port is its own, the same for a Tapas started again on the
 // same state directory, and a workload planned for another port is
 // refused.
 func TestPortIsKeptAcrossRestartsOfJavo(t *testing.T) {
@@ -600,18 +600,18 @@ func TestADaemonEndsWithTheUnitThatStartedIt(t *testing.T) {
 	until(t, "rid of the daemon the step left", func() bool { return !alive(left) })
 }
 
-// A Javo that starts on a state directory kills what the Javo before it
+// A Tapas that starts on a state directory kills what the Tapas before it
 // left running there, and leaves alone a recorded pid that is now another
 // process.
 func TestNewSweepsWhatAnEarlierJavoLeft(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "state")
-	// The earlier Javo: it is never closed before the next one starts.
+	// The earlier Tapas: it is never closed before the next one starts.
 	x, _ := build(t, process.Options{Dir: dir})
 	if err := x.Start(t.Context(), app(`echo $$; exec sleep 300`)); err != nil {
 		t.Fatal(err)
 	}
 	left := pidOf(t, printed(t, x, 1)[0])
-	// A unit of the earlier Javo whose first process is gone and whose
+	// A unit of the earlier Tapas whose first process is gone and whose
 	// daemon is not.
 	other := workload.Ref{Namespace: "alice", Name: "other", ID: "a-2", Owner: "alice"}
 	script, args := daemon("sleep 300")
@@ -729,7 +729,7 @@ func TestHostNamesTheFoldersAndTheInstallTools(t *testing.T) {
 		t.Fatalf("install path = %q", h.InstallPath)
 	}
 
-	// A step with that PATH finds the three tools; the two that are Javo's
+	// A step with that PATH finds the three tools; the two that are Tapas's
 	// own run this binary under their name.
 	t.Setenv(selfEnv, "1")
 	s := app(`pixi; sha256sum a b; flock l true`)

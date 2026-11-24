@@ -199,4 +199,4 @@ func parseComponents(in []string) (gateway, controller bool, err error) {
 
 // localShort says what `javo local` is, in a binary that can run it
 // (local.go) and in one that cannot (local_none.go).
-const localShort = "Run Javo for one person on this machine, with nothing else to set up"
+const localShort = "Run Tapas for one person on this machine, with nothing else to set up"

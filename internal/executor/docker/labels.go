@@ -8,7 +8,7 @@ import (
 )
 
 // The labels on everything this package makes. LabelManaged marks it as
-// Javo's: nothing without it is ever removed. The others say which
+// Tapas's: nothing without it is ever removed. The others say which
 // workload it is for, so a list, the events and the sweep find it.
 const (
 	LabelManaged   = "javo.managed"
@@ -27,19 +27,19 @@ const (
 	labelFingerprint = "javo.fingerprint."
 )
 
-// Managed is the label filter that finds everything of Javo's.
+// Managed is the label filter that finds everything of Tapas's.
 const Managed = LabelManaged + "=true"
 
-// ErrForeign means a container, network or volume does not carry Javo's
+// ErrForeign means a container, network or volume does not carry Tapas's
 // label. It is never removed or written to.
-var ErrForeign = errors.New("is not Javo's")
+var ErrForeign = errors.New("is not Tapas's")
 
 func foreign(kind, name string) error { return fmt.Errorf("%s %q %w", kind, name, ErrForeign) }
 
 // isRun reports whether labels mark a thing as a job run's.
 func isRun(labels map[string]string) bool { return labels[LabelRun] == "true" }
 
-// Ours reports whether labels mark a thing as Javo's.
+// Ours reports whether labels mark a thing as Tapas's.
 func Ours(labels map[string]string) bool { return labels[LabelManaged] == "true" }
 
 // Labels mark a container, network or volume as part of the workload ref.

@@ -4,13 +4,13 @@
 // A home is the volume "javo-<namespace>.home-<owner>", named with the
 // same helpers a home's claim is on Kubernetes (naming.HomeClaimName) and
 // a workload's network is on Docker, so two people, or one person in two
-// namespaces, never share one. Its labels say it is Javo's, which
+// namespaces, never share one. Its labels say it is Tapas's, which
 // namespace and person it is for, and that it is a home. A volume of that
 // name with any other labels is someone else's: it is refused, never
 // written to and never relabelled.
 //
 // Nothing here removes a volume. A home outlives the workloads that mount
-// it, the person's row and Javo itself, as a retained claim does on
+// it, the person's row and Tapas itself, as a retained claim does on
 // Kubernetes; a person who comes back finds it by its name and labels.
 //
 // There is one volume per person and none per group: group folders are

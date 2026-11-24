@@ -411,7 +411,7 @@ source:
       # public-repo read access only. Empty means anonymous.
       tokenFile: ""
 
-# What Javo tells about itself.
+# What Tapas tells about itself.
 telemetry:
   # Log lines: json (one object per line, for a log collector) or text.
   logFormat: json
@@ -449,7 +449,7 @@ tolerations: []
 
 # White-label look of the UI, shown to everyone, signed in or not (the sign-in
 # page too). Display only: Kubernetes object names, labels, cookies and env
-# vars stay javo. Empty keeps the built-in Javo name, mark, favicon and accent.
+# vars stay javo. Empty keeps the built-in Tapas name, mark, favicon and accent.
 # Each image takes ONE of:
 #   url: an https address the browser loads the image from (the UI's
 #        Content-Security-Policy then allows images from that host);
@@ -460,7 +460,7 @@ tolerations: []
 # refuses to start on a file that is not one of those image types. An SVG is
 # served with a Content-Security-Policy that stops it from running script.
 branding:
-  name: "" # product name in the sidebar, sign-in page and tab title; default Javo
+  name: "" # product name in the sidebar, sign-in page and tab title; default Tapas
   accent: "" # "#rrggbb" or "#rgb", the accent of both themes; default the built-in blue
   logo:
     # Top left of the sidebar and on the sign-in page, drawn 30px high.
@@ -656,7 +656,7 @@ config:
   # holds the job's schedule until a run ends); a pull request past `previews` gets no
   # preview. Lowering a cap stops nothing that exists. See
   # site/src/content/docs/admin/limits.md, which also covers the kubelet's
-  # podPidsLimit (Javo sets no process limit of its own).
+  # podPidsLimit (Tapas sets no process limit of its own).
   limits:
     runningApps: 10 # apps running at once (previews not counted)
     apps: 50 # apps, running or stopped

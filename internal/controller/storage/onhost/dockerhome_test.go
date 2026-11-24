@@ -153,7 +153,7 @@ func TestDockerHomeSaysWhyWhenTheDaemonFails(t *testing.T) {
 	}
 }
 
-// A volume removed behind Javo's back is made again and handed to the
+// A volume removed behind Tapas's back is made again and handed to the
 // person again: a fresh volume belongs to root.
 func TestDockerHomeIsHandedOverAgainWhenItsVolumeWasRemoved(t *testing.T) {
 	r, db, d := dockerHomes(t, uidOf{hostOwner: 1234})

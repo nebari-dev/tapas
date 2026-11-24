@@ -36,7 +36,7 @@ func Own(ctx context.Context, c *Client, s workload.Spec, image, volume string, 
 // on the host's disk, owned by s's user; secret files in memory), and in
 // each volume a unit may write, the folders its mounts name (SubPath)
 // that do not exist yet, as a Pod's would be. Storage (a volume with a
-// Source) must exist and be Javo's: ErrForeign otherwise. image is any
+// Source) must exist and be Tapas's: ErrForeign otherwise. image is any
 // image the daemon holds; nothing of it runs.
 //
 // Docker's local volumes have no size limit on most storage drivers, so
@@ -241,7 +241,7 @@ func SecretFiles(ctx context.Context, c *Client, s workload.Spec, v workload.Vol
 // Teardown removes everything Start made for the workload ref: its
 // containers, its network (the gateway is taken off it first) and the
 // volumes that end with it. A person's storage stays. Nothing that does
-// not carry Javo's labels is touched, and tearing down what does not
+// not carry Tapas's labels is touched, and tearing down what does not
 // exist is not an error.
 func Teardown(ctx context.Context, c *Client, ref workload.Ref, gateway string) error {
 	if _, err := base(ref); err != nil {

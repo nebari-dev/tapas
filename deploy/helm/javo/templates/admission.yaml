@@ -7,7 +7,7 @@ anything outside what the components do, so the chart refuses to render
 without them. */ -}}
 {{- $hasVAP := .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy" }}
 {{- if not $hasVAP }}
-{{- fail "Javo needs ValidatingAdmissionPolicy (admissionregistration.k8s.io/v1, Kubernetes 1.30+): its admission policies keep the components' namespace, RoleBinding, Secret and pod rights to what Javo does. Upgrade the cluster; with helm template or Argo CD pass --api-versions admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy when the cluster serves it." }}
+{{- fail "Tapas needs ValidatingAdmissionPolicy (admissionregistration.k8s.io/v1, Kubernetes 1.30+): its admission policies keep the components' namespace, RoleBinding, Secret and pod rights to what Tapas does. Upgrade the cluster; with helm template or Argo CD pass --api-versions admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy when the cluster serves it." }}
 {{- end }}
 {{- if $hasVAP }}
 {{- $controller := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "javo.account" (list . "javo-controller")) }}
@@ -20,7 +20,7 @@ workspace namespace; in the other modes the ones its placement names
 matches with the default prefix) and the network probe's own namespace
 (<release namespace>-netprobe, cut and hashed past 63 characters as the
 controller does). It never takes over a namespace someone else made: in the
-other modes an existing namespace becomes Javo's only when an admin labels it
+other modes an existing namespace becomes Tapas's only when an admin labels it
 managed; in shared mode the workspace namespace may be made by the chart or by
 an admin (createWorkspaceNamespace=false), and the controller labels it. */ -}}
 {{- $probe := printf "%s-netprobe" .Release.Namespace }}
@@ -37,7 +37,7 @@ an admin (createWorkspaceNamespace=false), and the controller labels it. */ -}}
 # Namespaces the controller creates and patches: it creates only the ones its
 # placement names, always managed and Pod Security restricted; it patches only
 # managed ones (and in shared mode the workspace namespace); and it sets only
-# Javo's labels and annotations plus the restricted Pod Security level.
+# Tapas's labels and annotations plus the restricted Pod Security level.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -79,24 +79,24 @@ spec:
         variables.creating
         ? {{ $create }}
         : (variables.oldLabels[?'{{ $managed }}'].orValue('') == 'true' || {{ $adopt }})
-      message: the Javo controller may create only the namespaces its placement names, and change only namespaces labelled {{ $managed }}=true
+      message: the Tapas controller may create only the namespaces its placement names, and change only namespaces labelled {{ $managed }}=true
     - expression: >-
         !variables.creating
         || (variables.newLabels[?'{{ $managed }}'].orValue('') == 'true'
             && ['enforce', 'warn', 'audit'].all(m, variables.newLabels[?('pod-security.kubernetes.io/' + m)].orValue('') == 'restricted'))
-      message: the Javo controller may create a namespace only labelled {{ $managed }}=true with every Pod Security label restricted
+      message: the Tapas controller may create a namespace only labelled {{ $managed }}=true with every Pod Security label restricted
     - expression: >-
         variables.changedLabels.all(k, k.startsWith('{{ $group }}/')
         || (k in ['pod-security.kubernetes.io/enforce', 'pod-security.kubernetes.io/warn', 'pod-security.kubernetes.io/audit']
             && k in variables.newLabels && variables.newLabels[k] == 'restricted')
         || (variables.creating && k == 'kubernetes.io/metadata.name'))
-      message: the Javo controller may set only {{ $group }}/ labels, and Pod Security labels only to restricted
+      message: the Tapas controller may set only {{ $group }}/ labels, and Pod Security labels only to restricted
     - expression: variables.changedAnnotations.all(k, k.startsWith('{{ $group }}/'))
-      message: the Javo controller may set only {{ $group }}/ annotations
+      message: the Tapas controller may set only {{ $group }}/ annotations
     - expression: >-
         variables.creating
         || (object.spec == oldObject.spec && object.metadata.?finalizers.orValue([]) == oldObject.metadata.?finalizers.orValue([]))
-      message: the Javo controller may change only labels and annotations of a namespace
+      message: the Tapas controller may change only labels and annotations of a namespace
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -137,11 +137,11 @@ spec:
   validations:
     - expression: >-
         '{{ $managed }}' in variables.namespaceLabels && variables.namespaceLabels['{{ $managed }}'] == 'true'
-      message: the Javo controller may change RoleBindings only in namespaces labelled {{ $managed }}=true
+      message: the Tapas controller may change RoleBindings only in namespaces labelled {{ $managed }}=true
     - expression: >-
         request.operation == 'DELETE'
         || variables.namespaceLabels[?'pod-security.kubernetes.io/enforce'].orValue('') == 'restricted'
-      message: the Javo controller may bind roles only in namespaces whose Pod Security level is restricted
+      message: the Tapas controller may bind roles only in namespaces whose Pod Security level is restricted
     # Each app ClusterRole goes to its own component's service account and to
     # nothing else: a binding to a group or another account would hand it the
     # Secrets and pod rights of the namespace.
@@ -154,7 +154,7 @@ spec:
                  && variables.subjects[0].name == '{{ include "javo.account" (list . "javo-gateway") }}')
                 || (object.roleRef.name == '{{ include "javo.appRoleName" (list . "javo-controller") }}'
                  && variables.subjects[0].name == '{{ include "javo.account" (list . "javo-controller") }}')))
-      message: the Javo controller may bind only the chart's app ClusterRoles, each to its own component's service account
+      message: the Tapas controller may bind only the chart's app ClusterRoles, each to its own component's service account
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -193,7 +193,7 @@ spec:
       expression: request.userInfo.username in ['{{ $controller }}', '{{ $gatewayUser }}']
   validations:
     - expression: object.?type.orValue('') != 'kubernetes.io/service-account-token'
-      message: Javo's components may not create service account token Secrets
+      message: Tapas's components may not create service account token Secrets
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -266,14 +266,14 @@ spec:
         && variables.labels[?'{{ $role }}'].orValue('') == 'files'
         && variables.labels[?'{{ $owner }}'].orValue('') == variables.owner
         && variables.labels.all(k, k in ['{{ $role }}', '{{ $owner }}'])
-      message: the Javo gateway may create only file pods named javo-files-<owner>, labelled only {{ $role }}=files and {{ $owner }}=<owner>
+      message: the Tapas gateway may create only file pods named javo-files-<owner>, labelled only {{ $role }}=files and {{ $owner }}=<owner>
     - expression: >-
         size(object.spec.containers) == 1
         && size(object.spec.?initContainers.orValue([])) == 0
         && size(object.spec.?ephemeralContainers.orValue([])) == 0
         && variables.containers.all(c, c.image == '{{ .Values.files.image }}'
         && !has(c.command) && c.?args.orValue([]) == ['rcd', '--rc-addr=:5572', '--rc-serve'])
-      message: the Javo gateway's pods may run only "rclone rcd" of the files image, in one container
+      message: the Tapas gateway's pods may run only "rclone rcd" of the files image, in one container
     # A claim is read-only, except the home of the file pod's own owner
     # (volume "home", claim home-<owner> or home-<owner>-<generation>): the
     # file editor saves through it. A generation has at most 7 digits, so it
@@ -287,7 +287,7 @@ spec:
         && (v.persistentVolumeClaim.claimName == variables.ownHome
         || (v.persistentVolumeClaim.claimName.startsWith(variables.ownHome + '-')
         && v.persistentVolumeClaim.claimName.substring(size(variables.ownHome) + 1).matches('^[1-9][0-9]{0,6}$')))))))
-      message: the Javo gateway's pods may mount only emptyDir volumes and claims read-only, except their owner's own home
+      message: the Tapas gateway's pods may mount only emptyDir volumes and claims read-only, except their owner's own home
     # Literal values, and the rclone password from the pod's own Secret
     # (<pod>-rc-<16 hex>, which the Secrets policy below lets the gateway make).
     - expression: >-
@@ -298,15 +298,15 @@ spec:
         && e.valueFrom.secretKeyRef.key == 'password'
         && e.valueFrom.secretKeyRef.name.startsWith(object.metadata.name + '-rc-')
         && e.valueFrom.secretKeyRef.name.substring(size(object.metadata.name) + 4).matches('^[0-9a-f]{16}$'))))
-      message: the Javo gateway's pods may set only literal environment variables and their own rclone password Secret
+      message: the Tapas gateway's pods may set only literal environment variables and their own rclone password Secret
     - expression: object.spec.?automountServiceAccountToken.orValue(true) == false
-      message: the Javo gateway's pods may not mount a service account token
+      message: the Tapas gateway's pods may not mount a service account token
     - expression: >-
         has(object.spec.securityContext) && has(object.spec.securityContext.runAsUser)
         && (object.spec.securityContext.runAsUser == 1000
         || (object.spec.securityContext.runAsUser >= {{ $uids.first | int64 }} && object.spec.securityContext.runAsUser <= {{ $uids.last | int64 }}))
         && variables.containers.all(c, !has(c.securityContext) || !has(c.securityContext.runAsUser))
-      message: the Javo gateway's pods must run as a person's uid (identity.uidRange, or 1000 when uids are fixed)
+      message: the Tapas gateway's pods must run as a person's uid (identity.uidRange, or 1000 when uids are fixed)
     # Groups: the people's primary group, plus only group folders' gids
     # (identity.gidRange), and no fsGroup, so a file pod reads no claim
     # through another group's gid.
@@ -315,21 +315,21 @@ spec:
         && !has(object.spec.securityContext.fsGroup)
         && object.spec.securityContext.?supplementalGroups.orValue([]).all(g, g >= {{ $gids.first | int64 }} && g <= {{ $gids.last | int64 }})
         && variables.containers.all(c, !has(c.securityContext) || !has(c.securityContext.runAsGroup))
-      message: the Javo gateway's pods must run in the people's group (gid 100), with extra groups only from identity.gidRange and no fsGroup
+      message: the Tapas gateway's pods must run in the people's group (gid 100), with extra groups only from identity.gidRange and no fsGroup
     # No priority above the default (it could preempt other people's pods),
     # the default scheduler, and the default runtime.
     - expression: >-
         object.spec.?priority.orValue(0) <= 0
         && object.spec.?schedulerName.orValue('default-scheduler') == 'default-scheduler'
         && !has(object.spec.runtimeClassName)
-      message: the Javo gateway's pods may not set a priority above 0, a scheduler or a RuntimeClass
+      message: the Tapas gateway's pods may not set a priority above 0, a scheduler or a RuntimeClass
     # Placement only by the scheduler (no node chosen by the creator), and
     # only the tolerations the API server adds to every pod.
     - expression: >-
         !has(object.spec.nodeName)
         && object.spec.?tolerations.orValue([]).all(t, t.?key.orValue('') in ['node.kubernetes.io/not-ready', 'node.kubernetes.io/unreachable']
         && t.?effect.orValue('') == 'NoExecute')
-      message: the Javo gateway's pods may not pick a node or tolerate taints
+      message: the Tapas gateway's pods may not pick a node or tolerate taints
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -381,7 +381,7 @@ spec:
         && object.metadata.ownerReferences[0].kind == 'Pod'
         && object.metadata.ownerReferences[0].apiVersion == 'v1'
         && object.metadata.ownerReferences[0].name == variables.pod
-      message: the Javo gateway may create only file pod password Secrets (<pod>-rc-<16 hex>, owned by the pod, holding only the password)
+      message: the Tapas gateway may create only file pod password Secrets (<pod>-rc-<16 hex>, owned by the pod, holding only the password)
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

@@ -87,12 +87,12 @@ func (u uids) UID(_ context.Context, owner string) (int64, int64, error) {
 }
 
 // rig is homes and file helpers on the daemon of this machine: a
-// database, the home reconciler, a container that stands in for Javo's
+// database, the home reconciler, a container that stands in for Tapas's
 // gateway, an executor that runs the helpers and a Lister over them.
 type rig struct {
 	ns string
 	// all sees everything of this run; the others make what one part of
-	// Javo makes, each under a role of its own, as servercmd wires them.
+	// Tapas makes, each under a role of its own, as servercmd wires them.
 	all, homes, helpers, apps *docker.Client
 	gw                        string
 	db                        *store.Store
@@ -136,7 +136,7 @@ func newRig(t *testing.T) *rig {
 	}
 	t.Cleanup(func() { r.sweep(t) })
 
-	// The gateway: on the daemon's default network, as Javo's is, and
+	// The gateway: on the daemon's default network, as Tapas's is, and
 	// listening on port 9090.
 	gwSpec := r.spec("gateway", aliceUID)
 	body, err := docker.ContainerBody(gwSpec, workload.Unit{Name: "gateway", Image: docker.TestImage, Command: []string{"sh", "-c", "mkdir /tmp/w && echo gateway > /tmp/w/index.html && httpd -p 9090 -h /tmp/w; sleep 86400"}}, docker.Inputs{})
@@ -381,7 +381,7 @@ func TestDaemonHomeIsAVolumeOwnedByThePerson(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "20001:100:700") || !strings.Contains(out, "hello") {
 		t.Errorf("as the owner: exit %d, %q; want a root of 20001:100 with mode 700 that the owner writes", code, out)
 	}
-	// Even mounted (which nothing of Javo's does), it is closed to another
+	// Even mounted (which nothing of Tapas's does), it is closed to another
 	// uid.
 	code, out = r.probe(t, "other", bobUID, want, `ls /home/user; echo ls=$?; cat /home/user/mine; echo cat=$?; touch /home/user/x; echo touch=$?`)
 	for _, w := range []string{"ls=", "cat=", "touch="} {

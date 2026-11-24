@@ -33,14 +33,14 @@ spec:
     limits: {cpu: 500m, memory: 64Mi}
 `
 
-// The scopes a Javo marks what it makes on a daemon with (wiring), each
+// The scopes a Tapas marks what it makes on a daemon with (wiring), each
 // a label whose value is its gateway container's name.
 var dockerScopes = []string{"javo.gateway", "javo.gateway.files", "javo.gateway.homes", "javo.gateway.probe"}
 
-// gatewayContainer starts a container that stands in for the one Javo
+// gatewayContainer starts a container that stands in for the one Tapas
 // runs in, under a name of this test process and with this machine's
-// host name, which is how Javo tells that it runs inside it. When the
-// test ends it removes what a Javo of that name made on the daemon, in
+// host name, which is how Tapas tells that it runs inside it. When the
+// test ends it removes what a Tapas of that name made on the daemon, in
 // every scope, and fails the test for anything left.
 func gatewayContainer(t *testing.T, d *dockerlive.Daemon) string {
 	t.Helper()
@@ -125,9 +125,9 @@ func rcloneImage(t *testing.T, d *dockerlive.Daemon) string {
 // what runs the apps never sees the helper.
 //
 // The app does not reach Running here and the helper is never reached:
-// Javo checks an app's port, and talks to a helper, from inside the
-// gateway container, and this test's Javo runs on the host and only
-// takes itself to be there. The whole of it, with Javo in its container,
+// Tapas checks an app's port, and talks to a helper, from inside the
+// gateway container, and this test's Tapas runs on the host and only
+// takes itself to be there. The whole of it, with Tapas in its container,
 // is what deploy/compose/docker.yaml runs.
 func TestServerStartsOnDocker(t *testing.T) {
 	d := dockerlive.New(t)
@@ -225,7 +225,7 @@ docker:
 	if !whole() {
 		t.Error("the file helper went with the app")
 	}
-	// Stopping Javo stops the helper: only Javo held its password.
+	// Stopping Tapas stops the helper: only Tapas held its password.
 	s.stop()
 	if err := <-s.done; err != nil {
 		t.Fatalf("javo server = %v", err)

@@ -35,14 +35,14 @@ type view struct {
 	Accent    string `json:"accent"`
 }
 
-func TestBrandingWithoutConfigIsJavoAndPublic(t *testing.T) {
+func TestBrandingWithoutConfigIsTapasAndPublic(t *testing.T) {
 	t.Parallel()
 	f := apitest.New(t, apitest.Options{})
 	w := f.Do("GET", "/api/branding", "", nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d %s", w.Code, w.Body)
 	}
-	if got := apitest.Decode[view](t, w); got != (view{Name: "Javo"}) {
+	if got := apitest.Decode[view](t, w); got != (view{Name: "Tapas"}) {
 		t.Fatalf("branding = %+v", got)
 	}
 	if w := f.Do("GET", "/branding/logo-light", "", nil); w.Code != http.StatusNotFound {

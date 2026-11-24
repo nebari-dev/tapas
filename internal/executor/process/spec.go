@@ -104,10 +104,10 @@ func (e *engine) prepare(ctx context.Context, s workload.Spec) error {
 	return nil
 }
 
-// checkUser refuses a workload that is to run as anyone but Javo.
+// checkUser refuses a workload that is to run as anyone but Tapas.
 func checkUser(u workload.User) error {
 	if (u.UID != 0 && u.UID != int64(os.Getuid())) || (u.GID != 0 && u.GID != int64(os.Getgid())) {
-		return &UnsupportedError{Why: fmt.Sprintf("it runs as uid %d and gid %d; without containers everything runs as Javo itself, uid %d and gid %d",
+		return &UnsupportedError{Why: fmt.Sprintf("it runs as uid %d and gid %d; without containers everything runs as Tapas itself, uid %d and gid %d",
 			u.UID, u.GID, os.Getuid(), os.Getgid())}
 	}
 	mine, err := os.Getgroups()
@@ -116,7 +116,7 @@ func checkUser(u workload.User) error {
 	}
 	for _, g := range u.Groups {
 		if !slices.Contains(mine, int(g)) {
-			return &UnsupportedError{Why: fmt.Sprintf("it runs in group %d, which Javo is not in", g)}
+			return &UnsupportedError{Why: fmt.Sprintf("it runs in group %d, which Tapas is not in", g)}
 		}
 	}
 	return nil
@@ -231,7 +231,7 @@ func (e *engine) command(ctx context.Context, s workload.Spec, u workload.Unit) 
 		cmd.Dir = u.Dir
 	}
 
-	// Nothing of Javo's own environment but PATH: it may hold Javo's keys.
+	// Nothing of Tapas's own environment but PATH: it may hold Tapas's keys.
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
 	bundles := map[string]*executor.Bundle{}
 	for _, v := range u.Env {

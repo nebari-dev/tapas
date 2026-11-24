@@ -15,17 +15,17 @@ import (
 // else runs them in place of the machine's own.
 const toolsDir = "bin"
 
-// javoTools are the tools Javo itself stands in for (internal/cli/podcmd).
+// javoTools are the tools Tapas itself stands in for (internal/cli/podcmd).
 var javoTools = []string{"sha256sum", "flock"}
 
-// tools fills toolsDir: pixi is a link to the binary Javo was given, and
+// tools fills toolsDir: pixi is a link to the binary Tapas was given, and
 // each of javoTools a script that runs this binary's command of that
-// name. They are written anew each time, since Javo may have moved.
+// name. They are written anew each time, since Tapas may have moved.
 func (e *engine) tools() error {
 	if err := e.root.MkdirAll(toolsDir, 0o700); err != nil {
 		return err
 	}
-	// The path is Javo's own, and is still quoted: a quote in it ends
+	// The path is Tapas's own, and is still quoted: a quote in it ends
 	// nothing.
 	self := "'" + strings.ReplaceAll(e.self, "'", `'\''`) + "'"
 	for _, name := range javoTools {

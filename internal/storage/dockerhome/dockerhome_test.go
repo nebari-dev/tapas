@@ -25,7 +25,7 @@ func volumes(t *testing.T) (dockerhome.Volumes, *dockertest.Daemon) {
 }
 
 // A person's home is one named volume, called after the namespace and the
-// person, that says on its labels it is Javo's and whose home it is.
+// person, that says on its labels it is Tapas's and whose home it is.
 func TestEnsureMakesAVolumeLabelledAsThePersonsHome(t *testing.T) {
 	v, d := volumes(t)
 	name, fresh, err := v.Ensure(ctx, ns, alice)
@@ -92,7 +92,7 @@ func TestEnsureRefusesAVolumeThatIsNotThePersons(t *testing.T) {
 		"someone's own volume":       nil,
 		"another person's":           with(docker.LabelOwner, bob),
 		"another namespace's":        with(docker.LabelNamespace, "javo-other"),
-		"not Javo's":                 without(docker.LabelManaged),
+		"not Tapas's":                without(docker.LabelManaged),
 		"a workload's, not a home":   without(dockerhome.LabelStorage),
 		"a group folder's, no home":  with(dockerhome.LabelStorage, "folder"),
 		"a workload's ending volume": with(docker.LabelEnds, "true"),

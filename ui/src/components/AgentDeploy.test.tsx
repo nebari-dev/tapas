@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const LINE = () => `Deploy the app in this folder to Javo. Follow ${window.location.origin}/llms.txt`
+const LINE = () => `Deploy the app in this folder to Tapas. Follow ${window.location.origin}/llms.txt`
 
 describe('AgentDeploy', () => {
   it('shows the line to paste, built from the address the person is on', () => {

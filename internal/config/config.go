@@ -195,7 +195,7 @@ type WorkloadsCfg struct {
 	// (pod/files/agents/agent-lock.sh). Needs Linux 6.2+ (Landlock version
 	// 3) on the nodes; on an older kernel the agent does not start. It is
 	// the one setting here that every executor takes: with executor docker
-	// the daemon's kernel must have it, and with executor process Javo does
+	// the daemon's kernel must have it, and with executor process Tapas does
 	// not start where the lock cannot be applied (a Mac).
 	Landlock bool `json:"landlock,omitempty"`
 }

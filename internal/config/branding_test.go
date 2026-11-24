@@ -7,13 +7,13 @@ import (
 
 const localAuth = "auth:\n  local:\n    enabled: true\n"
 
-func TestBrandingDefaultsToJavo(t *testing.T) {
+func TestBrandingDefaultsToTapas(t *testing.T) {
 	p, err := load(t, localAuth)
 	if err != nil {
 		t.Fatal(err)
 	}
 	b := p.Branding
-	if b.Name != "Javo" || b.Accent != "" || b.Logo.Light.Set() || b.Logo.Dark.Set() || b.Favicon.Set() {
+	if b.Name != "Tapas" || b.Accent != "" || b.Logo.Light.Set() || b.Logo.Dark.Set() || b.Favicon.Set() {
 		t.Fatalf("branding = %+v", b)
 	}
 }
