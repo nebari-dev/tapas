@@ -124,7 +124,7 @@ type Client interface {
 
 ### Wiring and the start check
 
-`wiring.Memory(c config.MemoryCfg, key string) *memory.Service` returns nil when memory is off; otherwise a `Service` over `NewMem0(c.URL, key, &http.Client{Timeout: c.Timeout.Duration})` with no write check. The gateway (`servercmd/gateway.go` run) builds it from `gatewayParts.memoryKey` and runs `memory.Probe(ctx, svc)` once in the background: a list for a reserved person (`tapas-start-check`) that logs `slog.Info("memory.ready", "url", url)` on success or `slog.Warn("memory.unreachable", "url", url, "err", err)` otherwise. The service is not yet passed to any consumer; recall, learning and the API take it from here.
+`wiring.Memory(c config.MemoryCfg, key string) *memory.Service` returns nil when memory is off; otherwise a `Service` over `NewMem0(c.URL, key, &http.Client{Timeout: c.Timeout.Duration}, WithAddClient(&http.Client{Timeout: c.AddTimeout.Duration}))` with no write check. The gateway (`servercmd/gateway.go` run) builds it from `gatewayParts.memoryKey` and runs `memory.Probe(ctx, svc, c.URL)` once in the background: a list for a reserved person (`tapas-start-check`) that logs `slog.Info("memory.ready", "url", url)` on success or `slog.Warn("memory.unreachable", "url", url, "err", err)` otherwise. The service is not yet passed to any consumer; recall, learning and the API take it from here.
 
 ### Docs
 
@@ -186,7 +186,7 @@ func (s *Service) Add(ctx context.Context, owner, agent string, msgs []Message) 
 func (s *Service) List(ctx context.Context, owner string) ([]Memory, error)
 func (s *Service) Get(ctx context.Context, owner, id string) (Memory, error)
 func (s *Service) Delete(ctx context.Context, owner, id string) error
-func Probe(ctx context.Context, s *Service) error
+func Probe(ctx context.Context, s *Service, url string) error
 
 // internal/memory/memorytest
 func New(seed ...memory.Memory) *Fake          // implements memory.Client, records calls
