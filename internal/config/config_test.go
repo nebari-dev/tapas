@@ -163,6 +163,11 @@ func TestLoadRejectsBadMemoryConfig(t *testing.T) {
 		{"url without host", local + mem("http://", "mem0"), "memory.url"},
 		{"url with user and password", local + mem("http://admin:s3cret@mem0:8000", "mem0"), "memory.url"},
 		{"url with user only", local + mem("http://admin@mem0:8000", "mem0"), "memory.url"},
+		{"url with password and bad port", local + mem("http://u:hunter2@mem0:badport", "mem0"), "memory.url"},
+		{"url with password and wrong scheme", local + mem("ftp://u:hunter2@mem0", "mem0"), "memory.url"},
+		{"url with password and no scheme", local + mem("//u:hunter2@", "mem0"), "memory.url"},
+		{"url with password and bad escape", local + mem("http://u:hunter2@mem0/%zz", "mem0"), "memory.url"},
+		{"url with secret in query", local + mem("http://mem0/?token=hunter2", "mem0"), "memory.url"},
 		{"url with query", local + mem("http://mem0:8000/?token=abc", "mem0"), "memory.url"},
 		{"url with fragment", local + mem("http://mem0:8000/#frag", "mem0"), "memory.url"},
 		{"enabled without namespace", local + "memory:\n  enabled: true\n  url: http://mem0:8000\n", "memory.apiKeySecret.namespace"},
@@ -175,6 +180,9 @@ func TestLoadRejectsBadMemoryConfig(t *testing.T) {
 			_, err := load(t, tc.yaml)
 			if err == nil || !strings.Contains(err.Error(), tc.key) {
 				t.Fatalf("err = %v, want it to name %q", err, tc.key)
+			}
+			if strings.Contains(err.Error(), "hunter2") {
+				t.Fatalf("err = %v, must not echo a secret from the config", err)
 			}
 		})
 	}
