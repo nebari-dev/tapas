@@ -18,6 +18,7 @@ Tapas is configured through the values of its Helm chart (the Docker Compose ins
 - [Secrets and keys](/admin/secrets-and-keys/): the key that protects people's secrets.
 - [AI](/admin/ai/): connect a model.
 - [Nebi environments](/admin/nebi/) (optional).
+- [Memory](/admin/memory/) (optional): keep memory for agents with the mem0 pack.
 - [App thumbnails](/admin/thumbnails/) (optional).
 - [Branding](/admin/branding/): your own name, logo, favicon and accent colour.
 - [Upgrades](/admin/upgrades/).

@@ -674,6 +674,21 @@ config:
     #   quota: {requests.cpu: "16", requests.memory: 64Gi, pods: "30", requests.ephemeral-storage: 100Gi}
     #   containerDefaults: {ephemeral-storage: 20Gi}
     #   containerDefaultRequests: {ephemeral-storage: 1Gi}
+  # Memory for people's agents, kept by the mem0 pack (needs
+  # executor: kubernetes). Off by default: then nothing talks to mem0 and no
+  # Secret is read. On, the gateway reads mem0's admin key from the Secret
+  # named here, once at start, and logs memory.ready or memory.unreachable.
+  # The mem0 pack must list this release's gateway account as a caller. See
+  # site/src/content/docs/admin/memory.md.
+  # memory:
+  #   enabled: true
+  #   url: http://mem0-nebari-mem0.mem0.svc:8000 # the mem0 pack's Service
+  #   timeout: 10s # search, list, get and delete calls
+  #   addTimeout: 120s # add calls, which run model extraction inline
+  #   apiKeySecret:
+  #     namespace: mem0 # required: the namespace the mem0 pack is installed in
+  #     name: mem0-admin-key
+  #     key: api-key
   # Model features: Explain more on a failure, Describe it on New app, Ask
   # AI in the search palette and the admin's cluster question. Off by
   # default: then nothing connects to a model and no AI control shows. The
