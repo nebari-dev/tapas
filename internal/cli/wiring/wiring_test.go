@@ -255,3 +255,27 @@ func TestStaleGroupsMountNoGroupFolder(t *testing.T) {
 		t.Fatalf("after signing in again: %d group folders", n)
 	}
 }
+
+// With memory off no service is built, so nothing ever talks to mem0. On, the
+// service is built from the config and the key.
+func TestMemory(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     config.MemoryCfg
+		key     string
+		wantNil bool
+	}{
+		{"off builds nothing", config.MemoryCfg{Enabled: false, URL: "http://mem0"}, "k", true},
+		{"on builds a service", config.MemoryCfg{
+			Enabled: true, URL: "http://mem0",
+			Timeout: metav1.Duration{Duration: time.Second}, AddTimeout: metav1.Duration{Duration: time.Minute},
+		}, "k", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Memory(tt.cfg, tt.key); (got == nil) != tt.wantNil {
+				t.Fatalf("Memory = %v, want nil %v", got, tt.wantNil)
+			}
+		})
+	}
+}
