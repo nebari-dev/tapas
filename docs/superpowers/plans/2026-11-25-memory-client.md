@@ -131,6 +131,8 @@ Merge order: #A -> #B -> #C.
 | vet | `go vet ./...` and `go vet -tags mem0 ./internal/memory/` | clean |
 | integration | `bash scripts/test/mem0-integration.sh` | ends with `ok  github.com/nebari-dev/javo/internal/memory` |
 
+**Evidence (2026-11-25, head 1c8fa13):** `go test -race ./internal/memory/...` ok; `go vet ./...` and `go vet -tags mem0 ./internal/memory/` clean; `MEM0_PACK_DIR=... bash scripts/test/mem0-integration.sh` (mem0 pack at 54e57b9) ended `ok  github.com/nebari-dev/javo/internal/memory`.
+
 ### Task 3: The mem0 client
 
 **Files:**
