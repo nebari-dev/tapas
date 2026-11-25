@@ -105,6 +105,7 @@ func (p Platform) misplaced() error {
 	only("storage", p.Storage, StorageCfg{}, ExecutorKubernetes)
 	only("limits.namespace", p.Limits.Namespace, NamespaceLimitsCfg{}, ExecutorKubernetes)
 	only("keysDir", p.KeysDir, "", ExecutorDocker, ExecutorProcess)
+	only("memory", p.Memory, MemoryCfg{}, ExecutorKubernetes)
 	only("docker", p.Docker, DockerCfg{}, ExecutorDocker)
 	only("process", p.Process, ProcessCfg{}, ExecutorProcess)
 	return errors.Join(errs...)

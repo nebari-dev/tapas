@@ -108,6 +108,74 @@ func TestLoadReadsNebi(t *testing.T) {
 	}
 }
 
+// memoryOn is a memory section that is on with only what is required.
+const memoryOn = "memory:\n  enabled: true\n  url: http://mem0-nebari-mem0.mem0.svc:8000\n  apiKeySecret:\n    namespace: mem0\n"
+
+func TestLoadReadsMemory(t *testing.T) {
+	p, err := load(t, "auth:\n  local:\n    enabled: true\nexecutor: kubernetes\n"+memoryOn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := p.Memory
+	if !m.Enabled || m.URL != "http://mem0-nebari-mem0.mem0.svc:8000" {
+		t.Fatalf("memory = %+v", m)
+	}
+	if m.Timeout.Duration != 10*time.Second || m.AddTimeout.Duration != 120*time.Second {
+		t.Fatalf("timeouts = %v, %v; want 10s, 120s", m.Timeout.Duration, m.AddTimeout.Duration)
+	}
+	if want := (SecretKeyRef{Namespace: "mem0", Name: "mem0-admin-key", Key: "api-key"}); m.APIKeySecret != want {
+		t.Fatalf("apiKeySecret = %+v, want %+v", m.APIKeySecret, want)
+	}
+}
+
+func TestLoadKeepsExplicitMemoryValues(t *testing.T) {
+	p, err := load(t, "auth:\n  local:\n    enabled: true\nmemory:\n  enabled: true\n  url: https://mem0.example.com\n  timeout: 3s\n  addTimeout: 5m\n  apiKeySecret:\n    namespace: mem0\n    name: my-key\n    key: k\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := p.Memory
+	if m.Timeout.Duration != 3*time.Second || m.AddTimeout.Duration != 5*time.Minute {
+		t.Fatalf("timeouts = %v, %v; want 3s, 5m", m.Timeout.Duration, m.AddTimeout.Duration)
+	}
+	if want := (SecretKeyRef{Namespace: "mem0", Name: "my-key", Key: "k"}); m.APIKeySecret != want {
+		t.Fatalf("apiKeySecret = %+v, want %+v", m.APIKeySecret, want)
+	}
+}
+
+func TestMemoryIsOffByDefault(t *testing.T) {
+	p, err := load(t, "auth:\n  local:\n    enabled: true\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Memory.Enabled {
+		t.Fatalf("memory = %+v, want it off", p.Memory)
+	}
+}
+
+func TestLoadRejectsBadMemoryConfig(t *testing.T) {
+	local := "auth:\n  local:\n    enabled: true\n"
+	mem := func(url, ns string) string {
+		return "memory:\n  enabled: true\n  url: " + url + "\n  apiKeySecret:\n    namespace: " + ns + "\n"
+	}
+	cases := []struct{ name, yaml, key string }{
+		{"enabled without url", local + "memory:\n  enabled: true\n  apiKeySecret:\n    namespace: mem0\n", "memory.url"},
+		{"url not http", local + mem("ftp://x", "mem0"), "memory.url"},
+		{"url without host", local + mem("http://", "mem0"), "memory.url"},
+		{"enabled without namespace", local + "memory:\n  enabled: true\n  url: http://mem0:8000\n", "memory.apiKeySecret.namespace"},
+		{"namespace not a DNS label", local + mem("http://mem0:8000", "Mem0_NS"), "memory.apiKeySecret.namespace"},
+		{"memory under docker", local + "executor: docker\nkeysDir: /k\ndocker:\n  gateway: javo\n" + mem("http://mem0:8000", "mem0"), "memory"},
+		{"memory under process", local + "executor: process\nkeysDir: /h/keys\nprocess:\n  stateDir: /h/state\n  homesDir: /h/homes\n" + mem("http://mem0:8000", "mem0"), "memory"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := load(t, tc.yaml)
+			if err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Fatalf("err = %v, want it to name %q", err, tc.key)
+			}
+		})
+	}
+}
+
 func TestValidateReportsEveryProblem(t *testing.T) {
 	_, err := load(t, "auth:\n  local:\n    enabled: false\nurls:\n  mode: subdomain\nnamespaces:\n  mode: per-team\n")
 	if err == nil {
