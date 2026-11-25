@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // maxBody caps what one mem0 answer may be; a list of 1000 memories is the
@@ -48,7 +50,7 @@ func WithAddClient(hc *http.Client) Option {
 }
 
 // NewMem0 returns a client for the mem0 pack at baseURL, sending apiKey as
-// X-API-Key. hc carries every call except Add, which uses it too unless
+// X-API-Key. A nil hc means a client with a 10 second timeout. hc carries every call except Add, which uses it too unless
 // WithAddClient says otherwise.
 func NewMem0(baseURL, apiKey string, hc *http.Client, opts ...Option) *Mem0 {
 	m := &Mem0{base: strings.TrimSuffix(baseURL, "/"), key: apiKey, client: noRedirects(hc)}
@@ -59,11 +61,15 @@ func NewMem0(baseURL, apiKey string, hc *http.Client, opts ...Option) *Mem0 {
 	return m
 }
 
+// defaultTimeout bounds a call when the caller passes no client; it matches
+// the config default.
+const defaultTimeout = 10 * time.Second
+
 // noRedirects returns a copy of hc that does not follow redirects, so the key
 // is never sent anywhere but the address it was configured for. The caller's
 // client is left as it was.
 func noRedirects(hc *http.Client) *http.Client {
-	c := http.Client{}
+	c := http.Client{Timeout: defaultTimeout}
 	if hc != nil {
 		c = *hc
 	}
@@ -85,10 +91,20 @@ func checkOwner(owner string) error {
 // checkScope refuses a user or agent name mem0 would read as something else:
 // the wildcard, or one with surrounding whitespace (mem0 trims it).
 func checkScope(what, v string) error {
-	if v == "*" || v != strings.TrimSpace(v) {
+	if v == "*" || paddedBy(v) {
 		return fmt.Errorf("mem0: %w: %s must be a plain name", ErrInvalid, what)
 	}
 	return nil
+}
+
+// paddedBy reports whether v starts or ends with a space or control
+// character. mem0 trims with Python's str.strip, whose set (including
+// U+001C to U+001F) differs from Go's TrimSpace, so refuse the union.
+func paddedBy(v string) bool {
+	first, _ := utf8.DecodeRuneInString(v)
+	last, _ := utf8.DecodeLastRuneInString(v)
+	bad := func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }
+	return v != "" && (bad(first) || bad(last))
 }
 
 // checkAgent is checkScope for an agent, which may be empty (no agent).

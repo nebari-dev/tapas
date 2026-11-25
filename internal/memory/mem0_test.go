@@ -436,7 +436,7 @@ func TestMem0RefusesANameMem0WouldReadAsSomeoneElseWithoutARequest(t *testing.T)
 		"List":   func(c *Mem0, o, _ string) error { _, err := c.List(ctx, o); return err },
 	}
 	for name, call := range calls {
-		for _, bad := range []string{" alice", "alice ", "\talice", "*"} {
+		for _, bad := range []string{" alice", "alice ", "\talice", "*", "\x1falice", "alice\x1c", "\x00alice", "\u00a0alice", "alice\u2003"} {
 			t.Run(name+" owner "+strconv.Quote(bad), func(t *testing.T) {
 				f := newFakeMem0(t)
 				if err := call(f.client(), bad, ""); !errors.Is(err, ErrInvalid) {
@@ -489,5 +489,12 @@ func TestMem0DoesNotFollowRedirectsSoTheKeyStaysAtItsAddress(t *testing.T) {
 	}
 	if mine.CheckRedirect != nil {
 		t.Error("the caller's client was changed")
+	}
+}
+
+func TestMem0WithANilClientUsesATenSecondTimeout(t *testing.T) {
+	c := NewMem0("http://mem0.invalid", testKey, nil, WithAddClient(nil))
+	if c.client.Timeout != 10*time.Second || c.addClient.Timeout != 10*time.Second {
+		t.Errorf("timeouts = %v, %v; want 10s", c.client.Timeout, c.addClient.Timeout)
 	}
 }
