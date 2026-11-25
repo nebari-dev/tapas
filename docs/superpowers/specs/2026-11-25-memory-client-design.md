@@ -85,7 +85,7 @@ type SecretKeyRef struct {
 }
 ```
 
-`Platform.Memory MemoryCfg `json:"memory"``. Defaults in `applyDefaults`: timeout 10s, addTimeout 120s, name `mem0-admin-key`, key `api-key` (the mem0 pack's defaults). `Validate`: when enabled, `memory.url` must be an `http`/`https` URL with a host; `memory.apiKeySecret.namespace` must be set and a valid DNS-1123 label. `misplaced()`: `memory` only with executor kubernetes.
+`Platform.Memory MemoryCfg `json:"memory"``. Defaults in `applyDefaults`: timeout 10s, addTimeout 120s, name `mem0-admin-key`, key `api-key` (the mem0 pack's defaults). `Validate`: when enabled, `memory.url` must be an `http`/`https` URL with a host and no userinfo, query or fragment; `memory.apiKeySecret.namespace` must be set and a valid DNS-1123 label. `misplaced()`: `memory` only with executor kubernetes.
 
 ### Key read (`internal/cli/servercmd`, tapas#15)
 

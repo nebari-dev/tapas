@@ -52,7 +52,7 @@ config:
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Turns memory on. |
-| `url` | none | The mem0 pack's Service address, `http` or `https` with a host. Required when memory is on. |
+| `url` | none | The mem0 pack's Service address, `http` or `https` with a host, and no user name, password, query or fragment. Required when memory is on. |
 | `timeout` | `10s` | How long a search, list, get or delete call may take. |
 | `addTimeout` | `120s` | How long an add call may take. It is longer because mem0 runs model extraction inline. |
 | `apiKeySecret.namespace` | none | The namespace of mem0's admin key Secret, which is the namespace the mem0 pack is installed in. Required when memory is on. |
@@ -61,7 +61,7 @@ config:
 
 The chart passes this section into the config file as written and creates no Role in mem0's namespace. The gateway reads the key through the Role the mem0 pack creates for the accounts in `callers`.
 
-The gateway refuses to start with memory on when `url` is missing or is not an `http` or `https` address, when `apiKeySecret.namespace` is missing or is not a valid namespace name, or when `executor` is not `kubernetes`.
+The gateway refuses to start with memory on when `url` is missing, is not an `http` or `https` address, or carries a user name, password, query or fragment, when `apiKeySecret.namespace` is missing or is not a valid namespace name, or when `executor` is not `kubernetes`.
 
 ## What the gateway logs at start
 
