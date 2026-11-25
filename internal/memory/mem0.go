@@ -44,27 +44,59 @@ type Option func(*Mem0)
 // it needs a longer timeout. A timed-out add may still have been stored, so
 // callers must not retry it blindly.
 func WithAddClient(hc *http.Client) Option {
-	return func(m *Mem0) { m.addClient = hc }
+	return func(m *Mem0) { m.addClient = noRedirects(hc) }
 }
 
 // NewMem0 returns a client for the mem0 pack at baseURL, sending apiKey as
 // X-API-Key. hc carries every call except Add, which uses it too unless
 // WithAddClient says otherwise.
 func NewMem0(baseURL, apiKey string, hc *http.Client, opts ...Option) *Mem0 {
-	m := &Mem0{base: strings.TrimSuffix(baseURL, "/"), key: apiKey, client: hc, addClient: hc}
+	m := &Mem0{base: strings.TrimSuffix(baseURL, "/"), key: apiKey, client: noRedirects(hc)}
+	m.addClient = m.client
 	for _, o := range opts {
 		o(m)
 	}
 	return m
 }
 
-// checkOwner refuses what the mem0 pack would refuse anyway, before any
-// request: no person, or every person.
+// noRedirects returns a copy of hc that does not follow redirects, so the key
+// is never sent anywhere but the address it was configured for. The caller's
+// client is left as it was.
+func noRedirects(hc *http.Client) *http.Client {
+	c := http.Client{}
+	if hc != nil {
+		c = *hc
+	}
+	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &c
+}
+
+// checkOwner refuses, before any request, an owner that is not one person
+// exactly as written: empty, the wildcard, or padded with whitespace. mem0
+// strips whitespace from user_id before using it, so " alice" would be stored
+// and read as "alice", another person's memories.
 func checkOwner(owner string) error {
-	if strings.TrimSpace(owner) == "" || owner == "*" {
+	if owner == "" || strings.TrimSpace(owner) == "" {
 		return fmt.Errorf("mem0: %w: owner must be one person", ErrInvalid)
 	}
+	return checkScope("owner", owner)
+}
+
+// checkScope refuses a user or agent name mem0 would read as something else:
+// the wildcard, or one with surrounding whitespace (mem0 trims it).
+func checkScope(what, v string) error {
+	if v == "*" || v != strings.TrimSpace(v) {
+		return fmt.Errorf("mem0: %w: %s must be a plain name", ErrInvalid, what)
+	}
 	return nil
+}
+
+// checkAgent is checkScope for an agent, which may be empty (no agent).
+func checkAgent(agent string) error {
+	if agent == "" {
+		return nil
+	}
+	return checkScope("agent", agent)
 }
 
 // wireMemory is one memory as mem0 v2.2.1 writes it: the text is "memory",
@@ -117,6 +149,9 @@ func (m *Mem0) Search(ctx context.Context, owner, agent, query string, limit int
 	if err := checkOwner(owner); err != nil {
 		return nil, err
 	}
+	if err := checkAgent(agent); err != nil {
+		return nil, err
+	}
 	if limit <= 0 {
 		return nil, fmt.Errorf("mem0: %w: limit must be above zero", ErrInvalid)
 	}
@@ -137,6 +172,9 @@ func (m *Mem0) Search(ctx context.Context, owner, agent, query string, limit int
 // "filters".
 func (m *Mem0) Add(ctx context.Context, owner, agent string, msgs []Message) ([]Memory, error) {
 	if err := checkOwner(owner); err != nil {
+		return nil, err
+	}
+	if err := checkAgent(agent); err != nil {
 		return nil, err
 	}
 	type wireMessage struct {

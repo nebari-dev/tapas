@@ -426,3 +426,68 @@ func TestMem0AWrongKeyIsRefusedOnEveryCall(t *testing.T) {
 		t.Errorf("Delete err = %v", err)
 	}
 }
+
+func TestMem0RefusesANameMem0WouldReadAsSomeoneElseWithoutARequest(t *testing.T) {
+	ctx := context.Background()
+	msgs := []Message{{"user", "hi"}}
+	calls := map[string]func(c *Mem0, owner, agent string) error{
+		"Add":    func(c *Mem0, o, a string) error { _, err := c.Add(ctx, o, a, msgs); return err },
+		"Search": func(c *Mem0, o, a string) error { _, err := c.Search(ctx, o, a, "q", 5); return err },
+		"List":   func(c *Mem0, o, _ string) error { _, err := c.List(ctx, o); return err },
+	}
+	for name, call := range calls {
+		for _, bad := range []string{" alice", "alice ", "\talice", "*"} {
+			t.Run(name+" owner "+strconv.Quote(bad), func(t *testing.T) {
+				f := newFakeMem0(t)
+				if err := call(f.client(), bad, ""); !errors.Is(err, ErrInvalid) {
+					t.Errorf("err = %v, want ErrInvalid", err)
+				}
+				if n := len(f.requests()); n != 0 {
+					t.Errorf("made %d requests, want none", n)
+				}
+			})
+			if name == "List" {
+				continue
+			}
+			t.Run(name+" agent "+strconv.Quote(bad), func(t *testing.T) {
+				f := newFakeMem0(t)
+				if err := call(f.client(), "alice", bad); !errors.Is(err, ErrInvalid) {
+					t.Errorf("err = %v, want ErrInvalid", err)
+				}
+				if n := len(f.requests()); n != 0 {
+					t.Errorf("made %d requests, want none", n)
+				}
+			})
+		}
+	}
+}
+
+func TestMem0DoesNotFollowRedirectsSoTheKeyStaysAtItsAddress(t *testing.T) {
+	other := newFakeMem0(t)
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer redirector.Close()
+	mine := &http.Client{}
+	c := NewMem0(redirector.URL, testKey, mine, WithAddClient(&http.Client{}))
+	ctx := context.Background()
+	for name, call := range map[string]func() error{
+		"Add":    func() error { _, err := c.Add(ctx, "alice", "", []Message{{"user", "x"}}); return err },
+		"Search": func() error { _, err := c.Search(ctx, "alice", "", "q", 1); return err },
+		"List":   func() error { _, err := c.List(ctx, "alice"); return err },
+		"Get":    func() error { _, err := c.Get(ctx, idA); return err },
+		"Delete": func() error { return c.Delete(ctx, idA) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := call(); err == nil {
+				t.Error("want an error for a redirect")
+			}
+		})
+	}
+	if n := len(other.requests()); n != 0 {
+		t.Errorf("the redirect target got %d requests, want none", n)
+	}
+	if mine.CheckRedirect != nil {
+		t.Error("the caller's client was changed")
+	}
+}
