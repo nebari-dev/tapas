@@ -73,6 +73,8 @@ Merge order: #A -> #B -> #C.
 | vet | `go vet ./...` | clean |
 | chart | `go test -count=1 ./test/helm/...` | ok |
 
+**Evidence (2026-11-25, head 11f4d38):** `go test ./internal/config/...` 1 ok; `go test ./internal/cli/...` 12 ok; `go test ./test/helm/...` ok (RBAC markers unchanged); `go vet ./...` clean; `make test-local` no failures.
+
 ### Task 1: The memory config section
 
 **Files:**
