@@ -208,6 +208,8 @@ Merge order: #A -> #B -> #C.
 | docs | `make docs-build` or the site build command in `site/` | builds |
 | CI | `gh pr checks <PR>` | Go build, vet, local, tests, govulncheck pass |
 
+**Evidence (2026-11-25, head 8a3bdd2):** `go test -count=1 ./internal/memory/... ./internal/cli/... ./test/helm/...` all ok; `make test-local` no failures; `go vet ./...` clean; docs built with `npx pnpm@10.34.7 install --frozen-lockfile && pnpm exec astro build` (40 pages, `/admin/memory/index.html` among them). `make test` fails locally in `internal/files` (TestDecodeListingByteCap), `internal/storage/hosthome` (/root is a symlink on this host) and `test/imagetag` (`shasum` not installed); the same three fail on origin/main in this environment and this branch touches none of those packages, so CI is the check for them.
+
 ### Task 6: Wiring and the start check
 
 **Files:**
