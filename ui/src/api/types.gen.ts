@@ -112,7 +112,7 @@ export type AdminConnector = {
     name: string;
     oauth: AdminOAuth;
     /**
-     * Paste this at the vendor as the OAuth redirect address
+     * This connector's own OAuth redirect address: paste it at the vendor
      */
     redirectUri?: string;
     rev: string;
@@ -458,9 +458,9 @@ export type CatalogEntry = {
 export type CatalogOutputBody = {
     items: Array<CatalogEntry> | null;
     /**
-     * Paste this at the vendor as the OAuth redirect address
+     * A connector's OAuth redirect address is this followed by its slug; paste that at the vendor
      */
-    redirectUri?: string;
+    redirectUriPrefix?: string;
 };
 
 export type Change = {
@@ -501,6 +501,10 @@ export type CompleteInput = {
      * The issuer the vendor named (RFC 9207), when it sent one
      */
     iss?: string;
+    /**
+     * The connector whose callback page the vendor sent the browser back to (the last part of its path)
+     */
+    slug: string;
     state: string;
 };
 

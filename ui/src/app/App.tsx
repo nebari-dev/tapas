@@ -44,7 +44,7 @@ export function AppRoutes() {
             { index: true, element: <ApiTokens /> },
             { path: 'secrets', element: <Secrets /> },
             { path: 'connections', element: <Connections /> },
-            { path: 'connections/callback', element: <ConnectionCallback /> },
+            { path: 'connections/callback/:slug', element: <ConnectionCallback /> },
             { path: 'apps', element: <AdminApps /> },
             { path: 'usage', element: <Usage /> },
             { path: 'backups', element: <Backups /> },

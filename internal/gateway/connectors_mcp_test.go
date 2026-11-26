@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -130,11 +131,20 @@ func signIn(t *testing.T, f *mcpFixture, as *connectorstest.AuthServer, path str
 	if w.Code != http.StatusOK {
 		t.Fatalf("POST %s: %d %s", path, w.Code, w.Body)
 	}
-	back, err := as.Authorize(apitest.Decode[struct{ AuthorizeURL string }](t, w).AuthorizeURL)
+	u := apitest.Decode[struct{ AuthorizeURL string }](t, w).AuthorizeURL
+	back, err := as.Authorize(u)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return fmt.Sprintf(`{"state":%q,"code":%q,"iss":%q}`, back.Get("state"), back.Get("code"), back.Get("iss"))
+	// The callback page is the one the vendor sends back to: its last path
+	// segment is the connector's slug.
+	parsed, err := url.Parse(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redirect := parsed.Query().Get("redirect_uri")
+	slug := redirect[strings.LastIndex(redirect, "/")+1:]
+	return fmt.Sprintf(`{"slug":%q,"state":%q,"code":%q,"iss":%q}`, slug, back.Get("state"), back.Get("code"), back.Get("iss"))
 }
 
 func complete(t *testing.T, f *mcpFixture, body string, c *http.Cookie, want int) {

@@ -17,10 +17,10 @@ import (
 // signIn is the sign-in at connectors' vendors, which is also how the vault
 // refreshes and revokes tokens. Every request goes through the guarded
 // client, with connectors.internalHosts allowed.
-func signIn(c config.ConnectorsCfg, db *store.Store, seal tink.AEAD, clients *connreg.Registry, redirectURI string) (gwconnectors.SignIn, vault.OAuth) {
+func signIn(c config.ConnectorsCfg, db *store.Store, seal tink.AEAD, clients *connreg.Registry, publicURL string) (gwconnectors.SignIn, vault.OAuth) {
 	s := oauth.New(oauth.Config{
 		DB: db, Seal: seal, Clients: clients, HTTP: httpx.Guard{PublicOnly: true, Internal: c.InternalHosts}.Client(),
-		InternalHosts: c.InternalHosts, RedirectURI: redirectURI,
+		InternalHosts: c.InternalHosts, PublicURL: publicURL,
 	})
 	return s, s
 }

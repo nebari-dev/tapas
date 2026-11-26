@@ -324,7 +324,7 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 		clients := connreg.New(connreg.Config{DB: db, Seal: key, InternalHosts: o.ConnectorInternalHosts})
 		signIn = oauth.New(oauth.Config{
 			DB: db, Seal: key, Clients: clients, HTTP: hc, InternalHosts: o.ConnectorInternalHosts,
-			RedirectURI: connectors.RedirectURI(o.PublicURL), Now: o.Now,
+			PublicURL: o.PublicURL, Now: o.Now,
 		})
 		vlt = vault.New(vault.Config{DB: db, Seal: key, OAuth: signIn, Now: o.Now})
 		conns = connreg.New(connreg.Config{DB: db, Seal: key, InternalHosts: o.ConnectorInternalHosts, Connections: vlt})

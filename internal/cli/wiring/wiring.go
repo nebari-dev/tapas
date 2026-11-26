@@ -27,7 +27,6 @@ import (
 	"github.com/nebari-dev/javo/internal/backup/restic"
 	"github.com/nebari-dev/javo/internal/buildinfo"
 	"github.com/nebari-dev/javo/internal/config"
-	"github.com/nebari-dev/javo/internal/connectors"
 	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
 	"github.com/nebari-dev/javo/internal/connectors/vault"
 	"github.com/nebari-dev/javo/internal/controller/jobs"
@@ -242,7 +241,7 @@ func Connectors(c config.ConnectorsCfg, db *store.Store, seal tink.AEAD, lasting
 	clients := connreg.New(connreg.Config{DB: db, Seal: seal, InternalHosts: c.InternalHosts})
 	var p ConnectorParts
 	var oauth vault.OAuth
-	p.SignIn, oauth = signIn(c, db, seal, clients, connectors.RedirectURI(publicURL))
+	p.SignIn, oauth = signIn(c, db, seal, clients, publicURL)
 	p.Vault = vault.New(vault.Config{DB: db, Seal: seal, OAuth: oauth})
 	p.Registry = connreg.New(connreg.Config{DB: db, Seal: seal, InternalHosts: c.InternalHosts, Connections: p.Vault})
 	return p, nil

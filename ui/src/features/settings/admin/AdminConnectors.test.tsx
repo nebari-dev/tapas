@@ -8,7 +8,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const REDIRECT = 'https://tapas.example.org/settings/connections/callback'
+const PREFIX = 'https://tapas.example.org/settings/connections/callback/'
 
 const chat = {
   id: 'c-1',
@@ -27,7 +27,7 @@ const chat = {
     { name: 'list_channels', description: 'List channels', readOnlyHint: true },
     { name: 'post_message', description: 'Post a message', readOnlyHint: false },
   ],
-  redirectUri: REDIRECT,
+  redirectUri: PREFIX + 'chat',
   updatedAt: '2026-11-20T10:00:00Z',
 }
 
@@ -49,6 +49,7 @@ const wiki = {
 }
 
 const catalog = {
+  redirectUriPrefix: PREFIX,
   items: [
     {
       id: 'chat',
@@ -151,7 +152,7 @@ describe('Connectors (admin)', () => {
     const form = await screen.findByRole('form', { name: 'Add Team chat' })
     expect(within(form).getByText(/Create an OAuth app at the vendor/)).toBeTruthy()
     expect((within(form).getByLabelText('Address of the MCP server') as HTMLInputElement).value).toBe('https://mcp.example.org/chat')
-    expect(within(form).getByText(REDIRECT)).toBeTruthy()
+    expect(within(form).getByText(PREFIX + 'chat')).toBeTruthy()
     await userEvent.type(within(form).getByLabelText('OAuth client id'), 'client-9')
     await userEvent.type(within(form).getByLabelText('OAuth client secret'), 'shh-9')
     await userEvent.type(within(form).getByLabelText('Allowed groups'), 'sales, *')
@@ -179,7 +180,10 @@ describe('Connectors (admin)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Add a custom MCP server' }))
     const form = await screen.findByRole('form', { name: 'Add a custom connector' })
     await userEvent.type(within(form).getByLabelText('Name'), 'Docs')
+    expect(within(form).getByText(/Shown here once the short name is filled in/)).toBeTruthy()
     await userEvent.type(within(form).getByLabelText('Short name'), 'docs')
+    // Each connector has its own redirect address, ending in its short name.
+    expect(within(form).getByText(PREFIX + 'docs')).toBeTruthy()
     await userEvent.type(within(form).getByLabelText('Address of the MCP server'), 'https://docs.example.org/mcp')
     await userEvent.click(within(form).getByRole('radio', { name: 'One shared account' }))
     await userEvent.click(within(form).getByRole('button', { name: 'Add connector' }))

@@ -19,7 +19,7 @@ const tickets = {
   tools: [],
 }
 
-const CALLBACK = '/settings/connections/callback?state=s-1&code=k-1&iss=https%3A%2F%2Fauth.example.org'
+const CALLBACK = '/settings/connections/callback/tickets?state=s-1&code=k-1&iss=https%3A%2F%2Fauth.example.org'
 
 describe('Connection callback', () => {
   it('finishes the sign-in once, takes the code out of the address, and says it worked', async () => {
@@ -30,8 +30,8 @@ describe('Connection callback', () => {
     renderApp(CALLBACK)
     expect(await screen.findByText('Tickets is connected')).toBeTruthy()
     expect(m.count('POST', '/api/connectors/oauth/complete')).toBe(1)
-    expect(m.calls.find((c) => c.method === 'POST')?.body).toEqual({ state: 's-1', code: 'k-1', iss: 'https://auth.example.org' })
-    expect(location()).toBe('/settings/connections/callback')
+    expect(m.calls.find((c) => c.method === 'POST')?.body).toEqual({ slug: 'tickets', state: 's-1', code: 'k-1', iss: 'https://auth.example.org' })
+    expect(location()).toBe('/settings/connections/callback/tickets')
     expect(screen.getByRole('link', { name: 'Back to Connected accounts' }).getAttribute('href')).toBe('/settings/connections')
   })
 
@@ -55,12 +55,12 @@ describe('Connection callback', () => {
 
   it('says the vendor refused, and sends nothing, when the vendor answered with an error', async () => {
     const m = mockApi({ 'GET /api/me': { body: me } })
-    renderApp('/settings/connections/callback?state=s-1&error=access_denied&error_description=The+user+said+no')
+    renderApp('/settings/connections/callback/tickets?state=s-1&error=access_denied&error_description=The+user+said+no')
     expect(await screen.findByText(/The service did not connect your account/)).toBeTruthy()
     // Text from the address is anyone's to write, so it is not shown.
     expect(document.body.textContent).not.toContain('The user said no')
     expect(m.count('POST', '/api/connectors/oauth/complete')).toBe(0)
-    expect(location()).toBe('/settings/connections/callback')
+    expect(location()).toBe('/settings/connections/callback/tickets')
   })
 
   it('sends a company-wide sign-in back to the Connectors page', async () => {

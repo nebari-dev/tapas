@@ -25,7 +25,7 @@ type SignIn interface {
 	// connection (person, or "" for the company's).
 	Start(ctx context.Context, actor model.Actor, c connectors.Connector, person, subject string) (string, error)
 	// Complete finishes person's sign-in with what the vendor sent back.
-	Complete(ctx context.Context, person, state, code, iss string) (vault.Grant, error)
+	Complete(ctx context.Context, person, slug, state, code, iss string) (vault.Grant, error)
 }
 
 // ToolLister lists a connector's tools at its MCP server with bearer.
@@ -72,6 +72,7 @@ type authorizeOutput struct{ Body AuthorizeURL }
 
 // CompleteInput is what the vendor sent the browser back with.
 type CompleteInput struct {
+	Slug  string `json:"slug" minLength:"2" maxLength:"31" doc:"The connector whose callback page the vendor sent the browser back to (the last part of its path)"`
 	State string `json:"state" minLength:"1" maxLength:"256"`
 	Code  string `json:"code" minLength:"1" maxLength:"4096"`
 	Iss   string `json:"iss,omitempty" maxLength:"2048" doc:"The issuer the vendor named (RFC 9207), when it sent one"`
@@ -130,7 +131,7 @@ func (a *API) registerMember(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "connectConnector", Method: http.MethodPost, Path: "/api/connectors/{id}/connect",
 		Summary:     "Start connecting your account to a connector (browser session only)",
-		Description: "Answers the vendor's sign-in address. The vendor sends the browser back to " + connectors.RedirectPath + ", which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.",
+		Description: "Answers the vendor's sign-in address. The vendor sends the browser back to " + connectors.RedirectPath + "/{slug}, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.",
 		Tags:        tag, Security: authn.SessionOnly,
 		Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusBadGateway},
 	}, func(ctx context.Context, in *idInput) (*authorizeOutput, error) {
@@ -151,7 +152,7 @@ func (a *API) registerMember(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "completeConnectorSignIn", Method: http.MethodPost, Path: "/api/connectors/oauth/complete",
 		Summary:     "Finish connecting an account (browser session only)",
-		Description: "Called by the page at " + connectors.RedirectPath + " with what the vendor sent back. A sign-in can be finished once, within 10 minutes, by the person who started it.",
+		Description: "Called by the page at " + connectors.RedirectPath + "/{slug} with what the vendor sent back and that slug. A sign-in can be finished once, within 10 minutes, by the person who started it, and only from the page of the connector it was started for.",
 		Tags:        tag, Security: authn.SessionOnly,
 		Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusBadGateway},
 	}, func(ctx context.Context, in *completeInput) (*completeOutput, error) {
@@ -162,7 +163,7 @@ func (a *API) registerMember(api huma.API) {
 			return nil, err
 		}
 		u := authn.User(ctx)
-		g, err := a.SignIn.Complete(ctx, u.ID, in.Body.State, in.Body.Code, in.Body.Iss)
+		g, err := a.SignIn.Complete(ctx, u.ID, in.Body.Slug, in.Body.State, in.Body.Code, in.Body.Iss)
 		if err != nil {
 			return nil, signInFailed(err)
 		}

@@ -39,6 +39,9 @@ const (
 	CodeNoPKCE = "pkce_s256_not_supported"
 	// CodeIssuer: the answer named another issuer (RFC 9207).
 	CodeIssuer = "issuer_mismatch"
+	// CodeRedirect: the answer came back on another connector's callback
+	// page than the one the sign-in was started for.
+	CodeRedirect = "redirect_mismatch"
 )
 
 // NewOAuthError is the OAuthError for code as a server sent it: kept when

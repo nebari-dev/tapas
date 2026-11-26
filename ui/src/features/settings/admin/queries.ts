@@ -275,7 +275,10 @@ export function useConnectorCatalog(enabled: boolean) {
   return useQuery({
     queryKey: keys.catalog,
     enabled,
-    queryFn: async () => (await adminConnectorCatalog({ throwOnError: true })).data.items ?? [],
+    queryFn: async () => {
+      const d = (await adminConnectorCatalog({ throwOnError: true })).data
+      return { items: d.items ?? [], redirectUriPrefix: d.redirectUriPrefix ?? '' }
+    },
   })
 }
 

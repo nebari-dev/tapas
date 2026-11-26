@@ -98,7 +98,7 @@ type AdminConnector struct {
 	AllowedGroups []string          `json:"allowedGroups"`
 	ToolModes     map[string]string `json:"toolModes"`
 	Tools         []ToolView        `json:"tools" doc:"The last snapshot of the server's tool list"`
-	RedirectURI   string            `json:"redirectUri,omitempty" doc:"Paste this at the vendor as the OAuth redirect address"`
+	RedirectURI   string            `json:"redirectUri,omitempty" doc:"This connector's own OAuth redirect address: paste it at the vendor"`
 	Shared        *SharedConnection `json:"shared,omitempty" doc:"The account everyone's calls use; only in shared mode"`
 	Connections   int               `json:"connections" doc:"How many accounts are connected"`
 	UpdatedAt     time.Time         `json:"updatedAt"`
@@ -128,8 +128,8 @@ type CatalogEntry struct {
 
 type catalogOutput struct {
 	Body struct {
-		Items       []CatalogEntry `json:"items"`
-		RedirectURI string         `json:"redirectUri,omitempty" doc:"Paste this at the vendor as the OAuth redirect address"`
+		Items             []CatalogEntry `json:"items"`
+		RedirectURIPrefix string         `json:"redirectUriPrefix,omitempty" doc:"A connector's OAuth redirect address is this followed by its slug; paste that at the vendor"`
 	}
 }
 
@@ -169,7 +169,7 @@ func (a *API) Register(api huma.API) {
 			return nil, off()
 		}
 		out := &catalogOutput{}
-		out.Body.Items, out.Body.RedirectURI = []CatalogEntry{}, connectors.RedirectURI(a.PublicURL)
+		out.Body.Items, out.Body.RedirectURIPrefix = []CatalogEntry{}, connectors.RedirectURI(a.PublicURL, "")
 		for _, e := range catalog.All() {
 			out.Body.Items = append(out.Body.Items, CatalogEntry{
 				ID: e.ID, Slug: e.Slug, Name: e.Name, URL: e.URL, AuthMode: string(e.AuthMode), Scopes: nonNil(e.Scopes),
@@ -342,7 +342,7 @@ func (a *API) view(c connectors.Connector) AdminConnector {
 			AuthorizeURL: c.OAuth.AuthorizeURL, TokenURL: c.OAuth.TokenURL, RevokeURL: c.OAuth.RevokeURL,
 		},
 		Scopes: nonNil(c.Scopes), AllowedGroups: nonNil(c.AllowedGroups), ToolModes: modes(c.ToolModes),
-		Tools: make([]ToolView, 0, len(c.Tools)), RedirectURI: connectors.RedirectURI(a.PublicURL), UpdatedAt: c.UpdatedAt,
+		Tools: make([]ToolView, 0, len(c.Tools)), RedirectURI: connectors.RedirectURI(a.PublicURL, c.Slug), UpdatedAt: c.UpdatedAt,
 	}
 	if p := c.OAuth.Server; p != nil {
 		v.OAuth.Issuer, v.OAuth.ServerMoved = p.Issuer, p.Moved

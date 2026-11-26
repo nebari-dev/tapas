@@ -759,7 +759,7 @@ export const listConnectors = <ThrowOnError extends boolean = false>(options?: O
 /**
  * Finish connecting an account (browser session only)
  *
- * Called by the page at /settings/connections/callback with what the vendor sent back. A sign-in can be finished once, within 10 minutes, by the person who started it.
+ * Called by the page at /settings/connections/callback/{slug} with what the vendor sent back and that slug. A sign-in can be finished once, within 10 minutes, by the person who started it, and only from the page of the connector it was started for.
  */
 export const completeConnectorSignIn = <ThrowOnError extends boolean = false>(options: Options<CompleteConnectorSignInData, ThrowOnError>): RequestResult<CompleteConnectorSignInResponses, CompleteConnectorSignInErrors, ThrowOnError> => (options.client ?? client).post<CompleteConnectorSignInResponses, CompleteConnectorSignInErrors, ThrowOnError>({
     security: [{
@@ -778,7 +778,7 @@ export const completeConnectorSignIn = <ThrowOnError extends boolean = false>(op
 /**
  * Start connecting your account to a connector (browser session only)
  *
- * Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.
+ * Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback/{slug}, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.
  */
 export const connectConnector = <ThrowOnError extends boolean = false>(options: Options<ConnectConnectorData, ThrowOnError>): RequestResult<ConnectConnectorResponses, ConnectConnectorErrors, ThrowOnError> => (options.client ?? client).post<ConnectConnectorResponses, ConnectConnectorErrors, ThrowOnError>({
     security: [{

@@ -143,8 +143,9 @@ function inputOf(d: Draft, secret: string, rev?: string): ConnectorInput {
 }
 
 /** The redirect address with a copy button, or why there is none yet. */
-function RedirectAddress({ uri }: { uri?: string }) {
-  if (uri === undefined) return <span className="hint">Shown here once the connector is saved. You can add it turned off first.</span>
+function RedirectAddress({ uri, needsSlug }: { uri?: string; needsSlug?: boolean }) {
+  if (uri === undefined) return <span className="hint">Loading</span>
+  if (needsSlug) return <span className="hint">Shown here once the short name is filled in.</span>
   if (!uri) return <span className="hint">The platform config sets no public address, so there is no redirect address yet.</span>
   return (
     <div className="row con-redirect">
@@ -271,20 +272,31 @@ function RefreshTools({ id, onFresh }: { id: string; onFresh: (c: AdminConnector
   )
 }
 
+// A connector's slug, as the server takes it (connectors.ValidSlug).
+const SLUG = /^[a-z][a-z0-9]{1,30}$/
+
+/** The redirect address to show: the saved connector's own, or the prefix and the slug being typed. */
+function redirectOf(existing: AdminConnector | undefined, prefix: string | undefined, slug: string): { uri?: string; needsSlug?: boolean } {
+  if (existing) return { uri: existing.redirectUri ?? '' }
+  if (prefix === undefined || !prefix) return { uri: prefix }
+  return SLUG.test(slug) ? { uri: prefix + slug } : { uri: '', needsSlug: true }
+}
+
 const FORM_FIELDS = new Set(['name', 'slug', 'url', 'oauth.clientId', 'oauth.clientSecret', 'scopes', 'allowedGroups'])
 
 function ConnectorForm({
   start,
   existing,
   entry,
-  redirectUri,
+  redirectPrefix,
   onDone,
   onConflict,
 }: {
   start: Draft
   existing?: AdminConnector
   entry?: CatalogEntry | null
-  redirectUri?: string
+  /** Each connector's redirect address is this followed by its slug. */
+  redirectPrefix?: string
   onDone: () => void
   /** A save found the connector changed: the page says so, and the form is made again from the fresh copy. */
   onConflict: (msg: string) => void
@@ -395,7 +407,7 @@ function ConnectorForm({
         </div>
         <div className="field">
           <span className="field-label">Redirect address</span>
-          <RedirectAddress uri={redirectUri} />
+          <RedirectAddress {...redirectOf(existing, redirectPrefix, d.slug)} />
           <span className="hint">Paste this at the vendor as the OAuth redirect (callback) address.</span>
           {cur?.oauth.issuer && <span className="hint">Sign-ins go to {cur.oauth.issuer}, found at the first sign-in.</span>}
           {cur?.oauth.serverMoved && (
@@ -631,10 +643,10 @@ export function AdminConnectors() {
   if (q.isError) return <Banner tone="err" title={problemText(q.error)} />
   if (!q.data) return <div className="muted">Loading</div>
   const list = q.data
-  const redirectUri = list[0]?.redirectUri
+  const redirectPrefix = cat.data?.redirectUriPrefix
   const editing = open?.kind === 'edit' ? list.find((c) => c.id === open.id) : undefined
   const close = () => setOpen(null)
-  const rows = listRows(list, cat.data ?? [])
+  const rows = listRows(list, cat.data?.items ?? [])
   return (
     <section className="section" aria-label="Connectors">
       <div className="section-head tok-head">
@@ -655,7 +667,7 @@ export function AdminConnectors() {
       )}
       {open?.kind === 'new' && (
         <div className="section-sm">
-          <ConnectorForm start={draftFrom(open.entry)} entry={open.entry} redirectUri={redirectUri} onDone={close} onConflict={setNotice} />
+          <ConnectorForm start={draftFrom(open.entry)} entry={open.entry} redirectPrefix={redirectPrefix} onDone={close} onConflict={setNotice} />
         </div>
       )}
       {editing && (
@@ -664,7 +676,7 @@ export function AdminConnectors() {
             key={editing.rev}
             start={withTools(draftOf(editing), editing.tools)}
             existing={editing}
-            redirectUri={editing.redirectUri}
+            redirectPrefix={redirectPrefix}
             onDone={close}
             onConflict={setNotice}
           />

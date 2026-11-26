@@ -281,7 +281,7 @@
             "$ref": "#/components/schemas/AdminOAuth"
           },
           "redirectUri": {
-            "description": "Paste this at the vendor as the OAuth redirect address",
+            "description": "This connector's own OAuth redirect address: paste it at the vendor",
             "type": "string"
           },
           "rev": {
@@ -1243,8 +1243,8 @@
               "null"
             ]
           },
-          "redirectUri": {
-            "description": "Paste this at the vendor as the OAuth redirect address",
+          "redirectUriPrefix": {
+            "description": "A connector's OAuth redirect address is this followed by its slug; paste that at the vendor",
             "type": "string"
           }
         },
@@ -1392,6 +1392,12 @@
             "maxLength": 2048,
             "type": "string"
           },
+          "slug": {
+            "description": "The connector whose callback page the vendor sent the browser back to (the last part of its path)",
+            "maxLength": 31,
+            "minLength": 2,
+            "type": "string"
+          },
           "state": {
             "maxLength": 256,
             "minLength": 1,
@@ -1399,6 +1405,7 @@
           }
         },
         "required": [
+          "slug",
           "state",
           "code"
         ],
@@ -10139,7 +10146,7 @@
     },
     "/api/connectors/oauth/complete": {
       "post": {
-        "description": "Called by the page at /settings/connections/callback with what the vendor sent back. A sign-in can be finished once, within 10 minutes, by the person who started it.",
+        "description": "Called by the page at /settings/connections/callback/{slug} with what the vendor sent back and that slug. A sign-in can be finished once, within 10 minutes, by the person who started it, and only from the page of the connector it was started for.",
         "operationId": "completeConnectorSignIn",
         "requestBody": {
           "content": {
@@ -10256,7 +10263,7 @@
     },
     "/api/connectors/{id}/connect": {
       "post": {
-        "description": "Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.",
+        "description": "Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback/{slug}, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.",
         "operationId": "connectConnector",
         "parameters": [
           {

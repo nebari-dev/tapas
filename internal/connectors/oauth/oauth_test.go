@@ -27,7 +27,11 @@ var (
 	alice = model.Actor{Person: "alice"}
 )
 
-const redirectURI = "https://tapas.example.org/settings/connections/callback"
+const (
+	publicURL = "https://tapas.example.org"
+	// redirectURI is the fixture connector's own redirect address.
+	redirectURI = publicURL + "/settings/connections/callback/fake"
+)
 
 // loopback is the internal host the fakes listen on.
 var loopback = []string{"127.0.0.1"}
@@ -75,7 +79,7 @@ func setup(t *testing.T, o connectorstest.AuthServerOptions, in func(*registry.I
 func (f *fixture) replica() *oauth.Service {
 	return oauth.New(oauth.Config{
 		DB: f.db, Seal: f.key, Clients: f.reg, HTTP: httpx.Guard{}.Client(), InternalHosts: loopback,
-		RedirectURI: redirectURI, Now: func() time.Time { return f.now },
+		PublicURL: publicURL, Now: func() time.Time { return f.now },
 	})
 }
 
@@ -101,15 +105,16 @@ func (f *fixture) signIn(t *testing.T, person string) (authorize url.Values, bac
 	return parsed.Query(), back
 }
 
-// completion is the sign-in the vendor sent the person back with.
-type completion struct{ state, code, iss string }
+// completion is the sign-in the vendor sent the person back with, and the
+// connector whose callback page it reached.
+type completion struct{ slug, state, code, iss string }
 
 func completionOf(back url.Values) completion {
-	return completion{back.Get("state"), back.Get("code"), back.Get("iss")}
+	return completion{"fake", back.Get("state"), back.Get("code"), back.Get("iss")}
 }
 
 func (f *fixture) complete(person string, c completion) (vault.Grant, error) {
-	return f.svc.Complete(ctx, person, c.state, c.code, c.iss)
+	return f.svc.Complete(ctx, person, c.slug, c.state, c.code, c.iss)
 }
 
 func TestCodeFlowWithDiscoveryAndAPastedClient(t *testing.T) {
@@ -259,7 +264,7 @@ func TestStateIsSingleUse(t *testing.T) {
 	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("second Complete = %v, want ErrSignInExpired", err)
 	}
-	if _, err := f.complete("alice", completion{state: "made-up", code: "x"}); !errors.Is(err, connectors.ErrSignInExpired) {
+	if _, err := f.complete("alice", completion{slug: "fake", state: "made-up", code: "x"}); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("unknown state = %v, want ErrSignInExpired", err)
 	}
 }
@@ -301,6 +306,54 @@ func TestIssuerMismatchFails(t *testing.T) {
 	}
 	if f.as.Exchanges() != 0 {
 		t.Fatal("the code was exchanged")
+	}
+}
+
+// Each connector has its own redirect address, and a sign-in finishes only
+// on the callback page of the connector it was started for (OAuth mix-up
+// defence): what came back on another connector's page is refused before
+// the code is exchanged.
+func TestASignInFinishesOnlyOnItsConnectorsCallback(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	q, back := f.signIn(t, "alice")
+	if q.Get("redirect_uri") != redirectURI {
+		t.Fatalf("redirect_uri %q, want %q", q.Get("redirect_uri"), redirectURI)
+	}
+	c := completionOf(back)
+	c.slug = "other"
+	var oe *connectors.OAuthError
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeRedirect {
+		t.Fatalf("Complete on another connector's page = %v", err)
+	}
+	if f.as.Exchanges() != 0 {
+		t.Fatal("the code was exchanged")
+	}
+}
+
+// An answer that names another issuer is refused even from a server that
+// did not say it sends iss (the sign-in still knows the pinned issuer), and
+// one without iss is refused when the server says it sends it.
+func TestAnIssuerTheSignInDidNotExpectIsRefused(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{NoIssParameter: true}, nil)
+	_, back := f.signIn(t, "alice")
+	c := completionOf(back)
+	c.iss = "https://as.example.org"
+	var oe *connectors.OAuthError
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeIssuer {
+		t.Fatalf("another iss from a server that does not advertise it = %v", err)
+	}
+
+	g := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back = g.signIn(t, "alice")
+	c = completionOf(back)
+	c.iss = ""
+	if _, err := g.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeIssuer {
+		t.Fatalf("no iss from a server that sends it = %v", err)
+	}
+	if f.as.Exchanges()+g.as.Exchanges() != 0 {
+		t.Fatal("a code was exchanged")
 	}
 }
 
@@ -412,7 +465,7 @@ func TestTheAuthorizationServerIsPinnedAtTheFirstSignIn(t *testing.T) {
 	other := connectorstest.NewAuthServer(t)
 	f.mcp.Advertise(other.URL)
 	replica := f.replica()
-	if _, err := replica.Complete(ctx, "bob", pending.Get("state"), pending.Get("code"), pending.Get("iss")); err != nil {
+	if _, err := replica.Complete(ctx, "bob", "fake", pending.Get("state"), pending.Get("code"), pending.Get("iss")); err != nil {
 		t.Fatalf("Complete on another replica: %v", err)
 	}
 	conn := f.get(t)

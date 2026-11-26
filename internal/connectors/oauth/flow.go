@@ -66,9 +66,10 @@ type Config struct {
 	// InternalHosts may be named over plain http (connectors.internalHosts);
 	// every other discovered address must be https.
 	InternalHosts []string
-	// RedirectURI is the deployment's one redirect address
-	// (connectors.RedirectURI of its public URL).
-	RedirectURI string
+	// PublicURL is the platform's public URL (mcp.publicURL): each
+	// connector's redirect address is built from it
+	// (connectors.RedirectURI).
+	PublicURL string
 	// Now is the clock; nil is the real one.
 	Now func() time.Time
 }
@@ -112,7 +113,7 @@ func hashState(state string) []byte {
 // when the server allows it (actor is on the audit log for both), else it
 // is connectors.ErrNeedsClient.
 func (s *Service) Start(ctx context.Context, actor model.Actor, c connectors.Connector, person, subject string) (string, error) {
-	if s.c.RedirectURI == "" {
+	if s.redirectURI(c.Slug) == "" {
 		return "", errors.New("oauth: no redirect address: set the platform's public URL (mcp.publicURL)")
 	}
 	c, e, err := s.startEndpoints(ctx, actor, c)
@@ -133,14 +134,10 @@ func (s *Service) Start(ctx context.Context, actor model.Actor, c connectors.Con
 	if err != nil {
 		return "", err
 	}
-	issuer := ""
-	if e.issParam {
-		issuer = e.issuer
-	}
 	now := s.c.Now()
 	if err := s.c.DB.ConnectorConnections().StartOAuth(ctx, store.ConnectorOAuthState{
 		StateHash: hash, ConnectorID: c.ID, ConnectorRev: c.Rev, Person: person, Subject: subject, VerifierSealed: sealed,
-		RedirectURI: s.c.RedirectURI, Issuer: issuer, CreatedAt: now, ExpiresAt: now.Add(StateTTL),
+		RedirectURI: s.redirectURI(c.Slug), Issuer: e.issuer, CreatedAt: now, ExpiresAt: now.Add(StateTTL),
 	}); err != nil {
 		return "", err
 	}
@@ -148,7 +145,7 @@ func (s *Service) Start(ctx context.Context, actor model.Actor, c connectors.Con
 	if e.resource != "" {
 		opts = append(opts, oauth2.SetAuthURLParam("resource", e.resource))
 	}
-	return s.config(c, e, "", s.c.RedirectURI).AuthCodeURL(state, opts...), nil
+	return s.config(c, e, "", s.redirectURI(c.Slug)).AuthCodeURL(state, opts...), nil
 }
 
 // client is c with an OAuth client: its own, or one registered now (RFC
@@ -163,7 +160,7 @@ func (s *Service) client(ctx context.Context, actor model.Actor, c connectors.Co
 	rctx, cancel := context.WithTimeout(ctx, HTTPTimeout)
 	defer cancel()
 	res, err := oauthex.RegisterClient(rctx, e.register, &oauthex.ClientRegistrationMetadata{
-		RedirectURIs: []string{s.c.RedirectURI}, TokenEndpointAuthMethod: "client_secret_basic",
+		RedirectURIs: []string{s.redirectURI(c.Slug)}, TokenEndpointAuthMethod: "client_secret_basic",
 		GrantTypes: []string{"authorization_code", "refresh_token"}, ResponseTypes: []string{"code"},
 		ClientName: "Tapas", Scope: strings.Join(c.Scopes, " "),
 	}, s.c.HTTP)
@@ -185,12 +182,14 @@ func (s *Service) client(ctx context.Context, actor model.Actor, c connectors.Co
 }
 
 // Complete finishes, for person, the sign-in the vendor sent them back
-// from with state, code and iss: the state must be one person started on
-// this connector revision, unused and not expired (else
-// connectors.ErrSignInExpired; the state is spent either way); when the
-// server said it names itself, iss must be it. The code is exchanged with
-// the PKCE verifier and the same redirect address.
-func (s *Service) Complete(ctx context.Context, person, state, code, iss string) (vault.Grant, error) {
+// from with state, code and iss, to the callback page of the connector
+// slug: the state must be one person started on this connector revision,
+// unused and not expired (else connectors.ErrSignInExpired; the state is
+// spent either way), and for slug's redirect address (else CodeRedirect).
+// For discovered endpoints an iss must be the pinned issuer, and is
+// required when the server said it sends it (else CodeIssuer; RFC 9207). The code is exchanged with the PKCE verifier and
+// the same redirect address.
+func (s *Service) Complete(ctx context.Context, person, slug, state, code, iss string) (vault.Grant, error) {
 	st, err := s.c.DB.ConnectorConnections().TakeOAuthState(ctx, hashState(state))
 	if errors.Is(err, store.ErrNotFound) {
 		return vault.Grant{}, connectors.ErrSignInExpired
@@ -208,16 +207,27 @@ func (s *Service) Complete(ctx context.Context, person, state, code, iss string)
 	if err != nil {
 		return vault.Grant{}, err
 	}
-	if st.Issuer != "" && iss != st.Issuer {
+	// A distinct redirect address per connector, checked against the page
+	// the answer reached, and the issuer check are the OAuth security BCP's
+	// defences against mix-up (RFC 9700 section 4.4).
+	if st.RedirectURI != s.redirectURI(slug) {
+		return vault.Grant{}, &connectors.OAuthError{Code: connectors.CodeRedirect}
+	}
+	e, err := pinnedEndpoints(c)
+	if err != nil {
+		return vault.Grant{}, err
+	}
+	// A discovered server's issuer is always known (pinned). Static
+	// endpoints have none to compare with, so an iss from them is ignored,
+	// as RFC 9207 lets a client that cannot compare do: some vendors with
+	// static catalogue endpoints (Google) send iss, and the distinct
+	// redirect address above already tells their answers apart.
+	if st.Issuer != "" && iss != st.Issuer && (iss != "" || e.issParam) {
 		return vault.Grant{}, &connectors.OAuthError{Code: connectors.CodeIssuer}
 	}
 	verifier, err := s.c.Seal.Decrypt(st.VerifierSealed, verifierAD(st.StateHash))
 	if err != nil {
 		return vault.Grant{}, errors.New("oauth: the sign-in's verifier does not open with this gateway's sessions key")
-	}
-	e, err := pinnedEndpoints(c)
-	if err != nil {
-		return vault.Grant{}, err
 	}
 	secret, err := s.c.Clients.ClientSecret(ctx, c.ID)
 	if err != nil {
@@ -254,7 +264,7 @@ func (s *Service) Refresh(ctx context.Context, c connectors.Connector, refresh s
 	}
 	hctx, cancel := s.httpContext(ctx)
 	defer cancel()
-	tok, err := s.config(c, e, secret, s.c.RedirectURI).TokenSource(hctx, &oauth2.Token{RefreshToken: refresh}).Token()
+	tok, err := s.config(c, e, secret, s.redirectURI(c.Slug)).TokenSource(hctx, &oauth2.Token{RefreshToken: refresh}).Token()
 	if err != nil {
 		return vault.Tokens{}, tokenError(err)
 	}
@@ -274,6 +284,9 @@ func (s *Service) config(c connectors.Connector, e endpoints, secret, redirectUR
 		Endpoint: oauth2.Endpoint{AuthURL: e.authorize, TokenURL: e.token, AuthStyle: style},
 	}
 }
+
+// redirectURI is the redirect address of the connector slug.
+func (s *Service) redirectURI(slug string) string { return connectors.RedirectURI(s.c.PublicURL, slug) }
 
 // httpContext makes oauth2 use the configured client, under HTTPTimeout.
 func (s *Service) httpContext(ctx context.Context) (context.Context, context.CancelFunc) {

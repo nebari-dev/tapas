@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { Banner } from '../../components/Banner'
 import { Card } from '../../components/Card'
 import { problemText } from '../../lib/http'
@@ -29,11 +29,14 @@ function Back({ shared }: { shared?: boolean }) {
 
 /**
  * Settings, the page a connector's vendor sends the browser back to after a
- * sign-in. It hands what the vendor sent to the server once, and takes the
- * one-time code out of the address bar and the history first.
+ * sign-in. Each connector has its own (its slug ends the path), and the page
+ * says which it was reached on, so the server can refuse an answer meant for
+ * another connector. It hands what the vendor sent to the server once, and
+ * takes the one-time code out of the address bar and the history first.
  */
 export function ConnectionCallback() {
   const { pathname, search } = useLocation()
+  const { slug = '' } = useParams()
   const navigate = useNavigate()
   const [answer] = useState(() => answerOf(search))
   const complete = useCompleteSignIn()
@@ -43,8 +46,8 @@ export function ConnectionCallback() {
     if (sent.current) return
     sent.current = true
     navigate(pathname, { replace: true })
-    if (answer.kind === 'code') complete.mutate({ state: answer.state, code: answer.code, ...(answer.iss ? { iss: answer.iss } : {}) })
-  }, [answer, complete, navigate, pathname])
+    if (answer.kind === 'code') complete.mutate({ slug, state: answer.state, code: answer.code, ...(answer.iss ? { iss: answer.iss } : {}) })
+  }, [answer, complete, navigate, pathname, slug])
 
   let body
   if (answer.kind === 'refused')

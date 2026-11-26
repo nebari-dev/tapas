@@ -249,15 +249,18 @@ func SealContext(table, rowID, column string) []byte {
 	return []byte("javo connector v1\x00" + table + "\x00" + rowID + "\x00" + column)
 }
 
-// RedirectPath is the page of the UI a vendor sends a person back to after
-// they sign in there.
+// RedirectPath is where the UI's callback pages are: a vendor sends a
+// person back to RedirectPath/{slug} after they sign in there.
 const RedirectPath = "/settings/connections/callback"
 
-// RedirectURI is the one OAuth redirect address of a deployment, built from
-// its configured public URL (never from a request's Host); "" without one.
-func RedirectURI(publicURL string) string {
+// RedirectURI is the OAuth redirect address of the connector slug, built
+// from the deployment's configured public URL (never from a request's
+// Host); "" without one. Each connector has its own, so an answer can be
+// told apart by the page it reaches (the OAuth security BCP's defence
+// against mix-up). The slug is known before the connector is created.
+func RedirectURI(publicURL, slug string) string {
 	if publicURL == "" {
 		return ""
 	}
-	return strings.TrimRight(publicURL, "/") + RedirectPath
+	return strings.TrimRight(publicURL, "/") + RedirectPath + "/" + slug
 }

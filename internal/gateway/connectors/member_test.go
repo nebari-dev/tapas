@@ -74,14 +74,14 @@ func (f *oauthFixture) start(t *testing.T, path string, c *http.Cookie) string {
 		t.Fatalf("POST %s: %d %s", path, w.Code, w.Body)
 	}
 	u := apitest.Decode[struct{ AuthorizeURL string }](t, w).AuthorizeURL
-	if q := mustQuery(t, u); q.Get("redirect_uri") != "https://tapas.example.org/settings/connections/callback" {
+	if q := mustQuery(t, u); q.Get("redirect_uri") != "https://tapas.example.org/settings/connections/callback/fake" {
 		t.Fatalf("redirect_uri %q", q.Get("redirect_uri"))
 	}
 	back, err := f.as.Authorize(u)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return fmt.Sprintf(`{"state":%q,"code":%q,"iss":%q}`, back.Get("state"), back.Get("code"), back.Get("iss"))
+	return fmt.Sprintf(`{"slug":"fake","state":%q,"code":%q,"iss":%q}`, back.Get("state"), back.Get("code"), back.Get("iss"))
 }
 
 func mustQuery(t *testing.T, raw string) url.Values {
@@ -202,6 +202,24 @@ func TestNoSignInStartsAfterTheAuthorizationServerMoved(t *testing.T) {
 	}
 }
 
+// What a vendor sent back reaches the callback page of the connector the
+// sign-in was for; the same answer posted from another connector's page is
+// refused before the code is exchanged (OAuth mix-up).
+func TestASignInFinishesOnlyFromItsConnectorsPage(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	id := f.create(t, "user")
+	alice := f.Session(apitest.AliceID, "sales")
+	body := strings.Replace(f.start(t, "/api/connectors/"+id+"/connect", alice), `"slug":"fake"`, `"slug":"other"`, 1)
+	w := f.Do("POST", "/api/connectors/oauth/complete", body, alice)
+	if w.Code != http.StatusBadGateway || !strings.Contains(apitest.Decode[problemJSON](t, w).Title, "redirect_mismatch") {
+		t.Fatalf("complete from another page: %d %s", w.Code, w.Body)
+	}
+	if f.as.Exchanges() != 0 {
+		t.Fatal("the code was exchanged")
+	}
+}
+
 // Someone outside the connector's groups does not see it and cannot
 // connect it.
 func TestOutsidersCannotConnect(t *testing.T) {
@@ -299,7 +317,7 @@ func TestSignInRoutesAreForBrowserSessionsOnly(t *testing.T) {
 	only := reasons.Msg(reasons.MsgConnectorSessionOnly)
 	for _, r := range []struct{ method, path, body string }{
 		{"POST", "/api/connectors/" + id + "/connect", ""},
-		{"POST", "/api/connectors/oauth/complete", `{"state":"s","code":"c"}`},
+		{"POST", "/api/connectors/oauth/complete", `{"slug":"fake","state":"s","code":"c"}`},
 		{"DELETE", "/api/connectors/" + id + "/connection", ""},
 		{"POST", "/api/admin/connectors/" + id + "/connect", ""},
 		{"DELETE", "/api/admin/connectors/" + id + "/connection", ""},
@@ -324,7 +342,7 @@ func TestMemberRoutesAnswerConnectorsOffWhenOff(t *testing.T) {
 	}{
 		{"GET", "/api/connectors", "", alice},
 		{"POST", "/api/connectors/c-1/connect", "", alice},
-		{"POST", "/api/connectors/oauth/complete", `{"state":"s","code":"c"}`, alice},
+		{"POST", "/api/connectors/oauth/complete", `{"slug":"fake","state":"s","code":"c"}`, alice},
 		{"DELETE", "/api/connectors/c-1/connection", "", alice},
 		{"POST", "/api/admin/connectors/c-1/connect", "", admin},
 		{"DELETE", "/api/admin/connectors/c-1/connection", "", admin},
