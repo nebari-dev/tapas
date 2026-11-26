@@ -267,15 +267,15 @@ func TestConnectorsNeedASessionsKeyThatSurvivesRestarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r, err := Connectors(config.ConnectorsCfg{}, db, key, false); r != nil || err != nil {
-		t.Fatalf("off: %v, %v", r, err)
+	if p, err := Connectors(config.ConnectorsCfg{}, db, key, false, ""); p.Registry != nil || p.Vault != nil || err != nil {
+		t.Fatalf("off: %+v, %v", p, err)
 	}
 	on := config.ConnectorsCfg{Enabled: true}
-	if r, err := Connectors(on, db, key, false); r != nil || err == nil || !strings.Contains(err.Error(), "--sessions-key-secret") {
-		t.Fatalf("with a key made at start: %v, %v", r, err)
+	if p, err := Connectors(on, db, key, false, ""); p.Registry != nil || err == nil || !strings.Contains(err.Error(), "--sessions-key-secret") {
+		t.Fatalf("with a key made at start: %+v, %v", p, err)
 	}
-	if r, err := Connectors(on, db, key, true); r == nil || err != nil {
-		t.Fatalf("with a lasting key: %v, %v", r, err)
+	if p, err := Connectors(on, db, key, true, ""); p.Registry == nil || p.Vault == nil || err != nil {
+		t.Fatalf("with a lasting key: %+v, %v", p, err)
 	}
 }
 
