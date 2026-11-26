@@ -105,12 +105,31 @@ describe('Connectors (admin)', () => {
     expect((await screen.findByRole('link', { name: 'Connectors' })).getAttribute('aria-current')).toBe('page')
     const list = await screen.findByRole('table', { name: 'Connectors' })
     const rows = within(list).getAllByRole('row').slice(1)
-    expect(rows).toHaveLength(2)
+    // Catalogue order first (set up or not), then the custom ones, one per row.
+    expect(rows).toHaveLength(3)
     expect(rows[0].textContent).toContain('Team chat')
     expect(rows[0].textContent).toContain('Each person signs in')
     expect(within(rows[0]).getByRole('switch', { name: 'Turn on Team chat' }).getAttribute('aria-checked')).toBe('true')
-    expect(rows[1].textContent).toContain('One shared account')
-    expect(within(rows[1]).getByRole('switch', { name: 'Turn on Wiki' }).getAttribute('aria-checked')).toBe('false')
+    expect(rows[1].textContent).toContain('Tickets')
+    expect(rows[1].textContent).toContain('Not set up')
+    expect(within(rows[1]).queryByRole('switch')).toBeNull()
+    expect(within(rows[1]).getByRole('button', { name: 'Set up Tickets' })).toBeTruthy()
+    expect(rows[2].textContent).toContain('One shared account')
+    expect(within(rows[2]).getByRole('switch', { name: 'Turn on Wiki' }).getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('shows each catalogue connector with its vendor logo and a custom one with a plug', async () => {
+    const github = { ...chat, catalogId: 'github', slug: 'github', name: 'GitHub' }
+    api({
+      'GET /api/admin/connectors': { body: { items: [github, wiki] } },
+      'GET /api/admin/connectors/catalog': { body: { items: [{ ...catalog.items[0], id: 'github', slug: 'github', name: 'GitHub' }] } },
+    })
+    renderApp('/settings/connectors')
+    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
+    expect(rows[0].textContent).toContain('GitHub')
+    expect(rows[0].querySelector('.mark')).not.toBeNull()
+    expect(rows[1].textContent).toContain('Wiki')
+    expect(rows[1].querySelector('svg.lucide-plug')).not.toBeNull()
   })
 
   it('says so when connectors are off on the platform', async () => {
@@ -123,10 +142,12 @@ describe('Connectors (admin)', () => {
   })
 
   it('adds one from the catalogue with the fields it prefills', async () => {
-    const m = api({ 'POST /api/admin/connectors': (c: Call) => ({ status: 201, body: { ...chat, id: 'c-9', ...(c.body as object) } }) })
+    const m = api({
+      'GET /api/admin/connectors': { body: { items: [wiki] } },
+      'POST /api/admin/connectors': (c: Call) => ({ status: 201, body: { ...chat, id: 'c-9', ...(c.body as object) } }),
+    })
     renderApp('/settings/connectors')
-    await userEvent.click(await screen.findByRole('button', { name: 'Add connector' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Team chat' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Set up Team chat' }))
     const form = await screen.findByRole('form', { name: 'Add Team chat' })
     expect(within(form).getByText(/Create an OAuth app at the vendor/)).toBeTruthy()
     expect((within(form).getByLabelText('Address of the MCP server') as HTMLInputElement).value).toBe('https://mcp.example.org/chat')
@@ -155,8 +176,7 @@ describe('Connectors (admin)', () => {
   it('adds a custom MCP server by its address', async () => {
     const m = api({ 'POST /api/admin/connectors': (c: Call) => ({ status: 201, body: { ...wiki, ...(c.body as object) } }) })
     renderApp('/settings/connectors')
-    await userEvent.click(await screen.findByRole('button', { name: 'Add connector' }))
-    await userEvent.click(await screen.findByRole('button', { name: /Custom MCP URL/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Add a custom MCP server' }))
     const form = await screen.findByRole('form', { name: 'Add a custom connector' })
     await userEvent.type(within(form).getByLabelText('Name'), 'Docs')
     await userEvent.type(within(form).getByLabelText('Short name'), 'docs')

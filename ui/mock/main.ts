@@ -1,6 +1,8 @@
 // Dev-only: runs the real UI against canned API answers so pages can be
 // looked at without a cluster (pnpm mock). Not part of the production build,
 // which starts from ui/index.html.
+import catalogJSON from '../../internal/connectors/catalog/catalog.json?raw'
+import type { CatalogEntry } from '../src/api'
 import {
   allReady,
   allStopped,
@@ -620,28 +622,13 @@ const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)),
 // Connectors (Settings, Connectors). ?connectors=off answers as a platform with connectors.enabled false.
 const connectorsOff = params.get('connectors') === 'off'
 const connectorRedirect = `${window.location.origin}/settings/connections/callback`
-const connectorCatalog = [
-  {
-    id: 'chat', slug: 'chat', name: 'Team chat', url: 'https://mcp.example.org/chat', authMode: 'user', scopes: ['channels:read', 'chat:write'],
-    toolModes: { list_channels: 'read' }, oauthEndpoints: 'discovered', oauth: {},
-    setup: 'Create an OAuth app at the vendor, add the redirect address shown here, then paste its client id and client secret.',
-    docs: 'https://docs.example.org/chat-mcp',
-  },
-  {
-    id: 'notes', slug: 'notes', name: 'Notes', url: 'https://mcp.example.org/notes', authMode: 'user', scopes: [], toolModes: {},
-    oauthEndpoints: 'discovered', oauth: {}, setup: 'Nothing to create at the vendor: Tapas registers its own OAuth client. Leave the client id and secret empty.', docs: '',
-  },
-  {
-    id: 'tickets', slug: 'tickets', name: 'Tickets', url: '', authMode: 'shared', scopes: ['tickets:read'], toolModes: {}, oauthEndpoints: 'static',
-    oauth: { authorizeUrl: 'https://tickets.example.org/oauth/authorize', tokenUrl: 'https://tickets.example.org/oauth/token' },
-    setup: 'Type the address of your own tickets server, then paste the OAuth client you made there.', docs: '',
-  },
-]
+// The catalogue the gateway ships (internal/connectors/catalog), so the mock shows the real entries and logos.
+const connectorCatalog: CatalogEntry[] = (JSON.parse(catalogJSON) as { entries: Omit<CatalogEntry, 'oauth'>[] }).entries.map((e) => ({ oauth: {}, ...e }))
 type MockConnector = Record<string, unknown> & { id: string; rev: string; slug: string; name: string; oauth: Record<string, unknown> }
 let connectorRev = 10
 const connectors: MockConnector[] = [
   {
-    id: 'c-1', rev: 'r-1', catalogId: 'chat', slug: 'chat', name: 'Team chat', url: 'https://mcp.example.org/chat', authMode: 'user', enabled: true,
+    id: 'c-1', rev: 'r-1', catalogId: 'slack', slug: 'slack', name: 'Slack', url: 'https://mcp.example.org/slack', authMode: 'user', enabled: true,
     oauth: { clientId: 'client-1', secretStored: true, registration: 'static', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
     scopes: ['channels:read', 'chat:write'], allowedGroups: ['data-science', 'ops'], toolModes: { list_channels: 'read', search: 'read' },
     tools: [
