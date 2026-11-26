@@ -142,6 +142,8 @@ type gatewayParts struct {
 	sessionsKey   tink.AEAD
 	fingerprinter *secrets.Fingerprinter
 	people        authn.People
+	// memoryKey is mem0's admin key; empty while memory is off.
+	memoryKey string
 	// internalHost is the host apps call the API at.
 	internalHost string
 }
