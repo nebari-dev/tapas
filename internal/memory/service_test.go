@@ -314,3 +314,27 @@ func TestServiceRefusesABadAgentBeforeAnyClientCall(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceCapsTheIDsInTheWarningButKeepsTheFullCount(t *testing.T) {
+	logs := capture(t)
+	f := seeded()
+	for i := 0; i < 45; i++ {
+		f.Leak = append(f.Leak, memory.Memory{ID: fmt.Sprintf("id-%02d", i), UserID: "bob"})
+	}
+	if _, err := memory.NewService(f, nil).List(context.Background(), "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if len(logs.recs) != 1 {
+		t.Fatalf("%d log records, want one", len(logs.recs))
+	}
+	got := text(logs.recs[0])
+	if !strings.Contains(got, "count=45") {
+		t.Errorf("record %q lacks the full count", got)
+	}
+	if n := strings.Count(got, "id-"); n != 20 {
+		t.Errorf("record names %d ids, want 20", n)
+	}
+	if !strings.Contains(got, "id-19") || strings.Contains(got, "id-20") {
+		t.Errorf("record %q should hold the first 20 ids only", got)
+	}
+}

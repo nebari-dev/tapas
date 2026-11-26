@@ -90,10 +90,14 @@ func checkScopes(owner, agent string) error {
 	return checkAgent(agent)
 }
 
+// maxLoggedIDs bounds the ids one warning names; the count stays complete.
+const maxLoggedIDs = 20
+
 // keep returns the memories whose UserID is exactly owner and, when agent is
 // set, whose AgentID is exactly agent, so a store that returns someone else's
 // cannot leak it. When it drops any it logs one warning with the count and
-// the dropped ids: never memory text and never another person's name.
+// the dropped ids (at most maxLoggedIDs of them): never memory text and never
+// another person's name.
 func keep(owner, agent string, in []Memory) []Memory {
 	out := make([]Memory, 0, len(in))
 	var dropped []string
@@ -105,7 +109,11 @@ func keep(owner, agent string, in []Memory) []Memory {
 		}
 	}
 	if len(dropped) > 0 {
-		slog.Warn("memory.foreign_dropped", "count", len(dropped), "ids", dropped)
+		ids := dropped
+		if len(ids) > maxLoggedIDs {
+			ids = ids[:maxLoggedIDs]
+		}
+		slog.Warn("memory.foreign_dropped", "count", len(dropped), "ids", ids)
 	}
 	return out
 }
