@@ -31,6 +31,7 @@ import (
 	"github.com/nebari-dev/javo/internal/gateway/branding"
 	"github.com/nebari-dev/javo/internal/gateway/proxy"
 	"github.com/nebari-dev/javo/internal/httpx"
+	"github.com/nebari-dev/javo/internal/memory"
 	"github.com/nebari-dev/javo/internal/plans"
 	"github.com/nebari-dev/javo/internal/sizes"
 	"github.com/nebari-dev/javo/internal/store"
@@ -220,6 +221,12 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 	aiSvc, err := wiring.AIService(ctx, platform.AI, aiLive, db, fp)
 	if err != nil {
 		return err
+	}
+	// Memory is built here when it is on. Recall, learning and the memories
+	// API take the service from this point. The check runs beside start, so a
+	// mem0 that is down is logged and never holds the gateway back.
+	if mem := wiring.Memory(platform.Memory, on.memoryKey); mem != nil {
+		go func() { _ = memory.Probe(ctx, mem, platform.Memory.URL) }()
 	}
 	proposals := &plans.Service{DB: db, TTL: platform.Plans.TTL.Duration}
 	go proposals.RunJanitor(ctx, time.Minute)

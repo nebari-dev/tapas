@@ -3,6 +3,7 @@ package wiring
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -275,5 +276,33 @@ func TestConnectorsNeedASessionsKeyThatSurvivesRestarts(t *testing.T) {
 	}
 	if r, err := Connectors(on, db, key, true); r == nil || err != nil {
 		t.Fatalf("with a lasting key: %v, %v", r, err)
+	}
+}
+
+// With memory off no service is built, so nothing ever talks to mem0. With it
+// on, the service sends its requests to the configured address with the key.
+func TestMemoryIsNilWhenOffAndTalksToTheConfiguredURLWithTheKeyWhenOn(t *testing.T) {
+	var gotKey, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotKey, gotPath = r.Header.Get("X-API-Key"), r.URL.Path
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+	on := config.MemoryCfg{
+		Enabled: true, URL: srv.URL,
+		Timeout: metav1.Duration{Duration: time.Second}, AddTimeout: metav1.Duration{Duration: time.Minute},
+	}
+	if got := Memory(config.MemoryCfg{Enabled: false, URL: srv.URL}, "k"); got != nil {
+		t.Fatalf("Memory with memory off = %v, want nil", got)
+	}
+	svc := Memory(on, "the-admin-key")
+	if svc == nil {
+		t.Fatal("Memory with memory on = nil")
+	}
+	if _, err := svc.List(context.Background(), "alice"); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if gotKey != "the-admin-key" || gotPath != "/memories" {
+		t.Errorf("mem0 saw key %q on path %q, want the key on /memories", gotKey, gotPath)
 	}
 }

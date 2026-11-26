@@ -118,6 +118,7 @@ jobs:
       - *restore
       - *trim-start
       - run: go vet ./...
+      - run: go vet -tags mem0 ./internal/memory/
       - *trim-finish
       - *save
 
