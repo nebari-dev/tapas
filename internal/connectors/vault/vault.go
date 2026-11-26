@@ -223,7 +223,8 @@ func (v *Vault) refresh(ctx context.Context, c connectors.Connector, row store.C
 	l := v.lock(row.ID)
 	l.Lock()
 	defer l.Unlock()
-	deadline := v.c.Now().Add(WaitFor)
+	// The wait is bounded by the real clock, whatever Now says.
+	deadline := time.Now().Add(WaitFor)
 	for {
 		cur, err := v.usable(ctx, c, row.Subject)
 		if err != nil {
@@ -244,7 +245,7 @@ func (v *Vault) refresh(ctx context.Context, c connectors.Connector, row store.C
 		if won {
 			return v.renew(ctx, c, cur)
 		}
-		if !now.Before(deadline) {
+		if !time.Now().Before(deadline) {
 			return "", errors.New("vault: another replica is still refreshing the token")
 		}
 		row = cur
