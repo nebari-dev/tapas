@@ -157,6 +157,29 @@ type ClusterFact struct {
 	ObservedAt dbtime.Time
 }
 
+type Connector struct {
+	ID                      string
+	Slug                    string
+	Name                    string
+	CatalogID               string
+	Url                     string
+	AuthMode                string
+	Enabled                 bool
+	OauthRegistration       string
+	OauthClientID           string
+	OauthClientSecretSealed []byte
+	OauthAuthorizeUrl       string
+	OauthTokenUrl           string
+	OauthRevokeUrl          string
+	Scopes                  string
+	AllowedGroups           string
+	ToolModes               string
+	Tools                   string
+	Rev                     string
+	CreatedAt               dbtime.Time
+	UpdatedAt               dbtime.Time
+}
+
 type DeviceLogin struct {
 	ID         string
 	UserCode   string
