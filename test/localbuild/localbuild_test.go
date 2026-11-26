@@ -66,11 +66,10 @@ var notImported = []leftOut{
 	{path: "github.com/zricethezav/gitleaks"},
 	{path: "github.com/mholt/archives"},
 	{path: "github.com/spf13/viper"},
-	// Failure notices, the agent endpoint, the connector routes, single sign-on, Postgres.
+	// Failure notices, the agent endpoint, single sign-on, Postgres.
 	{path: javo + "jobs/notify"},
 	{path: "github.com/argoproj/notifications-engine"},
 	{path: javo + "mcp"},
-	{path: javo + "gateway/connectors"},
 	{path: "github.com/modelcontextprotocol/go-sdk"},
 	{path: javo + "features/authoidc"},
 	{path: "github.com/coreos/go-oidc"},
