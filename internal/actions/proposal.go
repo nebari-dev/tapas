@@ -16,6 +16,10 @@ const (
 	AttachSecret = "attach-secret"
 	// DetachSecret takes the secret the app gets as variable "env" off it.
 	DetachSecret = "detach-secret"
+	// ConnectorCall is one call of a connector's tool that changes things
+	// (target "<slug>__<tool>", param "arguments", the call's JSON object).
+	// It is hidden: only the connectors' broker proposes it.
+	ConnectorCall = "connector-call"
 )
 
 // Proposal names one catalog action, the object it targets (an app's short

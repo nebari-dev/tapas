@@ -35,6 +35,10 @@ type Info struct {
 	ID      string  `json:"id"`
 	Summary string  `json:"summary"`
 	Params  []Param `json:"params,omitempty"`
+	// Hidden leaves the action out of Describe, so no agent or model is
+	// offered it: it is proposed only by code that builds its parameters
+	// (a connector call). A proposal naming it is planned as any other.
+	Hidden bool `json:"-"`
 }
 
 // Action is one kind of change. Plan and Apply act as the person in ctx,
@@ -64,11 +68,14 @@ func (c *Catalog) Get(id string) (Action, bool) {
 	return c.list[i], true
 }
 
-// Describe lists every action, for a model's or an agent's instructions.
+// Describe lists every action that is not hidden, for a model's or an
+// agent's instructions.
 func (c *Catalog) Describe() []Info {
-	out := make([]Info, len(c.list))
-	for i, a := range c.list {
-		out[i] = a.Info()
+	out := make([]Info, 0, len(c.list))
+	for _, a := range c.list {
+		if i := a.Info(); !i.Hidden {
+			out = append(out, i)
+		}
 	}
 	return out
 }
