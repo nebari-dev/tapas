@@ -172,6 +172,11 @@ func TestLoadRejectsBadMemoryConfig(t *testing.T) {
 		{"url with fragment", local + mem("http://mem0:8000/#frag", "mem0"), "memory.url"},
 		{"enabled without namespace", local + "memory:\n  enabled: true\n  url: http://mem0:8000\n", "memory.apiKeySecret.namespace"},
 		{"namespace not a DNS label", local + mem("http://mem0:8000", "Mem0_NS"), "memory.apiKeySecret.namespace"},
+		{"negative timeout", local + memoryOn + "  timeout: -1s\n", "memory.timeout"},
+		{"negative addTimeout", local + memoryOn + "  addTimeout: -5s\n", "memory.addTimeout"},
+		{"secret name not a DNS subdomain", local + memoryOn + "    name: Bad_Name\n", "memory.apiKeySecret.name"},
+		{"secret key with a slash", local + memoryOn + "    key: a/b\n", "memory.apiKeySecret.key"},
+		{"secret key with a space", local + memoryOn + "    key: \"a b\"\n", "memory.apiKeySecret.key"},
 		{"memory under docker", local + "executor: docker\nkeysDir: /k\ndocker:\n  gateway: javo\n" + mem("http://mem0:8000", "mem0"), "memory"},
 		{"memory under process", local + "executor: process\nkeysDir: /h/keys\nprocess:\n  stateDir: /h/state\n  homesDir: /h/homes\n" + mem("http://mem0:8000", "mem0"), "memory"},
 	}

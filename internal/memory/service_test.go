@@ -3,6 +3,10 @@ package memory_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nebari-dev/javo/internal/memory"
@@ -164,6 +168,148 @@ func TestServiceAddRunsTheWriteCheckFirst(t *testing.T) {
 			}
 			if tt.wantAdded == 1 && (len(got) != 1 || got[0].UserID != "alice" || got[0].AgentID != "agent-1") {
 				t.Errorf("got %+v, want one memory for alice and agent-1", got)
+			}
+		})
+	}
+}
+
+// logCapture collects the log records made while a test runs.
+type logCapture struct {
+	mu   sync.Mutex
+	recs []slog.Record
+}
+
+func (c *logCapture) Enabled(context.Context, slog.Level) bool { return true }
+func (c *logCapture) Handle(_ context.Context, r slog.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.recs = append(c.recs, r)
+	return nil
+}
+func (c *logCapture) WithAttrs([]slog.Attr) slog.Handler { return c }
+func (c *logCapture) WithGroup(string) slog.Handler      { return c }
+
+// capture routes the default logger to a logCapture until the test ends.
+func capture(t *testing.T) *logCapture {
+	t.Helper()
+	c := &logCapture{}
+	old := slog.Default()
+	slog.SetDefault(slog.New(c))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	return c
+}
+
+// text renders a record as message plus attributes, for substring checks.
+func text(r slog.Record) string {
+	s := r.Message
+	r.Attrs(func(a slog.Attr) bool { s += " " + a.Key + "=" + a.Value.String(); return true })
+	return s
+}
+
+func TestServiceWarnsOnceWhenSearchOrListDropsForeignResults(t *testing.T) {
+	const (
+		bobsID  = "3e1c0f61-4a5d-4c8e-8f9a-0b1c2d3e4f50"
+		otherID = "4f2d1a72-5b6e-4d9f-9a0b-1c2d3e4f5061"
+	)
+	leaks := []memory.Memory{
+		{ID: bobsID, Text: "bobs private text", UserID: "bobuser"},
+		{ID: otherID, Text: "second private text", UserID: "caroluser"},
+	}
+	tests := []struct {
+		name string
+		run  func(s *memory.Service) error
+	}{
+		{"search", func(s *memory.Service) error {
+			_, err := s.Search(context.Background(), "alice", "", "tea", 5)
+			return err
+		}},
+		{"list", func(s *memory.Service) error { _, err := s.List(context.Background(), "alice"); return err }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logs := capture(t)
+			f := seeded()
+			f.Leak = leaks
+			if err := tt.run(memory.NewService(f, nil)); err != nil {
+				t.Fatal(err)
+			}
+			if len(logs.recs) != 1 {
+				t.Fatalf("%d log records, want exactly one", len(logs.recs))
+			}
+			r := logs.recs[0]
+			got := text(r)
+			if r.Level != slog.LevelWarn || r.Message != "memory.foreign_dropped" {
+				t.Fatalf("record = %s at %v", got, r.Level)
+			}
+			for _, want := range []string{"count=2", bobsID, otherID} {
+				if !strings.Contains(got, want) {
+					t.Errorf("record %q lacks %q", got, want)
+				}
+			}
+			for _, secret := range []string{"private text", "bobuser", "caroluser"} {
+				if strings.Contains(got, secret) {
+					t.Errorf("record %q holds %q: only ids may be logged", got, secret)
+				}
+			}
+		})
+	}
+}
+
+func TestServiceDoesNotWarnWhenNothingIsDroppedOrOnAGetMismatch(t *testing.T) {
+	logs := capture(t)
+	s := memory.NewService(seeded(), nil)
+	ctx := context.Background()
+	if _, err := s.Search(ctx, "alice", "", "tea", 5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.List(ctx, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Get(ctx, "alice", bobID); !errors.Is(err, memory.ErrNotFound) {
+		t.Fatalf("Get err = %v, want ErrNotFound", err)
+	}
+	if err := s.Delete(ctx, "alice", bobID); !errors.Is(err, memory.ErrNotFound) {
+		t.Fatalf("Delete err = %v, want ErrNotFound", err)
+	}
+	if len(logs.recs) != 0 {
+		t.Fatalf("%d log records, want none: %s", len(logs.recs), text(logs.recs[0]))
+	}
+}
+
+func TestServiceSearchWithAnAgentDropsResultsOfAnotherAgentAndCountsThem(t *testing.T) {
+	const (
+		mineID  = "6b4f3c94-7d80-4f1b-9c2d-3e4f50617283"
+		otherID = "7c504da5-8e91-4a2c-8d3e-4f5061728394"
+	)
+	logs := capture(t)
+	f := memorytest.New(memory.Memory{ID: mineID, Text: "a", UserID: "alice", AgentID: "helper"})
+	f.Leak = []memory.Memory{{ID: otherID, Text: "b", UserID: "alice", AgentID: "other"}}
+	got, err := memory.NewService(f, nil).Search(context.Background(), "alice", "helper", "q", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != mineID {
+		t.Fatalf("got %+v, want only the helper's memory", got)
+	}
+	if len(logs.recs) != 1 || !strings.Contains(text(logs.recs[0]), "count=1") || !strings.Contains(text(logs.recs[0]), otherID) {
+		t.Fatalf("log records = %d, want one naming the dropped id", len(logs.recs))
+	}
+}
+
+func TestServiceRefusesABadAgentBeforeAnyClientCall(t *testing.T) {
+	ctx := context.Background()
+	for _, agent := range []string{"*", " helper", "helper\n"} {
+		t.Run(fmt.Sprintf("%q", agent), func(t *testing.T) {
+			f := seeded()
+			s := memory.NewService(f, nil)
+			if _, err := s.Search(ctx, "alice", agent, "q", 3); !errors.Is(err, memory.ErrInvalid) {
+				t.Errorf("Search err = %v, want ErrInvalid", err)
+			}
+			if _, err := s.Add(ctx, "alice", agent, []memory.Message{{Role: "user", Text: "hi"}}); !errors.Is(err, memory.ErrInvalid) {
+				t.Errorf("Add err = %v, want ErrInvalid", err)
+			}
+			if n := len(f.Calls()); n != 0 {
+				t.Errorf("store saw %d calls, want none", n)
 			}
 		})
 	}

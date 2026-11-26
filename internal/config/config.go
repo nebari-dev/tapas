@@ -962,6 +962,18 @@ func (p Platform) Validate() error {
 		} else if strings.ContainsAny(m.URL, "?#") {
 			bad("memory.url", "must be mem0's address only, without a query or fragment (the value is not shown: it may hold a token)")
 		}
+		positive("memory.timeout", m.Timeout)
+		positive("memory.addTimeout", m.AddTimeout)
+		if n := m.APIKeySecret.Name; n != "" {
+			if msgs := validation.IsDNS1123Subdomain(n); len(msgs) > 0 {
+				bad("memory.apiKeySecret.name", "%q is not a valid Secret name: %s", n, strings.Join(msgs, "; "))
+			}
+		}
+		if k := m.APIKeySecret.Key; k != "" {
+			if msgs := validation.IsConfigMapKey(k); len(msgs) > 0 {
+				bad("memory.apiKeySecret.key", "%q is not a valid Secret data key: %s", k, strings.Join(msgs, "; "))
+			}
+		}
 		if ns := m.APIKeySecret.Namespace; ns == "" {
 			bad("memory.apiKeySecret.namespace", "required with memory.enabled: the namespace of mem0's admin key Secret")
 		} else if msgs := validation.IsDNS1123Label(ns); len(msgs) > 0 {

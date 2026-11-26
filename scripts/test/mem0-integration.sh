@@ -10,9 +10,8 @@
 # Usage: scripts/test/mem0-integration.sh
 set -euo pipefail
 
-# The head of nebari-dev/mem0-pack PR #26's branch (slice/10-docs). Move this to a
-# release tag once mem0-pack#12 publishes one.
-MEM0_PACK_REF="${MEM0_PACK_REF:-54e57b9543d81460fd3ca311457f745b59904d63}"
+# The commit of release tag nebari-mem0-0.1.0-alpha.1 on nebari-dev/mem0-pack main.
+MEM0_PACK_REF="${MEM0_PACK_REF:-af0334448b49b7535efd11efe815d511c9a49f43}"
 # The pack's own pgvector pin (image/smoke.sh).
 PGVECTOR_IMAGE="pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd"
 

@@ -230,7 +230,7 @@ func (m *Mem0) List(ctx context.Context, owner string) ([]Memory, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mem0: %w", err)
 	}
-	raw, err := m.do(m.client, req)
+	raw, err := m.do(m.client, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (m *Mem0) Get(ctx context.Context, id string) (Memory, error) {
 	if err != nil {
 		return Memory{}, fmt.Errorf("mem0: %w", err)
 	}
-	raw, err := m.do(m.client, req)
+	raw, err := m.do(m.client, req, true)
 	if err != nil {
 		return Memory{}, err
 	}
@@ -273,7 +273,7 @@ func (m *Mem0) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("mem0: %w", err)
 	}
-	_, err = m.do(m.client, req)
+	_, err = m.do(m.client, req, true)
 	return err
 }
 
@@ -287,12 +287,15 @@ func (m *Mem0) post(ctx context.Context, hc *http.Client, path string, body any)
 		return nil, fmt.Errorf("mem0: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return m.do(hc, req)
+	return m.do(hc, req, false)
 }
 
 // do sends req with the key and maps mem0's refusals onto the package errors.
+// A 404 is ErrNotFound only when byID is set (a get or delete of one memory).
+// The mem0 pack's allowlist answers 404 for a route it does not allow, so for
+// any other call it is a wrong address, and is an ordinary error.
 // Error texts carry the method and path, never the key or an answer body.
-func (m *Mem0) do(hc *http.Client, req *http.Request) ([]byte, error) {
+func (m *Mem0) do(hc *http.Client, req *http.Request, byID bool) ([]byte, error) {
 	req.Header.Set("X-API-Key", m.key)
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -308,7 +311,7 @@ func (m *Mem0) do(hc *http.Client, req *http.Request) ([]byte, error) {
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
 		return nil, ErrRefused
-	case resp.StatusCode == http.StatusNotFound:
+	case resp.StatusCode == http.StatusNotFound && byID:
 		return nil, ErrNotFound
 	case resp.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("mem0: %s %s answered %d", req.Method, req.URL.Path, resp.StatusCode)

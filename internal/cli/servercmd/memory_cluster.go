@@ -5,7 +5,8 @@ package servercmd
 import (
 	"context"
 	"fmt"
-	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,9 +26,16 @@ func memoryKeyOf(ctx context.Context, c client.Client, m config.MemoryCfg) (stri
 	if err := c.Get(ctx, client.ObjectKey{Namespace: ref.Namespace, Name: ref.Name}, &sec); err != nil {
 		return "", fmt.Errorf("read the mem0 key Secret %s/%s: %w", ref.Namespace, ref.Name, err)
 	}
-	key := strings.TrimSpace(string(sec.Data[ref.Key]))
+	key := string(sec.Data[ref.Key])
 	if key == "" {
 		return "", fmt.Errorf("Secret %s/%s has no %q", ref.Namespace, ref.Name, ref.Key)
+	}
+	// mem0 compares the key to the X-API-Key header exactly, so a padded
+	// value can never work. Refuse it rather than quietly trim it.
+	first, _ := utf8.DecodeRuneInString(key)
+	last, _ := utf8.DecodeLastRuneInString(key)
+	if unicode.IsSpace(first) || unicode.IsSpace(last) {
+		return "", fmt.Errorf("Secret %s/%s key %q has leading or trailing whitespace: mem0 compares the key exactly, so fix the Secret", ref.Namespace, ref.Name, ref.Key)
 	}
 	return key, nil
 }
