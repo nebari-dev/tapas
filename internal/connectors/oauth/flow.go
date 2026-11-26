@@ -14,8 +14,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -87,21 +85,6 @@ func New(c Config) *Service {
 		c.Now = time.Now
 	}
 	return &Service{c: c, cache: map[string]cachedEndpoints{}}
-}
-
-// Completion is what the vendor sent the person back with. It never
-// prints.
-type Completion struct{ State, Code, Iss string }
-
-// Format keeps the state and code out of anything printed.
-func (Completion) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, "[redacted]") }
-
-// Grant is a finished sign-in: the connector, whose connection it is (the
-// person, or "" for the company's) and the tokens.
-type Grant struct {
-	Connector connectors.Connector
-	Subject   string
-	Tokens    vault.Tokens
 }
 
 const stateTable = "connector_oauth_states"
@@ -193,43 +176,44 @@ func (s *Service) client(ctx context.Context, actor model.Actor, c connectors.Co
 	return got, err
 }
 
-// Complete finishes the sign-in in, for person: the state must be one
-// person started on this connector revision, unused and not expired (else
+// Complete finishes, for person, the sign-in the vendor sent them back
+// from with state, code and iss: the state must be one person started on
+// this connector revision, unused and not expired (else
 // connectors.ErrSignInExpired; the state is spent either way); when the
-// server said it names itself, in.Iss must be it. The code is exchanged
-// with the PKCE verifier and the same redirect address.
-func (s *Service) Complete(ctx context.Context, person string, in Completion) (Grant, error) {
-	st, err := s.c.DB.ConnectorConnections().TakeOAuthState(ctx, hashState(in.State))
+// server said it names itself, iss must be it. The code is exchanged with
+// the PKCE verifier and the same redirect address.
+func (s *Service) Complete(ctx context.Context, person, state, code, iss string) (vault.Grant, error) {
+	st, err := s.c.DB.ConnectorConnections().TakeOAuthState(ctx, hashState(state))
 	if errors.Is(err, store.ErrNotFound) {
-		return Grant{}, connectors.ErrSignInExpired
+		return vault.Grant{}, connectors.ErrSignInExpired
 	}
 	if err != nil {
-		return Grant{}, err
+		return vault.Grant{}, err
 	}
 	if st.Person != person || !s.c.Now().Before(st.ExpiresAt) {
-		return Grant{}, connectors.ErrSignInExpired
+		return vault.Grant{}, connectors.ErrSignInExpired
 	}
 	c, err := s.c.Clients.Get(ctx, st.ConnectorID)
 	if errors.Is(err, store.ErrNotFound) || err == nil && c.Rev != st.ConnectorRev {
-		return Grant{}, connectors.ErrSignInExpired
+		return vault.Grant{}, connectors.ErrSignInExpired
 	}
 	if err != nil {
-		return Grant{}, err
+		return vault.Grant{}, err
 	}
-	if st.Issuer != "" && in.Iss != st.Issuer {
-		return Grant{}, &connectors.OAuthError{Code: connectors.CodeIssuer}
+	if st.Issuer != "" && iss != st.Issuer {
+		return vault.Grant{}, &connectors.OAuthError{Code: connectors.CodeIssuer}
 	}
 	verifier, err := s.c.Seal.Decrypt(st.VerifierSealed, verifierAD(st.StateHash))
 	if err != nil {
-		return Grant{}, errors.New("oauth: the sign-in's verifier does not open with this gateway's sessions key")
+		return vault.Grant{}, errors.New("oauth: the sign-in's verifier does not open with this gateway's sessions key")
 	}
 	e, err := s.endpoints(ctx, c)
 	if err != nil {
-		return Grant{}, err
+		return vault.Grant{}, err
 	}
 	secret, err := s.c.Clients.ClientSecret(ctx, c.ID)
 	if err != nil {
-		return Grant{}, err
+		return vault.Grant{}, err
 	}
 	opts := []oauth2.AuthCodeOption{oauth2.VerifierOption(string(verifier))}
 	if e.resource != "" {
@@ -237,15 +221,15 @@ func (s *Service) Complete(ctx context.Context, person string, in Completion) (G
 	}
 	hctx, cancel := s.httpContext(ctx)
 	defer cancel()
-	tok, err := s.config(c, e, secret, st.RedirectURI).Exchange(hctx, in.Code, opts...)
+	tok, err := s.config(c, e, secret, st.RedirectURI).Exchange(hctx, code, opts...)
 	if err != nil {
-		return Grant{}, tokenError(err)
+		return vault.Grant{}, tokenError(err)
 	}
 	t, err := tokensOf(tok, c.Scopes)
 	if err != nil {
-		return Grant{}, err
+		return vault.Grant{}, err
 	}
-	return Grant{Connector: c, Subject: st.Subject, Tokens: t}, nil
+	return vault.Grant{Connector: c, Subject: st.Subject, Tokens: t}, nil
 }
 
 // Refresh trades refresh for new tokens at c's token endpoint. A refusal

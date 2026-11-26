@@ -41,6 +41,14 @@ func (Tokens) LogValue() slog.Value { return slog.StringValue(redacted) }
 // Format keeps tokens out of anything printed with fmt.
 func (Tokens) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, redacted) }
 
+// Grant is a finished sign-in: the connector, whose connection it is (the
+// person, or "" for the company's) and the tokens, ready for Put.
+type Grant struct {
+	Connector connectors.Connector
+	Subject   string
+	Tokens    Tokens
+}
+
 // OAuth reaches a connector's authorization server.
 type OAuth interface {
 	// Refresh trades refresh for new tokens. A refusal for good is a

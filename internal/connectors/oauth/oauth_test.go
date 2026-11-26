@@ -91,8 +91,15 @@ func (f *fixture) signIn(t *testing.T, person string) (authorize url.Values, bac
 	return parsed.Query(), back
 }
 
-func completion(back url.Values) oauth.Completion {
-	return oauth.Completion{State: back.Get("state"), Code: back.Get("code"), Iss: back.Get("iss")}
+// completion is the sign-in the vendor sent the person back with.
+type completion struct{ state, code, iss string }
+
+func completionOf(back url.Values) completion {
+	return completion{back.Get("state"), back.Get("code"), back.Get("iss")}
+}
+
+func (f *fixture) complete(person string, c completion) (vault.Grant, error) {
+	return f.svc.Complete(ctx, person, c.state, c.code, c.iss)
 }
 
 func TestCodeFlowWithDiscoveryAndAPastedClient(t *testing.T) {
@@ -110,7 +117,7 @@ func TestCodeFlowWithDiscoveryAndAPastedClient(t *testing.T) {
 	if raw, err := base64Len(q.Get("state")); err != nil || raw != 32 {
 		t.Errorf("state %q is not 32 random bytes", q.Get("state"))
 	}
-	g, err := f.svc.Complete(ctx, "alice", completion(back))
+	g, err := f.complete("alice", completionOf(back))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +139,7 @@ func TestDiscoveryWithoutTheMetadataHint(t *testing.T) {
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	f.mcp.HideMetadataHint(true)
 	_, back := f.signIn(t, "alice")
-	if _, err := f.svc.Complete(ctx, "alice", completion(back)); err != nil {
+	if _, err := f.complete("alice", completionOf(back)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -143,7 +150,7 @@ func TestDynamicRegistration(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, func(in *registry.Input) { in.ClientID, in.ClientSecret = "", "" })
 	q, back := f.signIn(t, "alice")
-	if _, err := f.svc.Complete(ctx, "alice", completion(back)); err != nil {
+	if _, err := f.complete("alice", completionOf(back)); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := f.reg.Get(ctx, f.conn.ID)
@@ -154,7 +161,7 @@ func TestDynamicRegistration(t *testing.T) {
 		t.Fatalf("connector OAuth = %+v, authorize client_id %q", conn.OAuth, q.Get("client_id"))
 	}
 	_, back = f.signIn(t, "bob")
-	if _, err := f.svc.Complete(ctx, "bob", completion(back)); err != nil {
+	if _, err := f.complete("bob", completionOf(back)); err != nil {
 		t.Fatal(err)
 	}
 	if n := f.as.Registrations(); n != 1 {
@@ -188,7 +195,7 @@ func TestStaticEndpoints(t *testing.T) {
 	if q.Has("resource") {
 		t.Fatalf("static endpoints sent resource %q", q.Get("resource"))
 	}
-	g, err := f.svc.Complete(ctx, "alice", completion(back))
+	g, err := f.complete("alice", completionOf(back))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,10 +228,10 @@ func TestWrongPersonIsRefusedAndTheStateIsSpent(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	_, back := f.signIn(t, "alice")
-	if _, err := f.svc.Complete(ctx, "bob", completion(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+	if _, err := f.complete("bob", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("bob completes alice's sign-in: %v, want ErrSignInExpired", err)
 	}
-	if _, err := f.svc.Complete(ctx, "alice", completion(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("alice after bob tried: %v, want ErrSignInExpired", err)
 	}
 	if f.as.Exchanges() != 0 {
@@ -236,13 +243,13 @@ func TestStateIsSingleUse(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	_, back := f.signIn(t, "alice")
-	if _, err := f.svc.Complete(ctx, "alice", completion(back)); err != nil {
+	if _, err := f.complete("alice", completionOf(back)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Complete(ctx, "alice", completion(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("second Complete = %v, want ErrSignInExpired", err)
 	}
-	if _, err := f.svc.Complete(ctx, "alice", oauth.Completion{State: "made-up", Code: "x"}); !errors.Is(err, connectors.ErrSignInExpired) {
+	if _, err := f.complete("alice", completion{state: "made-up", code: "x"}); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("unknown state = %v, want ErrSignInExpired", err)
 	}
 }
@@ -252,7 +259,7 @@ func TestExpiredStateFails(t *testing.T) {
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	_, back := f.signIn(t, "alice")
 	f.now = f.now.Add(oauth.StateTTL + time.Second)
-	if _, err := f.svc.Complete(ctx, "alice", completion(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("Complete after the state expired = %v, want ErrSignInExpired", err)
 	}
 }
@@ -265,7 +272,7 @@ func TestConnectorChangedSinceStartFails(t *testing.T) {
 	if _, err := f.reg.SetTools(ctx, alice, f.conn.ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Complete(ctx, "alice", completion(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
 		t.Fatalf("Complete after a change = %v, want ErrSignInExpired", err)
 	}
 }
@@ -276,10 +283,10 @@ func TestIssuerMismatchFails(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	_, back := f.signIn(t, "alice")
-	c := completion(back)
-	c.Iss = "https://as.example.org"
+	c := completionOf(back)
+	c.iss = "https://as.example.org"
 	var oe *connectors.OAuthError
-	if _, err := f.svc.Complete(ctx, "alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeIssuer {
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeIssuer {
 		t.Fatalf("Complete with another iss = %v", err)
 	}
 	if f.as.Exchanges() != 0 {
@@ -301,10 +308,10 @@ func TestBadCodeIsAnOAuthError(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	_, back := f.signIn(t, "alice")
-	c := completion(back)
-	c.Code = "code-wrong"
+	c := completionOf(back)
+	c.code = "code-wrong"
 	var oe *connectors.OAuthError
-	if _, err := f.svc.Complete(ctx, "alice", c); !errors.As(err, &oe) || oe.Code != "invalid_grant" {
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != "invalid_grant" {
 		t.Fatalf("Complete with a bad code = %v", err)
 	}
 }
@@ -313,7 +320,7 @@ func TestRefreshRotatesAndInvalidGrant(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	_, back := f.signIn(t, "alice")
-	g, err := f.svc.Complete(ctx, "alice", completion(back))
+	g, err := f.complete("alice", completionOf(back))
 	if err != nil {
 		t.Fatal(err)
 	}
