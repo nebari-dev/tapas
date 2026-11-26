@@ -24,7 +24,7 @@ Defined by the builder under the owner's delegation (2026-11-25).
 | 6 | The gateway says at start whether mem0 answers with the key | The probe against a fake mem0 that accepts the key logs `memory.ready`; one that answers 401 logs `memory.unreachable` with the status; the gateway keeps running in both cases | automated: `go test ./internal/memory -run Probe` || 2026-11-25 @9eca44a: `go test -v ./internal/memory -run Probe` PASS TestProbeLogsWhetherMem0Answers (ready and 401 cases, log has no key) |
 | 7 | Turning memory off changes nothing | With no `memory` section the gateway reads no Secret (the fake client records no Get) and `wiring.Memory` returns nil; existing tests pass unchanged | automated: `go test ./internal/cli/... ./internal/config` and the full `make test` || 2026-11-25 @9eca44a: `go test ./internal/cli/... ./internal/config` 14 ok, 0 FAIL; TestMemory (wiring) PASS; `make test-local` no failures. Full `make test`: local failures only in internal/files, hosthome and imagetag, which fail identically on origin/main here; CI is the check (row 9) |
 | 8 | An admin can set it up from the docs | `site/src/content/docs/admin/memory.md` covers installing the mem0 pack with Tapas as caller (ServiceAccount by engine, pod labels, namespace), the config section, the start log lines and the limitations; the site builds | narrated: page headings and the site build output || 2026-11-25 @9eca44a: page has sections What memory does today, Install the mem0 pack with Tapas as its caller, Turn it on in Tapas, What the gateway logs at start, Limits; `pnpm@10.34.7 exec astro build`: 40 page(s) built, /admin/memory/index.html |
-| 9 | The PR proves itself in CI | Go build, vet, local build, tests (SQLite and Postgres shards) and govulncheck pass on the PR | narrated: `gh pr checks` transcript || pending: Slice 1 (#16) checks green; Slice 2 (#17) and Slice 3 CI not yet recorded |
+| 9 | The PR proves itself in CI | Go build, vet, local build, tests (SQLite and Postgres shards) and govulncheck pass on the PR | narrated: `gh pr checks` transcript || 2026-11-26: `gh pr checks` on #16, #17 and #18 (head 987d685): Go build, Go local build, Go tests (postgres 1/1, sqlite 1/6 to 6/6), Go vet and Go vulnerabilities pass on all three; #18 also Docs build pass |
 
 ## Global Constraints
 
@@ -52,9 +52,9 @@ Defined by the builder under the owner's delegation (2026-11-25).
 |---|---|---|---|---|---|
 | 1 | Memory config and the cross-namespace key read | tapas | tapas#16 | - | 1, 2, 5, 7 |
 | 2 | mem0 client and owner-checking service | tapas | tapas#17 | Slice 1 | 3, 4, 5 |
-| 3 | Wiring, start check and admin docs | tapas | tapas (Slice 3 PR, pending) | Slice 2 | 6, 7, 8, 9 |
+| 3 | Wiring, start check and admin docs | tapas | tapas#18 | Slice 2 | 6, 7, 8, 9 |
 
-Merge order: #16 -> #17 -> Slice 3.
+Merge order: #16 -> #17 -> #18.
 
 ## Slice 1: Memory config and the cross-namespace key read
 **Goal:** An admin can turn memory on in config, misconfiguration fails at load, and the gateway reads mem0's key from mem0's namespace at start (tapas#15).
