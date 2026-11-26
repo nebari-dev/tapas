@@ -65,7 +65,7 @@ D5. OAuth endpoints: discovered by default (RFC 9728 from the MCP URL, then RFC 
 
 D6. Client registration: use the pasted client id and secret when present; otherwise, when the authorization server advertises `registration_endpoint`, register dynamically (RFC 7591) once and store the result on the row with `oauth_registration = 'dynamic'`. If neither is possible the admin sees "paste an OAuth client".
 
-D7. OAuth callback lands on a UI page, not an API route. The redirect URI is `{publicURL}/settings/connections/callback` (a page of the SPA, served without a session). The page then calls `POST /api/connectors/oauth/complete` with `{state, code, iss}` from the same origin, which carries the `SameSite=Strict` session cookie and passes `authn.SameOrigin`. Reason: the cookie is not sent on the vendor's redirect, and this binds completion to the signed-in person with the checks every other write already has. The code in the page URL is harmless alone: it is single use and useless without the PKCE verifier, which never leaves the server. The page replaces its history entry before calling.
+D7. OAuth callback lands on a UI page, not an API route. Each connector has its own redirect URI, `{publicURL}/settings/connections/callback/{slug}` (a page of the SPA, served without a session; the slug is known before the connector exists, so the admin form shows it while it is typed). The page then calls `POST /api/connectors/oauth/complete` with `{slug, state, code, iss}` from the same origin; the server refuses a state started for another connector's redirect URI, and for discovered endpoints an iss other than the pinned issuer (the OAuth security BCP's mix-up defences), which carries the `SameSite=Strict` session cookie and passes `authn.SameOrigin`. Reason: the cookie is not sent on the vendor's redirect, and this binds completion to the signed-in person with the checks every other write already has. The code in the page URL is harmless alone: it is single use and useless without the PKCE verifier, which never leaves the server. The page replaces its history entry before calling.
 
 D8. Pending OAuth state lives in the database (`connector_oauth_states`), not in a cookie or memory. Reason: any replica can complete it, and it can be consumed exactly once with `DELETE ... RETURNING`. The row is keyed by the SHA-256 of the state (the state itself is never stored, as with plan ids and device codes), holds the sealed PKCE verifier, the person who started it, the connector's `rev` and the redirect URI used, and expires after 10 minutes. A janitor sweeps expired rows.
 
@@ -91,7 +91,7 @@ D18. Writes reuse plans unchanged. One hidden catalog action `connector-call` wh
 
 D19. Audit: one `audit_events` row per brokered call, appended after the outcome is known. If the row cannot be written, the result is withheld and the call answers an error, so no unaudited data leaves. Rows hold names and outcomes only.
 
-D20. Changing a connector's URL origin, OAuth endpoints or client deletes its connections (people reconnect) and requires the client secret again. Reason: a stored token must never be sent to a host other than the one it was issued for.
+D20. Changing a connector's URL (any change, compared exactly), OAuth endpoints or client deletes its connections (people reconnect) and requires the client secret again; so does saving it after its authorization server moved (below). Changing its auth mode deletes its connections too. The authorization server is pinned (issuer and endpoints, on the connector row) at the first discovery; finishing a sign-in, refreshing and revoking use only the pinned values, and when the MCP server's metadata later names another issuer no sign-in starts until an admin saves the connector again. Reason: a stored token, a code or the client secret must never be sent to a host other than the one it was issued for, and a later metadata change must not redirect them.
 
 D21. No new Go or npm dependencies. `golang.org/x/oauth2` (PKCE helpers, code exchange, refresh) and the go-sdk `oauthex` and `auth` discovery helpers are already in `go.mod`. The go-sdk's `auth.AuthorizationCodeHandler` is not used: it blocks in one process waiting for the code, which does not fit a browser redirect served by several replicas.
 
@@ -597,4 +597,42 @@ Shared files and how to avoid conflicts
 
 ## Status
 
-To be filled in at the end.
+As of 2026-11-26, on branch `connectors-broker`.
+
+### Done
+
+- Slice 1: the `connectors` table (00028), the built-in catalogue (Slack, GitHub, Notion, HubSpot, Gmail, Google Calendar, Google Drive), the registry with the OAuth client secret sealed by the sessions key, and the admin API. Every catalogue address and scope was checked against the vendor: each address answers as an MCP server (401 with OAuth metadata, or Google's with its own OAuth) and is named in the vendor's docs; every scope is in the vendor's docs or, for GitHub's `read:org`, in its server's `scopes_supported`.
+- Slice 2: the broker on `/mcp`: tools listed per caller as `<slug>__<tool>`, reads forwarded with the person's token, one MCP session per call, the guarded HTTP client shared with the AI settings.
+- Slice 3: per-person and company-wide OAuth (RFC 9728 and 8414 discovery, PKCE S256, RFC 7591 registration, RFC 8707 resource, RFC 9207 iss), the token vault (00029) with refresh, rotation and revocation, the member and admin routes.
+- Slices 4 and 5: `ActUseConnector` in authz and the policy hook (`policy.Checker`, allow-all by default, any error denies), both on every call.
+- Slice 6: writes, and reads a policy sends for approval, become plans holding the exact arguments; the owner approves in the browser and the stored call is sent once, after the checks run again.
+- Slice 7: one `connector.call` audit row per call, proposal and approved call, with names and outcomes only; a call whose row cannot be written answers an error and withholds the result.
+- Slice 8: Settings, Connectors (every catalogue entry listed with its vendor's logo) and Settings, Connected accounts, the sign-in callback page, the approval card for connector calls.
+- Docs: `site/src/content/docs/admin/connectors.md` and the connector section of `using/ask-ai.md`.
+
+Deviations from the plan above, made while building and recorded in the commits: tool names keep `__` (D9 is still open); the redirect address is one per connector, `{publicURL}/settings/connections/callback/{slug}` (D7, after the security review); a connector's authorization server is pinned at its first sign-in (migration 00030) and a change counts as a move (D20); a plan records the connector's id and address and fails if either changed.
+
+### Not done
+
+- Real policies: the OPA checker of #3. Only the interface and the allow-all default ship.
+- A NetworkPolicy so in-cluster connectors accept traffic only from the gateway (#2; needs enforcement on EKS).
+- Our own in-cluster MCP servers (Greenhouse, Gmail send). The broker passes the person's token per call, so they need no code here.
+- Plans still expire after 10 minutes (`plans.DefaultTTL`), short for a person who is away.
+- `javo user remove` deletes a person's connections without revoking them at the vendor (the CLI has neither the sessions key nor the guarded client).
+- An agent sees whether an approved write was applied or failed, not the connector's answer.
+
+### Run it locally
+
+- Tests: `make test` (needs Docker for the Postgres pass), or without Docker `JAVO_TEST_DB=postgres JAVO_TEST_PG_DSN=postgres://... go test ./internal/store/...` and `go test ./...`; `make test-local`; `pnpm -C ui test` and `pnpm -C ui build`.
+- The UI alone: `pnpm -C ui mock` shows both screens, a fake vendor sign-in included.
+- A cluster: `make up`, then set `connectors.enabled: true` in the platform config and add a connector in Settings, Connectors. The fakes in `internal/connectors/connectorstest` (an MCP server and an OAuth authorization server) are what the tests run against.
+
+### Security review
+
+Two independent reviews ran, each by a separate agent given the code and the requirements, not conclusions.
+
+The first (everything before slice 6) found no token leak, no cross-person token use and no authz bypass. It found: the authorization server was not pinned after sign-in (medium), an OAuth mix-up through the one shared redirect address (medium), a connection stored across a connector change, no total size cap on tool lists, a same-origin path change keeping connections, IPv6 forms that embed an IPv4 address passing the address guard, arguments read differently by the policy and the connector, and a shared connection revived by switching modes back (low or informational). All are fixed at the root, each with a test that failed first: pinning in 00030, per-connector redirect addresses and a strict iss check, a revision guard on storing a connection, byte caps on lists and on the broker's cache, exact address comparison, the guard reading embedded IPv4, refusing arguments that name a field twice, and an auth mode change counting as a move.
+
+The second (slice 6) found no critical or high issue; ownership, approval, apply-once and the hidden action held. It found: field names that differ only by case or a look-alike letter, and invisible or direction characters on the approval card (medium); an approved call reaching a connector moved since it was asked, and a connector's hints dropping the undo warning on a write tool (low); and a wrong message for a browser session. All are fixed, each with a failing test first.
+
+Known and accepted: with static OAuth endpoints (the Google entries) an `iss` in the answer is ignored rather than refused, since static endpoints have no known issuer; the per-connector redirect address keeps those answers apart.

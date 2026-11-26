@@ -4,15 +4,19 @@ package gateway_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
 	"github.com/nebari-dev/javo/internal/connectors/registry"
 	"github.com/nebari-dev/javo/internal/gateway/apitest"
+	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/model"
 )
 
@@ -116,5 +120,125 @@ func TestOnlyAgentAppTokensReachConnectors(t *testing.T) {
 	res, text := callTool(t, f.connect(t, agent.token), "fake__echo", map[string]any{})
 	if res.IsError || text != "{}" {
 		t.Fatalf("agent token call: %v %q", res.IsError, text)
+	}
+}
+
+// signIn connects through the API with cookie c at path (a connect route)
+// and the fake vendor; person is who finishes it.
+func signIn(t *testing.T, f *mcpFixture, as *connectorstest.AuthServer, path string, c *http.Cookie) string {
+	t.Helper()
+	w := f.Do("POST", path, "", c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("POST %s: %d %s", path, w.Code, w.Body)
+	}
+	u := apitest.Decode[struct{ AuthorizeURL string }](t, w).AuthorizeURL
+	back, err := as.Authorize(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The callback page is the one the vendor sends back to: its last path
+	// segment is the connector's slug.
+	parsed, err := url.Parse(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redirect := parsed.Query().Get("redirect_uri")
+	slug := redirect[strings.LastIndex(redirect, "/")+1:]
+	return fmt.Sprintf(`{"slug":%q,"state":%q,"code":%q,"iss":%q}`, slug, back.Get("state"), back.Get("code"), back.Get("iss"))
+}
+
+func complete(t *testing.T, f *mcpFixture, body string, c *http.Cookie, want int) {
+	t.Helper()
+	if w := f.Do("POST", "/api/connectors/oauth/complete", body, c); w.Code != want {
+		t.Fatalf("complete: %d %s, want %d", w.Code, w.Body, want)
+	}
+}
+
+// End to end: alice connects her own account through the fake vendor, and
+// her agent's /mcp call reaches the connector with her token, refreshed
+// when the connector stops taking it; bob cannot finish her sign-in and has
+// no tools of hers. A shared connector's calls use the account an admin
+// connected, for bob too.
+func TestConnectedAccountsThroughMCP(t *testing.T) {
+	t.Parallel()
+	af := apitest.New(t, apitest.Options{
+		Mcp: true, Connectors: true, PublicURL: "https://tapas.example.org", ConnectorInternalHosts: []string{"127.0.0.1"},
+		ConnectorHTTP: httpx.Guard{}.Client(), People: []apitest.TestPerson{apitest.SignedIn("bob", time.Time{})},
+	})
+	s := httptest.NewServer(af.Srv)
+	t.Cleanup(s.Close)
+	f := &mcpFixture{Fixture: af, url: s.URL, alice: af.LoginAlice()}
+	bob := f.Session(apitest.PersonID("bob"))
+	ctx := context.Background()
+	as := connectorstest.NewAuthServer(t)
+	mine := connectorstest.NewOAuthConnector(t, as)
+	conn, err := f.Connectors.Create(ctx, model.Actor{Person: "admin"}, registry.Input{
+		Slug: "mine", Name: "Mine", URL: mine.URL, AuthMode: connectors.AuthUser, Enabled: true, AllowedGroups: []string{"*"},
+		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret,
+		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := signIn(t, f, as, "/api/connectors/"+conn.ID+"/connect", f.alice)
+	complete(t, f, body, bob, http.StatusBadRequest)
+	complete(t, f, body, f.alice, http.StatusBadRequest)
+	complete(t, f, signIn(t, f, as, "/api/connectors/"+conn.ID+"/connect", f.alice), f.alice, http.StatusOK)
+
+	aliceTok := f.NewToken(f.alice, `{"name":"agent","scope":"read"}`).Token
+	bobTok := f.NewToken(bob, `{"name":"agent","scope":"read"}`).Token
+	if names := toolNames(t, f, aliceTok); !names["mine__echo"] {
+		t.Fatalf("alice's tools %v", names)
+	}
+	if names := toolNames(t, f, bobTok); names["mine__echo"] {
+		t.Fatalf("bob sees alice's connector's tools: %v", names)
+	}
+	res, text := callTool(t, f.connect(t, aliceTok), "mine__echo", map[string]any{"n": 1})
+	if res.IsError || text != `{"n":1}` {
+		t.Fatalf("alice's echo: %v %q", res.IsError, text)
+	}
+	stored, err := f.Vault.Token(ctx, conn, apitest.LocalAlice())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls := mine.Calls(); len(calls) != 1 || calls[0].Bearer != stored || !as.Valid(stored, mine.URL) {
+		t.Fatalf("calls %+v; alice's stored token %q", calls, stored)
+	}
+	if res, _ := callTool(t, f.connect(t, bobTok), "mine__echo", map[string]any{}); !res.IsError || len(mine.Calls()) != 1 {
+		t.Fatal("bob's call reached alice's connector")
+	}
+
+	// The vendor stops taking alice's token: the call refreshes it and
+	// goes through once more.
+	as.Expire()
+	if res, text := callTool(t, f.connect(t, aliceTok), "mine__echo", map[string]any{"n": 2}); res.IsError || text != `{"n":2}` {
+		t.Fatalf("echo after the token expired: %v %q", res.IsError, text)
+	}
+	calls := mine.Calls()
+	if len(calls) != 2 || calls[1].Bearer == stored || as.Refreshes() != 1 {
+		t.Fatalf("calls %+v after %d refreshes", calls, as.Refreshes())
+	}
+
+	sharedSrv := connectorstest.NewOAuthConnector(t, as)
+	shared, err := f.Connectors.Create(ctx, model.Actor{Person: "admin"}, registry.Input{
+		Slug: "team", Name: "Team", URL: sharedSrv.URL, AuthMode: connectors.AuthShared, Enabled: true, AllowedGroups: []string{"*"},
+		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret,
+		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := f.Session(apitest.AdminID, "javo-admins")
+	complete(t, f, signIn(t, f, as, "/api/admin/connectors/"+shared.ID+"/connect", admin), admin, http.StatusOK)
+	if res, text := callTool(t, f.connect(t, bobTok), "team__echo", map[string]any{"who": "bob"}); res.IsError || text != `{"who":"bob"}` {
+		t.Fatalf("bob's shared echo: %v %q", res.IsError, text)
+	}
+	adminTok, err := f.Vault.Token(ctx, shared, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls := sharedSrv.Calls(); len(calls) != 1 || calls[0].Bearer != adminTok {
+		t.Fatalf("shared calls %+v", calls)
 	}
 }

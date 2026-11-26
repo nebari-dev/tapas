@@ -634,3 +634,25 @@ h2.part-title>.part-icon{width:20px;height:20px}
 @container (max-width:600px){.atable .con-auth{display:none}.con-auth-sub{display:block}}
 p.sub.con-setup{margin:0 0 16px}
 .con-add-tool .btn{flex:none}
+/* Settings, Connected accounts: one row per connector, the buttons keep their words at every width. */
+.con-list{list-style:none;margin:0;padding:0}
+.con-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px 14px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.con-row:last-child{border-bottom:none}
+.con-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.con-name{font-size:var(--fs-md);font-weight:600;margin:0;overflow-wrap:anywhere}
+.con-row-act{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.con-row-act .btn{white-space:nowrap}
+.con-status{font-size:var(--fs-sm);color:var(--text-2)}
+.con-status.ok{color:var(--ok)}
+.con-status.warn{color:var(--warn)}
+@media (max-width:600px){
+  .con-row{grid-template-columns:auto minmax(0,1fr);padding:12px 14px}
+  .con-row > .logo{align-self:start}
+  .con-row-act{grid-column:2;justify-content:flex-start}
+}
+.con-refresh{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px}
+.con-refresh-row{gap:12px;flex-wrap:wrap}
+.con-refresh-row .btn{flex:none}
+.con-callback{display:flex;flex-direction:column;gap:16px;max-width:640px}
+.atable .col-act .btn + .btn{margin-left:8px}
+.con-tools-line{overflow-wrap:anywhere}

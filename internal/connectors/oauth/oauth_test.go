@@ -1,0 +1,509 @@
+package oauth_test
+
+import (
+	"context"
+	"errors"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/tink-crypto/tink-go/v2/tink"
+
+	"github.com/nebari-dev/javo/internal/connectors"
+	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
+	"github.com/nebari-dev/javo/internal/connectors/oauth"
+	"github.com/nebari-dev/javo/internal/connectors/registry"
+	"github.com/nebari-dev/javo/internal/connectors/vault"
+	"github.com/nebari-dev/javo/internal/httpx"
+	"github.com/nebari-dev/javo/internal/model"
+	"github.com/nebari-dev/javo/internal/secrets"
+	"github.com/nebari-dev/javo/internal/store"
+	"github.com/nebari-dev/javo/internal/store/storetest"
+)
+
+var (
+	ctx   = context.Background()
+	alice = model.Actor{Person: "alice"}
+)
+
+const (
+	publicURL = "https://tapas.example.org"
+	// redirectURI is the fixture connector's own redirect address.
+	redirectURI = publicURL + "/settings/connections/callback/fake"
+)
+
+// loopback is the internal host the fakes listen on.
+var loopback = []string{"127.0.0.1"}
+
+type fixture struct {
+	as   *connectorstest.AuthServer
+	mcp  *connectorstest.Connector
+	reg  *registry.Registry
+	db   *store.Store
+	svc  *oauth.Service
+	key  tink.AEAD
+	now  time.Time
+	conn connectors.Connector
+}
+
+// setup starts the fakes and a connector pointing at them. in changes the
+// connector before it is created.
+func setup(t *testing.T, o connectorstest.AuthServerOptions, in func(*registry.Input)) *fixture {
+	t.Helper()
+	f := &fixture{as: connectorstest.NewAuthServerWith(t, o), db: storetest.New(t), now: time.Now()}
+	f.mcp = connectorstest.NewOAuthConnector(t, f.as)
+	key, err := secrets.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.reg = registry.New(registry.Config{DB: f.db, Seal: key, InternalHosts: loopback})
+	input := registry.Input{
+		Slug: "fake", Name: "Fake", URL: f.mcp.URL, AuthMode: connectors.AuthUser, Enabled: true,
+		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret, Scopes: []string{"read", "write"},
+		AllowedGroups: []string{"*"},
+	}
+	if in != nil {
+		in(&input)
+	}
+	if f.conn, err = f.reg.Create(ctx, alice, input); err != nil {
+		t.Fatal(err)
+	}
+	f.key = key
+	f.svc = f.replica()
+	return f
+}
+
+// replica is a Service over the fixture's database and registry with its
+// own (empty) cache, as another gateway replica has.
+func (f *fixture) replica() *oauth.Service {
+	return oauth.New(oauth.Config{
+		DB: f.db, Seal: f.key, Clients: f.reg, HTTP: httpx.Guard{}.Client(), InternalHosts: loopback,
+		PublicURL: publicURL, Now: func() time.Time { return f.now },
+	})
+}
+
+// signIn starts a sign-in for person and follows it at the fake vendor.
+func (f *fixture) signIn(t *testing.T, person string) (authorize url.Values, back url.Values) {
+	t.Helper()
+	conn, err := f.reg.Get(ctx, f.conn.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := f.svc.Start(ctx, model.Actor{Person: person}, conn, person, person)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	parsed, err := url.Parse(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err = f.as.Authorize(u)
+	if err != nil {
+		t.Fatalf("authorize: %v", err)
+	}
+	return parsed.Query(), back
+}
+
+// completion is the sign-in the vendor sent the person back with, and the
+// connector whose callback page it reached.
+type completion struct{ slug, state, code, iss string }
+
+func completionOf(back url.Values) completion {
+	return completion{"fake", back.Get("state"), back.Get("code"), back.Get("iss")}
+}
+
+func (f *fixture) complete(person string, c completion) (vault.Grant, error) {
+	return f.svc.Complete(ctx, person, c.slug, c.state, c.code, c.iss)
+}
+
+func TestCodeFlowWithDiscoveryAndAPastedClient(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	q, back := f.signIn(t, "alice")
+	for k, want := range map[string]string{
+		"response_type": "code", "client_id": connectorstest.ClientID, "redirect_uri": redirectURI,
+		"code_challenge_method": "S256", "scope": "read write", "resource": f.mcp.URL,
+	} {
+		if q.Get(k) != want {
+			t.Errorf("authorize %s = %q, want %q", k, q.Get(k), want)
+		}
+	}
+	if raw, err := base64Len(q.Get("state")); err != nil || raw != 32 {
+		t.Errorf("state %q is not 32 random bytes", q.Get("state"))
+	}
+	g, err := f.complete("alice", completionOf(back))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Connector.ID != f.conn.ID || g.Subject != "alice" || g.Tokens.Refresh == "" || g.Tokens.Expiry.IsZero() {
+		t.Fatalf("Complete = %+v %+v", g.Connector.ID, g.Subject)
+	}
+	if !f.as.Valid(g.Tokens.Access, f.mcp.URL) {
+		t.Fatal("the access token is not one the vendor issued for the connector")
+	}
+	if f.as.Registrations() != 0 {
+		t.Fatal("registered a client although one was pasted")
+	}
+}
+
+// Without the hint in WWW-Authenticate, the metadata is found at its
+// well-known path.
+func TestDiscoveryWithoutTheMetadataHint(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	f.mcp.HideMetadataHint(true)
+	_, back := f.signIn(t, "alice")
+	if _, err := f.complete("alice", completionOf(back)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// With no pasted client, Tapas registers one once and keeps it on the
+// connector.
+func TestDynamicRegistration(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, func(in *registry.Input) { in.ClientID, in.ClientSecret = "", "" })
+	q, back := f.signIn(t, "alice")
+	if _, err := f.complete("alice", completionOf(back)); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := f.reg.Get(ctx, f.conn.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conn.OAuth.Registration != connectors.RegistrationDynamic || conn.OAuth.ClientID != q.Get("client_id") || !conn.OAuth.SecretStored {
+		t.Fatalf("connector OAuth = %+v, authorize client_id %q", conn.OAuth, q.Get("client_id"))
+	}
+	_, back = f.signIn(t, "bob")
+	if _, err := f.complete("bob", completionOf(back)); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.as.Registrations(); n != 1 {
+		t.Fatalf("%d registrations, want 1", n)
+	}
+}
+
+func TestNoClientAndNoRegistrationNeedsAClient(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{NoRegistration: true}, func(in *registry.Input) { in.ClientID, in.ClientSecret = "", "" })
+	if _, err := f.svc.Start(ctx, alice, f.conn, "alice", "alice"); !errors.Is(err, connectors.ErrNeedsClient) {
+		t.Fatalf("Start = %v, want ErrNeedsClient", err)
+	}
+}
+
+// Static endpoints on the row win over discovery, and send no resource.
+func TestStaticEndpoints(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	in := registry.Input{
+		Name: "Fake", URL: f.mcp.URL, AuthMode: connectors.AuthUser, Enabled: true,
+		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret, AllowedGroups: []string{"*"},
+		AuthorizeURL: f.as.URL + "/authorize", TokenURL: f.as.URL + "/token", RevokeURL: f.as.URL + "/revoke", Rev: f.conn.Rev,
+	}
+	var err error
+	if f.conn, err = f.reg.Update(ctx, alice, f.conn.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	f.mcp.HideMetadataHint(true)
+	q, back := f.signIn(t, "alice")
+	if q.Has("resource") {
+		t.Fatalf("static endpoints sent resource %q", q.Get("resource"))
+	}
+	g, err := f.complete("alice", completionOf(back))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Revoke(ctx, f.conn, g.Tokens.Refresh, "refresh_token"); err != nil {
+		t.Fatal(err)
+	}
+	if r := f.as.Revocations(); len(r) != 1 || r[0].Token != g.Tokens.Refresh || r[0].Hint != "refresh_token" {
+		t.Fatalf("revocations = %+v", r)
+	}
+}
+
+func TestStaticEndpointsWithoutAClientNeedAClient(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	conn, err := f.reg.Update(ctx, alice, f.conn.ID, registry.Input{
+		Name: "Fake", URL: f.mcp.URL, AuthMode: connectors.AuthUser, Enabled: true, AllowedGroups: []string{"*"},
+		AuthorizeURL: f.as.URL + "/authorize", TokenURL: f.as.URL + "/token", Rev: f.conn.Rev,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Start(ctx, alice, conn, "alice", "alice"); !errors.Is(err, connectors.ErrNeedsClient) {
+		t.Fatalf("Start = %v, want ErrNeedsClient", err)
+	}
+}
+
+// Only the person who started a sign-in finishes it; a refused attempt
+// spends the state.
+func TestWrongPersonIsRefusedAndTheStateIsSpent(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	if _, err := f.complete("bob", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+		t.Fatalf("bob completes alice's sign-in: %v, want ErrSignInExpired", err)
+	}
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+		t.Fatalf("alice after bob tried: %v, want ErrSignInExpired", err)
+	}
+	if f.as.Exchanges() != 0 {
+		t.Fatal("a refused sign-in reached the token endpoint")
+	}
+}
+
+func TestStateIsSingleUse(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	if _, err := f.complete("alice", completionOf(back)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+		t.Fatalf("second Complete = %v, want ErrSignInExpired", err)
+	}
+	if _, err := f.complete("alice", completion{slug: "fake", state: "made-up", code: "x"}); !errors.Is(err, connectors.ErrSignInExpired) {
+		t.Fatalf("unknown state = %v, want ErrSignInExpired", err)
+	}
+}
+
+func TestExpiredStateFails(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	f.now = f.now.Add(oauth.StateTTL + time.Second)
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+		t.Fatalf("Complete after the state expired = %v, want ErrSignInExpired", err)
+	}
+}
+
+// A connector changed since the sign-in started is refused.
+func TestConnectorChangedSinceStartFails(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	if _, err := f.reg.SetTools(ctx, alice, f.conn.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.complete("alice", completionOf(back)); !errors.Is(err, connectors.ErrSignInExpired) {
+		t.Fatalf("Complete after a change = %v, want ErrSignInExpired", err)
+	}
+}
+
+// An answer naming another issuer is refused when the server said it names
+// itself (RFC 9207).
+func TestIssuerMismatchFails(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	c := completionOf(back)
+	c.iss = "https://as.example.org"
+	var oe *connectors.OAuthError
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeIssuer {
+		t.Fatalf("Complete with another iss = %v", err)
+	}
+	if f.as.Exchanges() != 0 {
+		t.Fatal("the code was exchanged")
+	}
+}
+
+// Each connector has its own redirect address, and a sign-in finishes only
+// on the callback page of the connector it was started for (OAuth mix-up
+// defence): what came back on another connector's page is refused before
+// the code is exchanged.
+func TestASignInFinishesOnlyOnItsConnectorsCallback(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	q, back := f.signIn(t, "alice")
+	if q.Get("redirect_uri") != redirectURI {
+		t.Fatalf("redirect_uri %q, want %q", q.Get("redirect_uri"), redirectURI)
+	}
+	c := completionOf(back)
+	c.slug = "other"
+	var oe *connectors.OAuthError
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeRedirect {
+		t.Fatalf("Complete on another connector's page = %v", err)
+	}
+	if f.as.Exchanges() != 0 {
+		t.Fatal("the code was exchanged")
+	}
+}
+
+// An answer that names another issuer is refused even from a server that
+// did not say it sends iss (the sign-in still knows the pinned issuer), and
+// one without iss is refused when the server says it sends it.
+func TestAnIssuerTheSignInDidNotExpectIsRefused(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{NoIssParameter: true}, nil)
+	_, back := f.signIn(t, "alice")
+	c := completionOf(back)
+	c.iss = "https://as.example.org"
+	var oe *connectors.OAuthError
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeIssuer {
+		t.Fatalf("another iss from a server that does not advertise it = %v", err)
+	}
+
+	g := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back = g.signIn(t, "alice")
+	c = completionOf(back)
+	c.iss = ""
+	if _, err := g.complete("alice", c); !errors.As(err, &oe) || oe.Code != connectors.CodeIssuer {
+		t.Fatalf("no iss from a server that sends it = %v", err)
+	}
+	if f.as.Exchanges()+g.as.Exchanges() != 0 {
+		t.Fatal("a code was exchanged")
+	}
+}
+
+func TestServerWithoutS256IsRefused(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{PlainOnly: true}, nil)
+	var oe *connectors.OAuthError
+	if _, err := f.svc.Start(ctx, alice, f.conn, "alice", "alice"); !errors.As(err, &oe) || oe.Code != connectors.CodeNoPKCE {
+		t.Fatalf("Start = %v, want %s", err, connectors.CodeNoPKCE)
+	}
+}
+
+// A bad code comes back as the vendor's error code only.
+func TestBadCodeIsAnOAuthError(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	c := completionOf(back)
+	c.code = "code-wrong"
+	var oe *connectors.OAuthError
+	if _, err := f.complete("alice", c); !errors.As(err, &oe) || oe.Code != "invalid_grant" {
+		t.Fatalf("Complete with a bad code = %v", err)
+	}
+}
+
+func TestRefreshRotatesAndInvalidGrant(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	g, err := f.complete("alice", completionOf(back))
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := f.svc.Refresh(ctx, f.get(t), g.Tokens.Refresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Access == g.Tokens.Access || next.Refresh == "" || next.Refresh == g.Tokens.Refresh || !f.as.Valid(next.Access, f.mcp.URL) {
+		t.Fatal("refresh did not rotate the tokens")
+	}
+	f.as.RefuseRefresh(true)
+	if _, err := f.svc.Refresh(ctx, f.get(t), next.Refresh); !connectors.IsInvalidGrant(err) {
+		t.Fatalf("Refresh while refused = %v, want invalid_grant", err)
+	}
+}
+
+// Before any sign-in no server is pinned, so nothing is refreshed or
+// revoked anywhere.
+func TestNothingIsSentBeforeAServerIsPinned(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	var oe *connectors.OAuthError
+	if _, err := f.svc.Refresh(ctx, f.conn, "rt-1"); !errors.As(err, &oe) || oe.Code != connectors.CodeDiscovery {
+		t.Fatalf("Refresh = %v", err)
+	}
+	if err := f.svc.Revoke(ctx, f.conn, "at-1", "access_token"); !errors.As(err, &oe) || oe.Code != connectors.CodeDiscovery {
+		t.Fatalf("Revoke = %v", err)
+	}
+	if f.as.Refreshes() != 0 || len(f.as.Revocations()) != 0 {
+		t.Fatal("a token was sent")
+	}
+}
+
+func TestRevokeWithoutAnEndpoint(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{NoRevocation: true}, nil)
+	f.signIn(t, "alice")
+	if err := f.svc.Revoke(ctx, f.get(t), "at-1", "access_token"); !errors.Is(err, vault.ErrNoRevocation) {
+		t.Fatalf("Revoke = %v, want ErrNoRevocation", err)
+	}
+}
+
+// base64Len is the decoded length of a base64url value without padding.
+func base64Len(s string) (int, error) {
+	if strings.ContainsAny(s, "+/=") {
+		return 0, errors.New("not base64url")
+	}
+	return len(s) * 6 / 8, nil
+}
+
+// get is the connector as stored now.
+func (f *fixture) get(t *testing.T) connectors.Connector {
+	t.Helper()
+	c, err := f.reg.Get(ctx, f.conn.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+// The authorization server is pinned at the first sign-in. When the MCP
+// server's metadata later names another one, finishing a sign-in, refreshing
+// and revoking still go to the first, even on a replica that never saw it
+// (no cache), and no new sign-in starts until an admin saves the connector
+// again, with the client secret, which forgets what people connected.
+func TestTheAuthorizationServerIsPinnedAtTheFirstSignIn(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	g, err := f.complete("alice", completionOf(back))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, pending := f.signIn(t, "bob")
+	if s := f.get(t).OAuth.Server; s == nil || s.Issuer != f.as.URL || s.TokenURL != f.as.URL+"/token" {
+		t.Fatalf("pinned %+v", s)
+	}
+
+	other := connectorstest.NewAuthServer(t)
+	f.mcp.Advertise(other.URL)
+	replica := f.replica()
+	if _, err := replica.Complete(ctx, "bob", "fake", pending.Get("state"), pending.Get("code"), pending.Get("iss")); err != nil {
+		t.Fatalf("Complete on another replica: %v", err)
+	}
+	conn := f.get(t)
+	if _, err := replica.Refresh(ctx, conn, g.Tokens.Refresh); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if err := replica.Revoke(ctx, conn, g.Tokens.Access, "access_token"); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+	if other.Exchanges()+other.Refreshes() != 0 || len(other.Revocations()) != 0 {
+		t.Fatal("a code or token went to the newly named server")
+	}
+	if _, err := replica.Start(ctx, alice, conn, "carol", "carol"); !errors.Is(err, connectors.ErrServerMoved) {
+		t.Fatalf("Start after the server moved = %v, want ErrServerMoved", err)
+	}
+	conn = f.get(t)
+	if conn.OAuth.Server == nil || !conn.OAuth.Server.Moved || conn.OAuth.Server.Issuer != f.as.URL {
+		t.Fatalf("after the move %+v", conn.OAuth.Server)
+	}
+
+	// Saving it again needs the secret, then pins the new server.
+	in := registry.Input{
+		Name: conn.Name, URL: conn.URL, AuthMode: conn.AuthMode, Enabled: true, ClientID: conn.OAuth.ClientID,
+		Scopes: conn.Scopes, AllowedGroups: conn.AllowedGroups, Rev: conn.Rev,
+	}
+	var fe *connectors.FieldError
+	if _, err := f.reg.Update(ctx, alice, conn.ID, in); !errors.As(err, &fe) || fe.Field != "oauth.clientSecret" {
+		t.Fatalf("save without the secret = %v", err)
+	}
+	in.ClientSecret = connectorstest.ClientSecret
+	if conn, err = f.reg.Update(ctx, alice, conn.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	u, err := replica.Start(ctx, alice, conn, "carol", "carol")
+	if err != nil || !strings.HasPrefix(u, other.URL+"/authorize?") {
+		t.Fatalf("Start after the save = %q, %v", u, err)
+	}
+	if s := f.get(t).OAuth.Server; s == nil || s.Issuer != other.URL || s.Moved {
+		t.Fatalf("pinned after the save %+v", s)
+	}
+}

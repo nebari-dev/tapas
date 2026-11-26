@@ -16,6 +16,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/model"
 )
@@ -40,6 +41,14 @@ const (
 	MaxBody   = 4 << 20
 	MaxResult = 1 << 20
 	MaxTools  = 1000
+	// MaxToolList is the most bytes (as JSON) of all the tools a connector
+	// lists, over every page; a longer list is refused whole.
+	MaxToolList = 1 << 20
+	// A tool larger than MaxTool bytes (as JSON), or whose description or
+	// title is longer than these, is left out of the list.
+	MaxTool            = 64 << 10
+	MaxToolDescription = 8 << 10
+	MaxToolTitle       = 256
 )
 
 // Errors a call fails with, by class. Their text holds nothing the
@@ -62,18 +71,30 @@ type Client struct {
 
 var _ Forwarder = (*Client)(nil)
 
-// ListTools lists every tool of the connector.
+// ListTools lists every tool of the connector, leaving out the ones past
+// their size caps. More than MaxTools tools, or MaxToolList bytes of them
+// (counting the ones left out), is ErrTooLarge.
 func (c *Client) ListTools(ctx context.Context, t Target, bearer string) ([]*sdk.Tool, error) {
 	var tools []*sdk.Tool
 	err := c.session(ctx, t, bearer, or(c.ListTimeout, ListTimeout), func(ctx context.Context, cs *sdk.ClientSession) error {
+		seen, size := 0, 0
 		for tl, err := range cs.Tools(ctx, nil) {
 			if err != nil {
 				return err
 			}
-			if len(tools) == MaxTools {
+			b, err := json.Marshal(tl)
+			if err != nil {
+				return err
+			}
+			if seen++; seen > MaxTools {
 				return ErrTooLarge
 			}
-			tools = append(tools, tl)
+			if size += len(b); size > MaxToolList {
+				return ErrTooLarge
+			}
+			if fits(tl, len(b)) {
+				tools = append(tools, tl)
+			}
 		}
 		return nil
 	})
@@ -112,6 +133,12 @@ func (c *Client) CallTool(ctx context.Context, t Target, bearer, name string, ar
 	return res, nil
 }
 
+// fits reports whether tl, size bytes as JSON, is within the per-tool caps.
+func fits(tl *sdk.Tool, size int) bool {
+	return size <= MaxTool && len(tl.Description) <= MaxToolDescription && len(tl.Title) <= MaxToolTitle &&
+		(tl.Annotations == nil || len(tl.Annotations.Title) <= MaxToolTitle)
+}
+
 func or(d, def time.Duration) time.Duration {
 	if d > 0 {
 		return d
@@ -122,7 +149,7 @@ func or(d, def time.Duration) time.Duration {
 // session opens a session with bearer, runs do within timeout, and closes
 // it. An error is reduced to its class.
 func (c *Client) session(ctx context.Context, t Target, bearer string, timeout time.Duration, do func(context.Context, *sdk.ClientSession) error) error {
-	tr := &callTransport{bearer: bearer, next: http.DefaultTransport}
+	tr := &callTransport{bearer: connectors.Secret(bearer), next: http.DefaultTransport}
 	if c.HTTP != nil && c.HTTP.Transport != nil {
 		tr.next = c.HTTP.Transport
 	}
@@ -150,7 +177,7 @@ func (c *Client) session(ctx context.Context, t Target, bearer string, timeout t
 // callTransport adds the bearer to every request, caps every answer's body
 // and remembers what went wrong at the HTTP layer.
 type callTransport struct {
-	bearer       string
+	bearer       connectors.Secret
 	next         http.RoundTripper
 	unauthorized atomic.Bool
 	tooLarge     atomic.Bool
@@ -158,7 +185,7 @@ type callTransport struct {
 
 func (t *callTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
-	r.Header.Set("Authorization", "Bearer "+t.bearer)
+	r.Header.Set("Authorization", "Bearer "+t.bearer.Reveal())
 	resp, err := t.next.RoundTrip(r)
 	if err != nil {
 		return nil, err

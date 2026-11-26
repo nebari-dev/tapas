@@ -948,6 +948,9 @@ type Config struct {
 	Run workspace.Platform
 	// Trust says whether owners may let their coding agents act without asking.
 	Trust TrustPolicy
+	// ExtraActions join the app actions in the catalog plans are made
+	// from: the connectors' connector-call, when connectors are on.
+	ExtraActions []actions.Action
 }
 
 // New builds the app API from c; c.Now and c.Plans must be set.
@@ -961,7 +964,7 @@ func New(c Config) *Workspaces {
 		previews: c.PreviewsEnabled, thumbnails: c.Thumbnails, decodes: ratelimit.NewConcurrent(c.ThumbnailDecodes), previewsCap: min(cmp.Or(c.PreviewsMaxPerApp, model.MaxPreviewMax), model.MaxPreviewMax), now: c.Now, urls: c.URLs, hosts: c.CodeHosts,
 		cfg: c,
 	}
-	ws.actions = actions.NewCatalog(append(ws.appActions(), ws.secretActions()...)...)
+	ws.actions = actions.NewCatalog(slices.Concat(ws.appActions(), ws.secretActions(), c.ExtraActions)...)
 	return ws
 }
 

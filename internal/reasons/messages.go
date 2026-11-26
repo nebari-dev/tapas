@@ -338,7 +338,10 @@ const (
 	MsgConnectorSignInFailed        MessageCode = "ConnectorSignInFailed" // arg: the OAuth error code the vendor answered
 	MsgConnectorSignInExpired       MessageCode = "ConnectorSignInExpired"
 	MsgConnectorNeedsOAuthClient    MessageCode = "ConnectorNeedsOAuthClient"
+	MsgConnectorServerMoved         MessageCode = "ConnectorServerMoved"
 	MsgConnectorToolNotFound        MessageCode = "ConnectorToolNotFound"
+	MsgConnectorCallChanged         MessageCode = "ConnectorCallChanged"
+	MsgConnectorForAgents           MessageCode = "ConnectorForAgents"
 	MsgConnectorDeniedByPolicy      MessageCode = "ConnectorDeniedByPolicy" // arg: the policy's reason, a sentence without its full stop
 	MsgConnectorNotForAppTokens     MessageCode = "ConnectorNotForAppTokens"
 	MsgConnectorSessionOnly         MessageCode = "ConnectorSessionOnly"
@@ -678,12 +681,15 @@ var messages = map[MessageCode]string{
 	MsgConnectorsOff:                "Connectors are off on this platform (connectors.enabled in the platform config).",
 	MsgConnectorSlugTaken:           "A connector called %s already exists. Pick another short name.",
 	MsgConnectorURLNotAllowed:       "Give an https address, such as https://mcp.example.org/mcp, without a user name, password or #fragment. Plain http only works for a host listed in connectors.internalHosts.",
-	MsgConnectorSecretForNewAddress: "The address, the OAuth endpoints or the client changed, so paste the client secret again. A stored secret is only sent where it was saved for.",
+	MsgConnectorSecretForNewAddress: "The address, the OAuth endpoints, the client or the server's authorization server changed, so paste the client secret again. A stored secret is only sent where it was saved for.",
 	MsgConnectorNotConnected:        "You have not connected %s yet, or it needs connecting again. Connect it at %s.",
 	MsgConnectorSignInFailed:        "The sign-in at the vendor did not complete (%s). Try connecting again; if it keeps failing, ask your admin to check the connector's OAuth client.",
 	MsgConnectorSignInExpired:       "This sign-in has expired or was already used. Start connecting again.",
 	MsgConnectorNeedsOAuthClient:    "This connector needs an OAuth client: create one at the vendor with the redirect address shown here, then paste its client id and secret.",
+	MsgConnectorServerMoved:         "This connector's server now sends sign-ins to another authorization server, so nobody can connect it until an admin checks it and saves the connector again.",
 	MsgConnectorToolNotFound:        "No such tool.",
+	MsgConnectorCallChanged:         "The connector was changed after this was asked, so the call was not made. Ask again.",
+	MsgConnectorForAgents:           "Connector tools are called by agents, through Tapas's MCP endpoint, not from the browser.",
 	MsgConnectorDeniedByPolicy:      "Not allowed by the platform's policy: %s.",
 	MsgConnectorNotForAppTokens:     "An app's or job's own API token cannot use connectors, unless the app is your own coding agent. Use a personal token from Settings.",
 	MsgConnectorSessionOnly:         "Only a person signed in in the browser can connect or disconnect an account. No API token can.",

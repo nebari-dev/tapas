@@ -103,16 +103,24 @@ export type AdminConnector = {
     allowedGroups: Array<string> | null;
     authMode: 'user' | 'shared';
     catalogId: string;
+    /**
+     * How many accounts are connected
+     */
+    connections: number;
     enabled: boolean;
     id: string;
     name: string;
     oauth: AdminOAuth;
     /**
-     * Paste this at the vendor as the OAuth redirect address
+     * This connector's own OAuth redirect address: paste it at the vendor
      */
     redirectUri?: string;
     rev: string;
     scopes: Array<string> | null;
+    /**
+     * The account everyone's calls use; only in shared mode
+     */
+    shared?: SharedConnection;
     slug: string;
     toolModes: {
         [key: string]: string;
@@ -129,6 +137,10 @@ export type AdminOAuth = {
     authorizeUrl?: string;
     clientId: string;
     /**
+     * The authorization server sign-ins, refreshes and revocations go to, pinned at the first sign-in (discovered endpoints only)
+     */
+    issuer?: string;
+    /**
      * static: pasted; dynamic: registered by Tapas (RFC 7591); empty: no client yet
      */
     registration: 'static' | 'dynamic' | '';
@@ -137,6 +149,10 @@ export type AdminOAuth = {
      * A client secret is stored
      */
     secretStored: boolean;
+    /**
+     * The MCP server now names another authorization server: nobody can connect until an admin saves the connector again (with the client secret), which disconnects everyone
+     */
+    serverMoved?: boolean;
     tokenUrl?: string;
 };
 
@@ -264,6 +280,13 @@ export type AuditEvent = {
 
 export type AuditOutputBody = {
     items: Array<AuditEvent> | null;
+};
+
+export type AuthorizeUrl = {
+    /**
+     * The vendor's sign-in page; it sends the browser back to the redirect address
+     */
+    authorizeUrl: string;
 };
 
 export type BackupJobRef = {
@@ -434,6 +457,10 @@ export type CatalogEntry = {
 
 export type CatalogOutputBody = {
     items: Array<CatalogEntry> | null;
+    /**
+     * A connector's OAuth redirect address is this followed by its slug; paste that at the vendor
+     */
+    redirectUriPrefix?: string;
 };
 
 export type Change = {
@@ -466,6 +493,23 @@ export type CommandView = {
     plans: Array<Plan> | null;
     reply: string;
     retryAfter?: number;
+};
+
+export type CompleteInput = {
+    code: string;
+    /**
+     * The issuer the vendor named (RFC 9207), when it sent one
+     */
+    iss?: string;
+    /**
+     * The connector whose callback page the vendor sent the browser back to (the last part of its path)
+     */
+    slug: string;
+    state: string;
+};
+
+export type CompleteOutputBody = {
+    connector: MyConnector;
 };
 
 export type ConnectorInput = {
@@ -1277,6 +1321,52 @@ export type Me = {
     username: string;
 };
 
+export type MyConnector = {
+    /**
+     * user: you connect your own account; shared: an admin connected one account for everyone
+     */
+    authMode: 'user' | 'shared';
+    /**
+     * The catalogue entry it was made from, for its vendor's logo; empty for a custom one
+     */
+    catalogId: string;
+    /**
+     * The page to connect it at
+     */
+    connectUrl: string;
+    /**
+     * A connection exists (yours, or the shared one)
+     */
+    connected: boolean;
+    connectedAt?: string;
+    id: string;
+    name: string;
+    slug: string;
+    /**
+     * needs_reauth: the vendor no longer accepts it; connect again
+     */
+    status?: 'active' | 'needs_reauth';
+    /**
+     * Its tools, from the last snapshot an admin took
+     */
+    tools: Array<MyTool> | null;
+};
+
+export type MyListOutputBody = {
+    items: Array<MyConnector> | null;
+};
+
+export type MyTool = {
+    /**
+     * read runs at once; write is proposed for you to approve
+     */
+    mode: 'read' | 'write';
+    /**
+     * The tool's name on Tapas's MCP endpoint: slug__tool
+     */
+    name: string;
+};
+
 export type NewFoldersOutputBody = {
     /**
      * Absent when the app would not start locked in
@@ -1804,6 +1894,15 @@ export type SharedApp = {
     thumbnail?: Thumbnail;
     url: string;
     via: string;
+};
+
+export type SharedConnection = {
+    connected: boolean;
+    /**
+     * The admin who connected it
+     */
+    connectedBy?: string;
+    status?: 'active' | 'needs_reauth';
 };
 
 export type SharedOutputBody = {
@@ -3510,6 +3609,155 @@ export type AdminUpdateConnectorResponses = {
 
 export type AdminUpdateConnectorResponse = AdminUpdateConnectorResponses[keyof AdminUpdateConnectorResponses];
 
+export type AdminConnectConnectorData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/connectors/{id}/connect';
+};
+
+export type AdminConnectConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Bad Gateway
+     */
+    502: ErrorModel;
+};
+
+export type AdminConnectConnectorError = AdminConnectConnectorErrors[keyof AdminConnectConnectorErrors];
+
+export type AdminConnectConnectorResponses = {
+    /**
+     * OK
+     */
+    200: AuthorizeUrl;
+};
+
+export type AdminConnectConnectorResponse = AdminConnectConnectorResponses[keyof AdminConnectConnectorResponses];
+
+export type AdminDisconnectConnectorData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/connectors/{id}/connection';
+};
+
+export type AdminDisconnectConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type AdminDisconnectConnectorError = AdminDisconnectConnectorErrors[keyof AdminDisconnectConnectorErrors];
+
+export type AdminDisconnectConnectorResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type AdminDisconnectConnectorResponse = AdminDisconnectConnectorResponses[keyof AdminDisconnectConnectorResponses];
+
+export type AdminRefreshConnectorToolsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/connectors/{id}/tools/refresh';
+};
+
+export type AdminRefreshConnectorToolsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Bad Gateway
+     */
+    502: ErrorModel;
+};
+
+export type AdminRefreshConnectorToolsError = AdminRefreshConnectorToolsErrors[keyof AdminRefreshConnectorToolsErrors];
+
+export type AdminRefreshConnectorToolsResponses = {
+    /**
+     * OK
+     */
+    200: AdminConnector;
+};
+
+export type AdminRefreshConnectorToolsResponse = AdminRefreshConnectorToolsResponses[keyof AdminRefreshConnectorToolsResponses];
+
 export type GetAdminReportData = {
     body?: never;
     path?: never;
@@ -4339,6 +4587,190 @@ export type GetBrandingResponses = {
 };
 
 export type GetBrandingResponse = GetBrandingResponses[keyof GetBrandingResponses];
+
+export type ListConnectorsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/connectors';
+};
+
+export type ListConnectorsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type ListConnectorsError = ListConnectorsErrors[keyof ListConnectorsErrors];
+
+export type ListConnectorsResponses = {
+    /**
+     * OK
+     */
+    200: MyListOutputBody;
+};
+
+export type ListConnectorsResponse = ListConnectorsResponses[keyof ListConnectorsResponses];
+
+export type CompleteConnectorSignInData = {
+    body: CompleteInput;
+    path?: never;
+    query?: never;
+    url: '/api/connectors/oauth/complete';
+};
+
+export type CompleteConnectorSignInErrors = {
+    /**
+     * Bad Request
+     */
+    400: ErrorModel;
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Bad Gateway
+     */
+    502: ErrorModel;
+};
+
+export type CompleteConnectorSignInError = CompleteConnectorSignInErrors[keyof CompleteConnectorSignInErrors];
+
+export type CompleteConnectorSignInResponses = {
+    /**
+     * OK
+     */
+    200: CompleteOutputBody;
+};
+
+export type CompleteConnectorSignInResponse = CompleteConnectorSignInResponses[keyof CompleteConnectorSignInResponses];
+
+export type ConnectConnectorData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/connectors/{id}/connect';
+};
+
+export type ConnectConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Bad Gateway
+     */
+    502: ErrorModel;
+};
+
+export type ConnectConnectorError = ConnectConnectorErrors[keyof ConnectConnectorErrors];
+
+export type ConnectConnectorResponses = {
+    /**
+     * OK
+     */
+    200: AuthorizeUrl;
+};
+
+export type ConnectConnectorResponse = ConnectConnectorResponses[keyof ConnectConnectorResponses];
+
+export type DisconnectConnectorData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/connectors/{id}/connection';
+};
+
+export type DisconnectConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type DisconnectConnectorError = DisconnectConnectorErrors[keyof DisconnectConnectorErrors];
+
+export type DisconnectConnectorResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type DisconnectConnectorResponse = DisconnectConnectorResponses[keyof DisconnectConnectorResponses];
 
 export type SearchDirectoryData = {
     body?: never;

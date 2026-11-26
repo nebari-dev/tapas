@@ -433,6 +433,7 @@ var sessionOnlyRoutes = []struct {
 	{IsTrustChange, reasons.MsgTrustSessionOnly},
 	{IsFoldersChange, reasons.MsgFoldersOwnerOnly},
 	{IsDeviceDecision, reasons.MsgDeviceSessionOnly},
+	{IsConnectorSignIn, reasons.MsgConnectorSessionOnly},
 }
 
 // SessionOnlyRefusal is the refusal an API token gets at path p, and true,
@@ -480,6 +481,16 @@ func restricted(ctx context.Context) bool { return viaAppToken(ctx) && !Trusted(
 func ViaAgentToken(ctx context.Context) bool {
 	caps, _ := ctx.Value(agentKey{}).(AgentCaps)
 	return caps.Deploy && restricted(ctx)
+}
+
+// AgentCapsOf is what the coding agent's app token the request came with
+// may do as an agent (Authenticator.Agents); zero for any other request.
+func AgentCapsOf(ctx context.Context) AgentCaps {
+	if !viaAppToken(ctx) {
+		return AgentCaps{}
+	}
+	caps, _ := ctx.Value(agentKey{}).(AgentCaps)
+	return caps
 }
 
 // ViaAgentModelToken reports whether the request came with the token of a
@@ -820,6 +831,27 @@ func isAppRoute(p, verb string) bool {
 	}
 	name, got, ok := strings.Cut(rest, "/")
 	return ok && name != "" && got == verb
+}
+
+// IsConnectorSignIn is true for the routes that connect or disconnect an
+// account at a connector's vendor, or finish connecting one, which only a
+// signed-in person in the browser may use: no token, so no agent, can
+// connect an account it would then use. The path is cleaned first, as
+// IsPlanDecision does; OpenAPI path templates ({id}) match too.
+func IsConnectorSignIn(p string) bool {
+	p = path.Clean("/" + p)
+	if p == "/api/connectors/oauth/complete" {
+		return true
+	}
+	rest, ok := strings.CutPrefix(p, "/api/connectors/")
+	if !ok {
+		rest, ok = strings.CutPrefix(p, "/api/admin/connectors/")
+	}
+	if !ok {
+		return false
+	}
+	id, verb, ok := strings.Cut(rest, "/")
+	return ok && id != "" && (verb == "connect" || verb == "connection")
 }
 
 // NoTokens refuses a request made with any API token: for the routes only a

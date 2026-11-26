@@ -15,7 +15,7 @@ func TestConnectorMessagesAreInCatalogAndTakeTheirArguments(t *testing.T) {
 		MsgConnectorSignInExpired, MsgConnectorNeedsOAuthClient, MsgConnectorToolNotFound, MsgConnectorNotForAppTokens,
 		MsgConnectorSessionOnly, MsgConnectorChanged, MsgConnectorSlugInvalid, MsgConnectorNameInvalid,
 		MsgConnectorAuthModeInvalid, MsgConnectorScopesInvalid, MsgConnectorGroupsInvalid, MsgConnectorToolModesInvalid,
-		MsgConnectorEndpointsPaired, MsgConnectorCatalogUnknown,
+		MsgConnectorEndpointsPaired, MsgConnectorCatalogUnknown, MsgConnectorServerMoved,
 	}
 	for _, c := range plain {
 		if Msg(c) == Msg(MsgInvalidRequest) {

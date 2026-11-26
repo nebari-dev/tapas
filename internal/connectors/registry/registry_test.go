@@ -128,6 +128,9 @@ func TestChangingTheAddressOrClientNeedsTheSecretAgain(t *testing.T) {
 	for name, change := range map[string]func(*registry.Input){
 		"another host": func(in *registry.Input) { in.URL = "https://mcp.example.com/mcp" },
 		"another port": func(in *registry.Input) { in.URL = "https://mcp.example.org:8443/mcp" },
+		// Another path may name another authorization server in its
+		// metadata, so it is a new address too.
+		"another path": func(in *registry.Input) { in.URL = "https://mcp.example.org/v2/mcp" },
 		"static token endpoint": func(in *registry.Input) {
 			in.AuthorizeURL, in.TokenURL = "https://idp.example.org/a", "https://idp.example.org/t"
 		},
@@ -150,11 +153,6 @@ func TestChangingTheAddressOrClientNeedsTheSecretAgain(t *testing.T) {
 		t.Fatalf("a refused change touched the secret: %q, %v", s, err)
 	}
 
-	// Another path on the same origin keeps the secret.
-	c, err = update(func(in *registry.Input) { in.URL = "https://mcp.example.org/v2/mcp" })
-	if err != nil || !c.OAuth.SecretStored {
-		t.Fatalf("same origin: %+v, %v", c, err)
-	}
 	// A new address with the secret pasted again is saved.
 	c, err = update(func(in *registry.Input) { in.URL, in.ClientSecret = "https://mcp.example.com/mcp", "new-secret" })
 	if err != nil || c.URL != "https://mcp.example.com/mcp" {
@@ -252,5 +250,182 @@ func TestDeleteRemovesTheConnector(t *testing.T) {
 	}
 	if err := r.Delete(ctx, alice, c.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("second Delete = %v", err)
+	}
+}
+
+// forgetter records which connectors' connections were dropped, and with
+// which address: the one the tokens were issued for. then, when set, runs
+// after each.
+type forgetter struct {
+	forgot []string
+	then   func(c connectors.Connector)
+}
+
+func (f *forgetter) DeleteForConnector(_ context.Context, _ model.Actor, c connectors.Connector) error {
+	f.forgot = append(f.forgot, c.Slug+"@"+c.URL)
+	if f.then != nil {
+		f.then(c)
+	}
+	return nil
+}
+
+func newRegistryWith(t *testing.T, f *forgetter) *registry.Registry {
+	t.Helper()
+	key, err := secrets.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry.New(registry.Config{DB: storetest.New(t), Seal: key, Connections: f})
+}
+
+// A new address or client drops what people connected, for the address
+// they connected to; other changes keep it. Deleting drops it too.
+func TestAddressChangeAndDeleteForgetConnections(t *testing.T) {
+	t.Parallel()
+	f := &forgetter{}
+	r := newRegistryWith(t, f)
+	in := fakeInput()
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Rev, in.Name = c.Rev, "Renamed"
+	if c, err = r.Update(ctx, alice, c.ID, in); err != nil || len(f.forgot) != 0 {
+		t.Fatalf("rename: %v, forgot %v", err, f.forgot)
+	}
+	in.Rev, in.URL = c.Rev, "https://other.example.org/mcp"
+	if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	in.Rev, in.URL, in.ClientSecret = c.Rev, "https://other.example.org/v2/mcp", "again"
+	if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Delete(ctx, alice, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	want := "fake@https://mcp.example.org/mcp fake@https://other.example.org/mcp fake@https://other.example.org/v2/mcp"
+	if strings.Join(f.forgot, " ") != want {
+		t.Fatalf("forgot %v, want %s", f.forgot, want)
+	}
+}
+
+// A sign-in that finishes while an admin moves the connector (its tokens
+// stored after the old connections were revoked, before the move is
+// saved) leaves no connection behind: the move removes it.
+func TestAMoveRemovesAConnectionStoredWhileItWasSaved(t *testing.T) {
+	t.Parallel()
+	db := storetest.New(t)
+	key, err := secrets.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &forgetter{}
+	r := registry.New(registry.Config{DB: db, Seal: key, Connections: f})
+	in := fakeInput()
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.then = func(c connectors.Connector) {
+		if _, err := db.ConnectorConnections().Put(ctx, alice, store.ConnectorConnection{
+			ConnectorID: c.ID, Subject: "bob", ConnectedBy: "bob", Resource: c.URL,
+		}, c.Rev, func(string) ([]byte, []byte, error) { return []byte("sealed"), nil, nil }); err != nil {
+			t.Error(err)
+		}
+	}
+	in.Rev, in.URL = c.Rev, "https://other.example.org/mcp"
+	if _, err := r.Update(ctx, alice, c.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	if left, err := db.ConnectorConnections().ForConnector(ctx, c.ID); err != nil || len(left) != 0 {
+		t.Fatalf("connections after the move: %+v, %v", left, err)
+	}
+}
+
+// Switching whose account a connector uses drops what was connected, so
+// switching back later does not revive an old company-wide (or personal)
+// connection nobody chose again. It keeps the client secret.
+func TestAnAuthModeChangeForgetsConnections(t *testing.T) {
+	t.Parallel()
+	f := &forgetter{}
+	r := newRegistryWith(t, f)
+	in := fakeInput()
+	in.AuthMode = connectors.AuthShared
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.ClientSecret = ""
+	for _, mode := range []connectors.AuthMode{connectors.AuthUser, connectors.AuthShared} {
+		in.Rev, in.AuthMode = c.Rev, mode
+		if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(f.forgot) != 2 || !c.OAuth.SecretStored {
+		t.Fatalf("forgot %v, secret stored %v", f.forgot, c.OAuth.SecretStored)
+	}
+}
+
+// A client Tapas registered itself is stored on the connector, its secret
+// sealed, marked dynamic; a stale rev is refused.
+func TestRegisteredStoresADynamicClient(t *testing.T) {
+	t.Parallel()
+	r, _ := newRegistry(t)
+	in := fakeInput()
+	in.ClientID, in.ClientSecret = "", ""
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.Registered(ctx, alice, c, "dyn-1", secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OAuth.ClientID != "dyn-1" || got.OAuth.Registration != connectors.RegistrationDynamic || !got.OAuth.SecretStored || got.Rev == c.Rev {
+		t.Fatalf("Registered = %+v", got.OAuth)
+	}
+	if s, err := r.ClientSecret(ctx, c.ID); err != nil || s != secret {
+		t.Fatalf("ClientSecret = %q, %v", s, err)
+	}
+	if _, err := r.Registered(ctx, alice, c, "dyn-2", secret); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("Registered on a stale rev = %v, want ErrConflict", err)
+	}
+}
+
+// A client Tapas registered belongs to the server it registered at: moving
+// the connector drops it (and its secret) instead of asking the admin for
+// a secret they never had, so the next sign-in registers a new one.
+func TestAMoveDropsARegisteredClient(t *testing.T) {
+	t.Parallel()
+	r, _ := newRegistry(t)
+	in := fakeInput()
+	in.ClientID, in.ClientSecret = "", ""
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, err = r.Registered(ctx, alice, c, "dyn-1", secret); err != nil {
+		t.Fatal(err)
+	}
+	in.Rev, in.ClientID, in.URL = c.Rev, "dyn-1", "https://mcp.example.org/v2/mcp"
+	c, err = r.Update(ctx, alice, c.ID, in)
+	if err != nil || c.OAuth.ClientID != "" || c.OAuth.SecretStored || c.OAuth.Registration != "" {
+		t.Fatalf("moved: %+v, %v", c.OAuth, err)
+	}
+}
+
+func TestSetToolsReplacesTheSnapshot(t *testing.T) {
+	t.Parallel()
+	r, _ := newRegistry(t)
+	c, err := r.Create(ctx, alice, fakeInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := []connectors.Tool{{Name: "echo", Description: "Echo", ReadOnlyHint: true}, {Name: "post"}}
+	got, err := r.SetTools(ctx, alice, c.ID, tools)
+	if err != nil || !slices.Equal(got.Tools, tools) || got.Rev == c.Rev {
+		t.Fatalf("SetTools = %+v, %v", got, err)
 	}
 }

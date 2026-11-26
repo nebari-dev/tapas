@@ -8,7 +8,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const REDIRECT = 'https://tapas.example.org/settings/connections/callback'
+const PREFIX = 'https://tapas.example.org/settings/connections/callback/'
 
 const chat = {
   id: 'c-1',
@@ -27,7 +27,7 @@ const chat = {
     { name: 'list_channels', description: 'List channels', readOnlyHint: true },
     { name: 'post_message', description: 'Post a message', readOnlyHint: false },
   ],
-  redirectUri: REDIRECT,
+  redirectUri: PREFIX + 'chat',
   updatedAt: '2026-11-20T10:00:00Z',
 }
 
@@ -49,6 +49,7 @@ const wiki = {
 }
 
 const catalog = {
+  redirectUriPrefix: PREFIX,
   items: [
     {
       id: 'chat',
@@ -151,7 +152,7 @@ describe('Connectors (admin)', () => {
     const form = await screen.findByRole('form', { name: 'Add Team chat' })
     expect(within(form).getByText(/Create an OAuth app at the vendor/)).toBeTruthy()
     expect((within(form).getByLabelText('Address of the MCP server') as HTMLInputElement).value).toBe('https://mcp.example.org/chat')
-    expect(within(form).getByText(REDIRECT)).toBeTruthy()
+    expect(within(form).getByText(PREFIX + 'chat')).toBeTruthy()
     await userEvent.type(within(form).getByLabelText('OAuth client id'), 'client-9')
     await userEvent.type(within(form).getByLabelText('OAuth client secret'), 'shh-9')
     await userEvent.type(within(form).getByLabelText('Allowed groups'), 'sales, *')
@@ -179,7 +180,10 @@ describe('Connectors (admin)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Add a custom MCP server' }))
     const form = await screen.findByRole('form', { name: 'Add a custom connector' })
     await userEvent.type(within(form).getByLabelText('Name'), 'Docs')
+    expect(within(form).getByText(/Shown here once the short name is filled in/)).toBeTruthy()
     await userEvent.type(within(form).getByLabelText('Short name'), 'docs')
+    // Each connector has its own redirect address, ending in its short name.
+    expect(within(form).getByText(PREFIX + 'docs')).toBeTruthy()
     await userEvent.type(within(form).getByLabelText('Address of the MCP server'), 'https://docs.example.org/mcp')
     await userEvent.click(within(form).getByRole('radio', { name: 'One shared account' }))
     await userEvent.click(within(form).getByRole('button', { name: 'Add connector' }))
@@ -302,5 +306,106 @@ describe('Connectors (admin)', () => {
     await userEvent.click(within(fresh).getByRole('button', { name: 'Save' }))
     await vi.waitFor(() => expect(m.count('PUT', '/api/admin/connectors/c-1')).toBe(2))
     expect(body(m, 'PUT').rev).toBe('r-2')
+  })
+
+  it('says how many people connected each connector', async () => {
+    api({ 'GET /api/admin/connectors': { body: { items: [{ ...chat, connections: 3 }, wiki] } } })
+    renderApp('/settings/connectors')
+    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
+    expect(rows[0].textContent).toContain('3 people connected')
+  })
+
+  it('connects the shared account by sending the admin to the vendor', async () => {
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, origin: window.location.origin, assign })
+    const signIn = 'https://wiki.example.org/oauth/authorize?state=s-9'
+    const m = api({
+      'GET /api/admin/connectors': { body: { items: [chat, { ...wiki, shared: { connected: false } }] } },
+      'POST /api/admin/connectors/c-2/connect': { body: { authorizeUrl: signIn } },
+    })
+    renderApp('/settings/connectors')
+    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
+    expect(rows[2].textContent).toContain('Shared account not connected')
+    await userEvent.click(within(rows[2]).getByRole('button', { name: 'Connect the shared account for Wiki' }))
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(signIn))
+    expect(m.count('POST', '/api/admin/connectors/c-2/connect')).toBe(1)
+  })
+
+  it('disconnects the shared account after asking', async () => {
+    const shared = { ...wiki, connections: 1, shared: { connected: true, connectedBy: 'alice', status: 'active' } }
+    const m = api({
+      'GET /api/admin/connectors': [{ body: { items: [chat, shared] } }, { body: { items: [chat, { ...wiki, shared: { connected: false } }] } }],
+      'DELETE /api/admin/connectors/c-2/connection': { status: 204 },
+    })
+    renderApp('/settings/connectors')
+    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
+    expect(rows[2].textContent).toContain('Shared account connected by alice')
+    expect(within(rows[2]).queryByRole('button', { name: /Connect the shared account/ })).toBeNull()
+    await userEvent.click(within(rows[2]).getByRole('button', { name: 'Disconnect the shared account for Wiki' }))
+    const ask = await screen.findByRole('alertdialog', { name: 'Disconnect the shared account for Wiki?' })
+    expect(m.count('DELETE', '/api/admin/connectors/c-2/connection')).toBe(0)
+    await userEvent.click(within(ask).getByRole('button', { name: 'Disconnect' }))
+    await vi.waitFor(() => expect(m.count('DELETE', '/api/admin/connectors/c-2/connection')).toBe(1))
+    expect(await screen.findByText('Shared account not connected')).toBeTruthy()
+  })
+
+  it('says where sign-ins go, and warns when the server now names another sign-in server', async () => {
+    const moved = { ...chat, connections: 2, oauth: { ...chat.oauth, issuer: 'https://login.example.org', serverMoved: true } }
+    api({ 'GET /api/admin/connectors': { body: { items: [moved, wiki] } } })
+    renderApp('/settings/connectors')
+    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
+    expect(rows[0].textContent).toContain('Its server now sends sign-ins to another server')
+    await userEvent.click(within(rows[0]).getByRole('button', { name: 'Edit Team chat' }))
+    expect(await screen.findByText(/Sign-ins go to https:\/\/login\.example\.org/)).toBeTruthy()
+    expect(screen.getByText(/Saving it trusts the new sign-in server/)).toBeTruthy()
+  })
+
+  it('offers to reconnect a shared account the vendor no longer accepts', async () => {
+    api({ 'GET /api/admin/connectors': { body: { items: [{ ...wiki, shared: { connected: true, connectedBy: 'alice', status: 'needs_reauth' } }] } } })
+    renderApp('/settings/connectors')
+    expect(await screen.findByText(/Shared account needs reconnecting/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reconnect the shared account for Wiki' })).toBeTruthy()
+  })
+
+  it('refreshes the tool list from the server, keeping what was typed, and saves at the new rev', async () => {
+    const refreshed = {
+      ...chat,
+      rev: 'r-5',
+      tools: [...chat.tools, { name: 'archive_channel', description: 'Archive a channel', readOnlyHint: false }],
+    }
+    const m = api({
+      'POST /api/admin/connectors/c-1/tools/refresh': { body: refreshed },
+      'PUT /api/admin/connectors/c-1': (c: Call) => ({ body: { ...refreshed, ...(c.body as object), rev: 'r-6' } }),
+    })
+    renderApp('/settings/connectors')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Team chat' }))
+    const form = await screen.findByRole('form', { name: 'Team chat' })
+    const name = within(form).getByLabelText('Name')
+    await userEvent.clear(name)
+    await userEvent.type(name, 'Chat')
+    await userEvent.click(within(form).getByRole('button', { name: 'Refresh tools' }))
+    await vi.waitFor(() => expect(m.count('POST', '/api/admin/connectors/c-1/tools/refresh')).toBe(1))
+    const again = await screen.findByRole('form', { name: 'Team chat' })
+    const tools = within(again).getByRole('table', { name: 'Tools' })
+    expect(await within(tools).findByText('archive_channel')).toBeTruthy()
+    expect((within(again).getByLabelText('Name') as HTMLInputElement).value).toBe('Chat')
+    await userEvent.click(within(again).getByRole('button', { name: 'Save' }))
+    await vi.waitFor(() => expect(m.count('PUT', '/api/admin/connectors/c-1')).toBe(1))
+    expect(body(m, 'PUT').rev).toBe('r-5')
+    expect(body(m, 'PUT').toolModes).toEqual({ list_channels: 'read', post_message: 'write', archive_channel: 'write' })
+  })
+
+  it('says why the tools could not be refreshed', async () => {
+    api({
+      'POST /api/admin/connectors/c-1/tools/refresh': {
+        status: 409,
+        body: { status: 409, title: 'You have not connected Team chat yet. Connect it under Connected accounts first.' },
+      },
+    })
+    renderApp('/settings/connectors')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Team chat' }))
+    const form = await screen.findByRole('form', { name: 'Team chat' })
+    await userEvent.click(within(form).getByRole('button', { name: 'Refresh tools' }))
+    expect(await within(form).findByText(/You have not connected Team chat yet/)).toBeTruthy()
   })
 })

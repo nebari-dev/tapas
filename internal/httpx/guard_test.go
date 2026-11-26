@@ -45,6 +45,11 @@ func TestPublicOnlyGuardRefusesInternalAddresses(t *testing.T) {
 		"unspecified": "https://0.0.0.0/",
 		"multicast":   "https://224.0.0.1/",
 		"mapped":      "https://[::ffff:10.0.0.1]/",
+		"nat64":       "https://[64:ff9b::a00:1]/",
+		"nat64-local": "https://[64:ff9b:1::a00:1]/",
+		"6to4":        "https://[2002:a00:1::1]/",
+		"v4-compat":   "https://[::a00:1]/",
+		"site-local":  "https://[fec0::1]/",
 	} {
 		_, err := c.Get(target)
 		if !errors.Is(err, httpx.ErrBlockedAddress) {
@@ -97,6 +102,16 @@ func TestPlainGuardRefusesOnlyMetadata(t *testing.T) {
 	}
 	if !httpx.Blocked(netip.MustParseAddr("fd00:ec2::254")) || httpx.Blocked(netip.MustParseAddr("10.0.0.1")) {
 		t.Error("Blocked")
+	}
+	// IPv6 addresses that carry an IPv4 one (NAT64, 6to4, IPv4-compatible)
+	// reach that IPv4 address, so a metadata one inside is blocked too.
+	for _, a := range []string{"64:ff9b::a9fe:a9fe", "64:ff9b:1::a9fe:a9fe", "2002:a9fe:a9fe::1", "::a9fe:a9fe", "64:ff9b::6464:64c8"} {
+		if !httpx.Blocked(netip.MustParseAddr(a)) {
+			t.Errorf("Blocked(%s)", a)
+		}
+	}
+	if httpx.Blocked(netip.MustParseAddr("64:ff9b::a00:1")) || httpx.Blocked(netip.MustParseAddr("2002:a00:1::1")) {
+		t.Error("a private IPv4 inside IPv6 is not blocked by the plain guard")
 	}
 	if !httpx.MetadataHost("Metadata.Google.Internal.") || httpx.MetadataHost("example.org") {
 		t.Error("MetadataHost")

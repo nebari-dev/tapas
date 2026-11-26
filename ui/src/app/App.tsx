@@ -8,6 +8,8 @@ import { Login } from '../features/auth/Login'
 import { NewApp } from '../features/apps/NewApp'
 import { PlanPage } from '../features/ai/PlanPage'
 import { SessionGuard } from './SessionGuard'
+import { ConnectionCallback } from '../features/settings/ConnectionCallback'
+import { Connections } from '../features/settings/Connections'
 import { Secrets } from '../features/settings/Secrets'
 import { ApiTokens, Settings } from '../features/settings/Settings'
 import { AdminAI } from '../features/settings/admin/AdminAI'
@@ -41,6 +43,8 @@ export function AppRoutes() {
           children: [
             { index: true, element: <ApiTokens /> },
             { path: 'secrets', element: <Secrets /> },
+            { path: 'connections', element: <Connections /> },
+            { path: 'connections/callback/:slug', element: <ConnectionCallback /> },
             { path: 'apps', element: <AdminApps /> },
             { path: 'usage', element: <Usage /> },
             { path: 'backups', element: <Backups /> },

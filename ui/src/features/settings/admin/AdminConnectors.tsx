@@ -1,5 +1,5 @@
-import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useId, useState, type FormEvent } from 'react'
+import { ExternalLink, Link2, Pencil, Plus, RefreshCw, Trash2, Unlink } from 'lucide-react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import type { AdminConnector, CatalogEntry, ConnectorInput } from '../../../api'
 import { Banner } from '../../../components/Banner'
 import { Button } from '../../../components/Button'
@@ -10,7 +10,18 @@ import { Segmented } from '../../../components/Segmented'
 import { Switch } from '../../../components/Switch'
 import { ApiError, fieldErrors, problemText } from '../../../lib/http'
 import { ConnectorLogo } from '../../../components/KindLogo'
-import { useConnectorCatalog, useConnectors, useCreateConnector, useDeleteConnector, useIsAdmin, useUpdateConnector } from './queries'
+import {
+  useConnectShared,
+  useConnectorCatalog,
+  useConnectors,
+  useCreateConnector,
+  useDeleteConnector,
+  useDisconnectShared,
+  useIsAdmin,
+  useRefreshConnectorTools,
+  useReloadConnectors,
+  useUpdateConnector,
+} from './queries'
 
 type AuthMode = AdminConnector['authMode']
 
@@ -132,8 +143,9 @@ function inputOf(d: Draft, secret: string, rev?: string): ConnectorInput {
 }
 
 /** The redirect address with a copy button, or why there is none yet. */
-function RedirectAddress({ uri }: { uri?: string }) {
-  if (uri === undefined) return <span className="hint">Shown here once the connector is saved. You can add it turned off first.</span>
+function RedirectAddress({ uri, needsSlug }: { uri?: string; needsSlug?: boolean }) {
+  if (uri === undefined) return <span className="hint">Loading</span>
+  if (needsSlug) return <span className="hint">Shown here once the short name is filled in.</span>
   if (!uri) return <span className="hint">The platform config sets no public address, so there is no redirect address yet.</span>
   return (
     <div className="row con-redirect">
@@ -144,7 +156,18 @@ function RedirectAddress({ uri }: { uri?: string }) {
 }
 
 /** A read, write or off control per tool, and a way to add a tool the server has not listed yet. */
-function ToolModes({ tools, modes, onChange }: { tools?: AdminConnector['tools']; modes: Record<string, string>; onChange: (m: Record<string, string>) => void }) {
+function ToolModes({
+  tools,
+  modes,
+  onChange,
+  refresh,
+}: {
+  tools?: AdminConnector['tools']
+  modes: Record<string, string>
+  onChange: (m: Record<string, string>) => void
+  /** The Refresh tools control, for a connector already saved. */
+  refresh?: ReactNode
+}) {
   const ids = { head: useId(), add: useId() }
   const [name, setName] = useState('')
   const about = new Map((tools ?? []).map((t) => [t.name, t]))
@@ -163,6 +186,7 @@ function ToolModes({ tools, modes, onChange }: { tools?: AdminConnector['tools']
       <span className="hint">
         Read tools run at once. Write tools become plans the agent's owner approves first. Off tools are hidden from agents.
       </span>
+      {refresh}
       {names.length === 0 ? (
         <p className="tight muted small">
           No tools are known yet: Tapas has not read the list from the server. Add a tool by name to set its mode now. A tool not set here
@@ -230,20 +254,49 @@ function ToolModes({ tools, modes, onChange }: { tools?: AdminConnector['tools']
   )
 }
 
+/** Reads the tool list from the connector's server again, with the shared account or the admin's own. */
+function RefreshTools({ id, onFresh }: { id: string; onFresh: (c: AdminConnector) => void }) {
+  const refresh = useRefreshConnectorTools()
+  return (
+    <div className="con-refresh">
+      <div className="row con-refresh-row">
+        <Button size="sm" icon={RefreshCw} disabled={refresh.isPending} onClick={() => refresh.mutate(id, { onSuccess: onFresh })}>
+          {refresh.isPending ? 'Refreshing tools' : 'Refresh tools'}
+        </Button>
+        <span className="hint">
+          {refresh.isSuccess ? 'Read just now. New tools are listed below; save to keep the modes.' : 'Reads the list again from the server, signed in as the shared account or as you.'}
+        </span>
+      </div>
+      {refresh.isError && <span className="hint err">{problemText(refresh.error)}</span>}
+    </div>
+  )
+}
+
+// A connector's slug, as the server takes it (connectors.ValidSlug).
+const SLUG = /^[a-z][a-z0-9]{1,30}$/
+
+/** The redirect address to show: the saved connector's own, or the prefix and the slug being typed. */
+function redirectOf(existing: AdminConnector | undefined, prefix: string | undefined, slug: string): { uri?: string; needsSlug?: boolean } {
+  if (existing) return { uri: existing.redirectUri ?? '' }
+  if (prefix === undefined || !prefix) return { uri: prefix }
+  return SLUG.test(slug) ? { uri: prefix + slug } : { uri: '', needsSlug: true }
+}
+
 const FORM_FIELDS = new Set(['name', 'slug', 'url', 'oauth.clientId', 'oauth.clientSecret', 'scopes', 'allowedGroups'])
 
 function ConnectorForm({
   start,
   existing,
   entry,
-  redirectUri,
+  redirectPrefix,
   onDone,
   onConflict,
 }: {
   start: Draft
   existing?: AdminConnector
   entry?: CatalogEntry | null
-  redirectUri?: string
+  /** Each connector's redirect address is this followed by its slug. */
+  redirectPrefix?: string
   onDone: () => void
   /** A save found the connector changed: the page says so, and the form is made again from the fresh copy. */
   onConflict: (msg: string) => void
@@ -256,6 +309,15 @@ function ConnectorForm({
   const ids = { name: useId(), slug: useId(), url: useId(), auth: useId(), id: useId(), secret: useId(), scopes: useId(), groups: useId() }
   const [d, setD] = useState(start)
   const [secret, setSecret] = useState('')
+  // The connector as a tool refresh answered it: newer tools and rev than existing.
+  const [fresh, setFresh] = useState<AdminConnector>()
+  const cur = fresh ?? existing
+  const reload = useReloadConnectors()
+  const done = () => {
+    // The list still has the rev from before the refresh.
+    if (fresh) reload()
+    onDone()
+  }
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }))
   const errs = save.isError && !(existing && isConflict(save.error)) ? fieldErrors(save.error) : { fields: {} as Record<string, string>, other: [] as string[] }
   const other = [...errs.other, ...Object.entries(errs.fields).filter(([f]) => !FORM_FIELDS.has(f)).map(([, m]) => m)]
@@ -263,10 +325,10 @@ function ConnectorForm({
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (existing)
+    if (cur)
       update.mutate(
-        { id: existing.id, body: inputOf(d, secret, existing.rev) },
-        { onSuccess: onDone, onError: (err) => isConflict(err) && onConflict(problemText(err)) },
+        { id: cur.id, body: inputOf(d, secret, cur.rev) },
+        { onSuccess: done, onError: (err) => isConflict(err) && onConflict(problemText(err)) },
       )
     else create.mutate(inputOf(d, secret), { onSuccess: onDone })
   }
@@ -332,7 +394,7 @@ function ConnectorForm({
             spellCheck={false}
             onChange={(e) => set('url', e.target.value)}
           />
-          {existing && <span className="hint">Moving it to another server disconnects everyone who connected.</span>}
+          {existing && <span className="hint">Changing it disconnects everyone who connected.</span>}
           {err('url')}
         </div>
         <div className="field" role="group" aria-labelledby={ids.auth}>
@@ -341,11 +403,19 @@ function ConnectorForm({
           </span>
           <Segmented label="Who signs in" value={d.authMode} options={AUTH_MODES} onChange={(v) => set('authMode', v)} />
           <span className="hint">{AUTH_HINTS[d.authMode]}</span>
+          {existing && <span className="hint">Changing it disconnects everyone who connected.</span>}
         </div>
         <div className="field">
           <span className="field-label">Redirect address</span>
-          <RedirectAddress uri={redirectUri} />
+          <RedirectAddress {...redirectOf(existing, redirectPrefix, d.slug)} />
           <span className="hint">Paste this at the vendor as the OAuth redirect (callback) address.</span>
+          {cur?.oauth.issuer && <span className="hint">Sign-ins go to {cur.oauth.issuer}, found at the first sign-in.</span>}
+          {cur?.oauth.serverMoved && (
+            <span className="hint con-status warn">
+              The server now names another sign-in server. Saving it trusts the new sign-in server, disconnects everyone and needs the client
+              secret again.
+            </span>
+          )}
         </div>
         <div className="field">
           <label htmlFor={ids.id}>OAuth client id</label>
@@ -365,7 +435,7 @@ function ConnectorForm({
             onChange={(e) => setSecret(e.target.value)}
           />
           <span className="hint">
-            {existing?.oauth.secretStored
+            {cur?.oauth.secretStored
               ? 'A secret is stored, encrypted. Leave this empty to keep it, or paste a new one to replace it.'
               : 'Stored encrypted and never shown again.'}
           </span>
@@ -385,7 +455,22 @@ function ConnectorForm({
           </span>
           {err('allowedGroups')}
         </div>
-        <ToolModes tools={existing?.tools} modes={d.modes} onChange={(m) => set('modes', m)} />
+        <ToolModes
+          tools={cur?.tools}
+          modes={d.modes}
+          onChange={(m) => set('modes', m)}
+          refresh={
+            cur && (
+              <RefreshTools
+                id={cur.id}
+                onFresh={(c) => {
+                  setFresh(c)
+                  setD((x) => withTools(x, c.tools))
+                }}
+              />
+            )
+          }
+        />
         <div className="field fit">
           <Switch label={d.enabled ? 'On' : 'Off'} name="Turned on" checked={d.enabled} onChange={(on) => set('enabled', on)} />
           <span className="hint">Off, no agent sees its tools and nobody can connect to it.</span>
@@ -396,7 +481,7 @@ function ConnectorForm({
               Remove connector
             </Button>
           )}
-          <Button variant="ghost" onClick={onDone}>
+          <Button variant="ghost" onClick={done}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" disabled={save.isPending}>
@@ -413,7 +498,7 @@ function ConnectorForm({
           danger
           busy={remove.isPending}
           error={remove.isError ? remove.error : undefined}
-          onConfirm={() => remove.mutate(existing.id, { onSuccess: onDone })}
+          onConfirm={() => remove.mutate(existing.id, { onSuccess: done })}
           onCancel={() => setAsking(false)}
         />
       )}
@@ -422,8 +507,68 @@ function ConnectorForm({
 }
 
 /** The catalogue to start from, or an empty form for any MCP server. */
+/** Who is connected: the shared account's state, or how many people connected their own. */
+function connectionsOf(c: AdminConnector): { text: string; tone: 'ok' | 'warn' | 'off' } {
+  if (c.oauth.serverMoved) {
+    return { text: 'Its server now sends sign-ins to another server: nobody can connect until you check and save it', tone: 'warn' }
+  }
+  if (c.authMode === 'user') {
+    const n = c.connections
+    return { text: n === 0 ? 'Nobody connected yet' : n === 1 ? '1 person connected' : `${n} people connected`, tone: n > 0 ? 'ok' : 'off' }
+  }
+  const s = c.shared
+  if (!s?.connected) return { text: 'Shared account not connected', tone: 'off' }
+  if (s.status === 'needs_reauth') return { text: 'Shared account needs reconnecting: the service no longer accepts it', tone: 'warn' }
+  return { text: s.connectedBy ? `Shared account connected by ${s.connectedBy}` : 'Shared account connected', tone: 'ok' }
+}
+
+/** Connect, reconnect or disconnect a shared connector's one account. */
+function SharedAccount({ c, onError }: { c: AdminConnector; onError: (msg: string) => void }) {
+  const connect = useConnectShared()
+  const disconnect = useDisconnectShared()
+  const [asking, setAsking] = useState(false)
+  const connected = !!c.shared?.connected
+  const stale = c.shared?.status === 'needs_reauth'
+  const go = () => connect.mutate(c.id, { onSuccess: (url) => window.location.assign(url), onError: (err) => onError(problemText(err)) })
+  return (
+    <>
+      {connected && (
+        <Button size="sm" variant="ghost" icon={Unlink} aria-label={`Disconnect the shared account for ${c.name}`} onClick={() => setAsking(true)}>
+          <span className="atable-act-label">Disconnect account</span>
+        </Button>
+      )}
+      {(!connected || stale) && (
+        <Button
+          size="sm"
+          variant={stale ? 'primary' : undefined}
+          icon={Link2}
+          aria-label={`${stale ? 'Reconnect' : 'Connect'} the shared account for ${c.name}`}
+          disabled={connect.isPending}
+          onClick={go}
+        >
+          <span className="atable-act-label">{stale ? 'Reconnect account' : 'Connect account'}</span>
+        </Button>
+      )}
+      {asking && (
+        <Confirm
+          title={`Disconnect the shared account for ${c.name}?`}
+          body={`Agents stop using ${c.name} for everyone at once, until an admin connects an account again.`}
+          confirm="Disconnect"
+          icon={Unlink}
+          danger
+          busy={disconnect.isPending}
+          error={disconnect.isError ? disconnect.error : undefined}
+          onConfirm={() => disconnect.mutate(c.id, { onSuccess: () => setAsking(false) })}
+          onCancel={() => setAsking(false)}
+        />
+      )}
+    </>
+  )
+}
+
 function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () => void; onError: (msg: string) => void }) {
   const update = useUpdateConnector()
+  const conn = connectionsOf(c)
   const turn = (enabled: boolean) =>
     update.mutate({ id: c.id, body: inputOf({ ...draftOf(c), enabled }, '', c.rev) }, { onError: (err) => onError(problemText(err)) })
   return (
@@ -435,6 +580,7 @@ function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () =>
             <b>{c.name}</b>
             <span className="mono faint small">{c.slug}</span>
             <span className="faint small con-auth-sub">{authLabel(c.authMode)}</span>
+            <span className={`small con-status ${conn.tone}`}>{conn.text}</span>
           </div>
         </div>
       </th>
@@ -443,6 +589,7 @@ function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () =>
         <Switch label={c.enabled ? 'On' : 'Off'} name={`Turn on ${c.name}`} checked={c.enabled} disabled={update.isPending} onChange={turn} />
       </td>
       <td className="col-act">
+        {c.authMode === 'shared' && <SharedAccount c={c} onError={onError} />}
         <Button size="sm" variant="ghost" icon={Pencil} aria-label={`Edit ${c.name}`} onClick={onEdit}>
           <span className="atable-act-label">Edit</span>
         </Button>
@@ -496,10 +643,10 @@ export function AdminConnectors() {
   if (q.isError) return <Banner tone="err" title={problemText(q.error)} />
   if (!q.data) return <div className="muted">Loading</div>
   const list = q.data
-  const redirectUri = list[0]?.redirectUri
+  const redirectPrefix = cat.data?.redirectUriPrefix
   const editing = open?.kind === 'edit' ? list.find((c) => c.id === open.id) : undefined
   const close = () => setOpen(null)
-  const rows = listRows(list, cat.data ?? [])
+  const rows = listRows(list, cat.data?.items ?? [])
   return (
     <section className="section" aria-label="Connectors">
       <div className="section-head tok-head">
@@ -520,7 +667,7 @@ export function AdminConnectors() {
       )}
       {open?.kind === 'new' && (
         <div className="section-sm">
-          <ConnectorForm start={draftFrom(open.entry)} entry={open.entry} redirectUri={redirectUri} onDone={close} onConflict={setNotice} />
+          <ConnectorForm start={draftFrom(open.entry)} entry={open.entry} redirectPrefix={redirectPrefix} onDone={close} onConflict={setNotice} />
         </div>
       )}
       {editing && (
@@ -529,7 +676,7 @@ export function AdminConnectors() {
             key={editing.rev}
             start={withTools(draftOf(editing), editing.tools)}
             existing={editing}
-            redirectUri={editing.redirectUri}
+            redirectPrefix={redirectPrefix}
             onDone={close}
             onConflict={setNotice}
           />

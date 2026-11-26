@@ -28,7 +28,7 @@ func newUserRemoveCmd(newClaims homeclaims.Factory, openStore dbflag.Opener) *co
 	var cluster func() (executor string, onCluster bool, err error)
 	cmd := &cobra.Command{
 		Use:   "remove <identity name | username | email>",
-		Short: "Remove a person (local account or single sign-on): end their sessions, revoke their API tokens, delete their secrets and forget their home",
+		Short: "Remove a person (local account or single sign-on): end their sessions, revoke their API tokens, delete their secrets and connected accounts and forget their home",
 		Long: "Finds the person by identity name (such as alice-1a2b3c4d), by local account name, or by the " +
 			"username or email they sign in with (ignoring case). When more than one person matches, nothing is " +
 			"removed and the command lists them; rerun with the identity name of the one to remove.\n\n" +
@@ -194,6 +194,13 @@ func (r remover) remove(ctx context.Context, who string) (string, error) {
 	if _, err := r.db.Secrets().DeleteFor(ctx, cliActor, m.name); err != nil {
 		return "", failed("deleting their secrets", err)
 	}
+	// The CLI holds neither the gateway's sessions key nor its guarded
+	// client, so the tokens are deleted without being revoked at the
+	// vendor: Tapas can no longer use them, and they last at the vendor
+	// until it expires or revokes them.
+	if _, err := r.db.ConnectorConnections().DeleteForSubject(ctx, cliActor, m.name); err != nil {
+		return "", failed("deleting their connected accounts", err)
+	}
 	if err := r.db.AgentSettings().Delete(ctx, m.name); err != nil {
 		return "", failed("deleting their agent model setting", err)
 	}
@@ -219,7 +226,7 @@ func (r remover) remove(ctx context.Context, who string) (string, error) {
 		return "", failed("forgetting their home", err)
 	}
 
-	done := []string{"signed out", "API tokens revoked", "secrets deleted"}
+	done := []string{"signed out", "API tokens revoked", "secrets deleted", "connected accounts deleted"}
 	if m.account != "" {
 		done = append([]string{"local account deleted"}, done...)
 	}

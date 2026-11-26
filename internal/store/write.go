@@ -38,6 +38,13 @@ type auditRow struct {
 // bookkeeping at high volume). Sign-in and sign-out (ui session create and
 // delete), sign-out everywhere (Sessions.DeleteFor), gid allocation
 // (Groups.Ensure), token creation and revocation and run history deletion (Jobs.PruneRuns) are audited.
+// Some audit rows stand for no store write and are appended with Audit.Append:
+// among them each connector tool call (connector.call, written by the
+// connectors' broker once the call's outcome is known; a call whose row
+// cannot be written fails).
+// Connector connections: refresh claims, refreshed tokens, status changes
+// and OAuth sign-in states (start, take and sweep) are plumbing and not
+// audited; connecting and disconnecting are.
 
 // mutate runs fn in one transaction. The audit row fn asks for is written in
 // the same transaction, so the write and its audit row commit together or

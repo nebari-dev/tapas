@@ -10,6 +10,7 @@ import (
 
 	"github.com/nebari-dev/javo/internal/actions"
 	"github.com/nebari-dev/javo/internal/authz"
+	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/problem"
 	"github.com/nebari-dev/javo/internal/plans"
@@ -177,8 +178,13 @@ func (a *plansAPI) approveURL(id string) string {
 	return u.String()
 }
 
-// audit names the app a plan acts on, when it still exists.
+// audit names the app a plan acts on, when it still exists; for a
+// connector call, the connector by its slug and the tool in the detail.
 func (a *plansAPI) audit(ctx context.Context, p actions.Proposal) plans.Audit {
+	if p.Action == actions.ConnectorCall {
+		slug, tool, _ := connectors.SplitTool(p.Target)
+		return plans.Audit{Kind: "connector", Name: slug, Owner: p.Owner, Detail: map[string]string{"tool": tool}}
+	}
 	out := plans.Audit{Kind: "app", Name: p.Target}
 	if app, err := a.ws.allowed(ctx, &nameInput{Name: p.Target, Owner: p.Owner}, authz.ActManageApp); err == nil {
 		out.ID, out.Namespace, out.Owner = app.ID, app.Namespace, app.Owner

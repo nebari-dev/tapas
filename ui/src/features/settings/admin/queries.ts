@@ -8,10 +8,13 @@ import {
   adminResetAiSettings,
   adminSetAiSettings,
   adminBackUpNow,
+  adminConnectConnector,
   adminConnectorCatalog,
   adminCreateConnector,
   adminDeleteConnector,
+  adminDisconnectConnector,
   adminListConnectors,
+  adminRefreshConnectorTools,
   adminUpdateConnector,
   adminListApps,
   adminListBackups,
@@ -272,7 +275,10 @@ export function useConnectorCatalog(enabled: boolean) {
   return useQuery({
     queryKey: keys.catalog,
     enabled,
-    queryFn: async () => (await adminConnectorCatalog({ throwOnError: true })).data.items ?? [],
+    queryFn: async () => {
+      const d = (await adminConnectorCatalog({ throwOnError: true })).data
+      return { items: d.items ?? [], redirectUriPrefix: d.redirectUriPrefix ?? '' }
+    },
   })
 }
 
@@ -306,4 +312,39 @@ export function useDeleteConnector() {
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.connectors }),
   })
+}
+
+/** Start connecting a shared connector's one account: answers the vendor's sign-in address. */
+export function useConnectShared() {
+  return useMutation({
+    mutationFn: async (id: string) => (await adminConnectConnector({ path: { id }, throwOnError: true })).data.authorizeUrl,
+  })
+}
+
+/** Disconnect a shared connector's one account. */
+export function useDisconnectShared() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await adminDisconnectConnector({ path: { id }, throwOnError: true })
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: keys.connectors }),
+  })
+}
+
+/**
+ * Read a connector's tool list from its server again. The answer is the
+ * connector at its new rev; the list is left alone so an open form is not
+ * made again from it, losing what was typed.
+ */
+export function useRefreshConnectorTools() {
+  return useMutation({
+    mutationFn: async (id: string) => (await adminRefreshConnectorTools({ path: { id }, throwOnError: true })).data,
+  })
+}
+
+/** Ask for the connector list again, such as after a form that refreshed tools closes. */
+export function useReloadConnectors() {
+  const qc = useQueryClient()
+  return () => void qc.invalidateQueries({ queryKey: keys.connectors })
 }

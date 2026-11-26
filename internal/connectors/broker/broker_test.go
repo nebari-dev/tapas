@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nebari-dev/javo/internal/actions"
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/authz"
 	"github.com/nebari-dev/javo/internal/connectors"
@@ -21,6 +23,7 @@ import (
 	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/reasons"
 	"github.com/nebari-dev/javo/internal/secrets"
+	"github.com/nebari-dev/javo/internal/store"
 	"github.com/nebari-dev/javo/internal/store/storetest"
 )
 
@@ -32,6 +35,7 @@ var (
 const bearer = "tok-shared"
 
 type fixture struct {
+	db   *store.Store
 	reg  *registry.Registry
 	fake *connectorstest.Connector
 	b    *broker.Broker
@@ -39,8 +43,11 @@ type fixture struct {
 }
 
 type options struct {
-	tokens connectors.TokenSource
-	policy policy.Checker
+	tokens    connectors.TokenSource
+	policy    policy.Checker
+	forwarder client.Forwarder
+	audit     broker.Auditor
+	now       func() time.Time
 }
 
 func newFixture(t *testing.T, o options) *fixture {
@@ -49,7 +56,8 @@ func newFixture(t *testing.T, o options) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reg := registry.New(registry.Config{DB: storetest.New(t), Seal: key, InternalHosts: []string{"127.0.0.1"}})
+	db := storetest.New(t)
+	reg := registry.New(registry.Config{DB: db, Seal: key, InternalHosts: []string{"127.0.0.1"}})
 	fake := connectorstest.NewConnector(t, bearer)
 	conn, err := reg.Create(ctx, admin, registry.Input{
 		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
@@ -61,11 +69,17 @@ func newFixture(t *testing.T, o options) *fixture {
 	if o.tokens == nil {
 		o.tokens = connectorstest.StaticToken(bearer)
 	}
+	if o.forwarder == nil {
+		o.forwarder = &client.Client{HTTP: &http.Client{}}
+	}
+	if o.audit == nil {
+		o.audit = db.Audit()
+	}
 	b := broker.New(broker.Config{
-		Connectors: reg, Forwarder: &client.Client{HTTP: &http.Client{}}, Tokens: o.tokens, Policy: o.policy,
-		PublicURL: "https://tapas.example.org",
+		Connectors: reg, Forwarder: o.forwarder, Tokens: o.tokens, Policy: o.policy, Audit: o.audit,
+		PublicURL: "https://tapas.example.org", Now: o.now,
 	})
-	return &fixture{reg: reg, fake: fake, b: b, conn: conn}
+	return &fixture{db: db, reg: reg, fake: fake, b: b, conn: conn}
 }
 
 func alice() connectors.Caller {
@@ -168,14 +182,57 @@ func TestAReadIsForwardedWithTheConnectionsToken(t *testing.T) {
 	}
 }
 
-// Writes become plans in a later change; until then they are refused and
-// never reach the connector.
-func TestAWriteIsNotForwarded(t *testing.T) {
+// A write becomes a plan, checked by the connector-call action as the
+// caller, and never reaches the connector.
+func TestAWriteBecomesAPlan(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, options{})
-	res := call(t, f, alice(), "fake__post", `{"text":"hello"}`)
-	if !res.IsError || len(f.fake.Calls()) != 0 {
-		t.Fatalf("post %+v, calls %v", res, f.fake.Calls())
+	var planned actions.Planned
+	c := writer()
+	c.Propose = func(ctx context.Context, p actions.Proposal) (connectors.Proposed, error) {
+		pl, err := as(f, c).Plan(ctx, p)
+		if err != nil {
+			return connectors.Proposed{}, &connectors.ProposalRefused{Text: err.Error()}
+		}
+		planned = pl
+		return connectors.Proposed{ID: "h-1", ApproveURL: "https://tapas.example.org/approvals/h-1"}, nil
+	}
+	res := call(t, f, c, "fake__post", `{"text": "hello"}`)
+	if res.IsError || text(t, res) != `{"approveUrl":"https://tapas.example.org/approvals/h-1","planId":"h-1","state":"awaiting_approval"}` {
+		t.Fatalf("post %+v", res)
+	}
+	if planned.Target != "fake__post" || planned.Params["arguments"] != `{"text":"hello"}` || len(f.fake.Calls()) != 0 {
+		t.Fatalf("planned %+v, calls %v", planned, f.fake.Calls())
+	}
+}
+
+// A read the policy wants approved becomes a plan too.
+func TestAReadThePolicyWantsApprovedBecomesAPlan(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, options{policy: &phased{ask: policy.PhaseRead}})
+	c := proposing(writer())
+	c.Propose = planWith(f)
+	if res := call(t, f, c, "fake__echo", `{}`); res.IsError || !strings.Contains(text(t, res), "awaiting_approval") || len(f.fake.Calls()) != 0 {
+		t.Fatalf("echo %+v, calls %v", res, f.fake.Calls())
+	}
+}
+
+// proposing is c with a way to propose; planWith replaces it in a test.
+func proposing(c connectors.Caller) connectors.Caller {
+	c.Propose = func(context.Context, actions.Proposal) (connectors.Proposed, error) {
+		return connectors.Proposed{}, errors.New("unset")
+	}
+	return c
+}
+
+// planWith proposes by planning with f's action as the proposal's caller
+// would, answering the plan handle h-1.
+func planWith(f *fixture) func(context.Context, actions.Proposal) (connectors.Proposed, error) {
+	return func(ctx context.Context, p actions.Proposal) (connectors.Proposed, error) {
+		if _, err := as(f, writer()).Plan(ctx, p); err != nil {
+			return connectors.Proposed{}, &connectors.ProposalRefused{Text: err.Error()}
+		}
+		return connectors.Proposed{ID: "h-1", ApproveURL: "https://tapas.example.org/approvals/h-1"}, nil
 	}
 }
 
@@ -244,6 +301,18 @@ func TestOnlyPersonalAndAgentTokens(t *testing.T) {
 	}
 }
 
+// A caller with no token is a browser session: connector tools are made
+// by agents, and the refusal says so rather than blaming an app's token.
+func TestABrowserSessionIsToldConnectorToolsAreForAgents(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, options{})
+	session := alice()
+	session.Token = token.Token{}
+	if res := call(t, f, session, "fake__echo", `{}`); text(t, res) != reasons.Msg(reasons.MsgConnectorForAgents) || len(f.fake.Calls()) != 0 {
+		t.Fatalf("session: %+v", res)
+	}
+}
+
 func TestNotConnectedShowsNoToolsAndSaysWhereToConnect(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, options{tokens: connectorstest.StaticToken("")})
@@ -291,7 +360,18 @@ func TestArgumentsMustBeASmallJSONObject(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, options{})
 	big := `{"text":"` + strings.Repeat("x", broker.MaxArguments) + `"}`
-	for _, args := range []string{`[1]`, `"x"`, `null`, `{`, big} {
+	// A name given twice, at any depth, is refused: the policy and the
+	// connector could each read a different one of the two values. So is a
+	// pair of names that differ only by case or a case-folding look-alike
+	// (a decoder that folds case reads them as one), and a name holding an
+	// invisible, control or direction character, which a person approving
+	// could not see.
+	for _, args := range []string{
+		`[1]`, `"x"`, `null`, `{`, big,
+		`{"text":"a","text":"b"}`, `{"q":{"a":1,"a":2}}`, `{"l":[{"a":1,"a":2}]}`,
+		`{"to":"a","To":"b"}`, `{"scope":1,"\u017fcope":2}`, `{"k":1,"\u212a":2}`, `{"q":{"ab":1,"AB":2}}`,
+		`{"amount\u200b":5}`, `{"a\u202e":1}`, `{"a\u0007":1}`, `{"a\u2028":1}`,
+	} {
 		if res := call(t, f, alice(), "fake__echo", args); !res.IsError {
 			t.Errorf("%.20s: %+v", args, res)
 		}
@@ -322,7 +402,8 @@ func TestAFailingConnectorIsLeftOutOfTheList(t *testing.T) {
 func TestATimeoutIsAToolError(t *testing.T) {
 	t.Parallel()
 	key, _ := secrets.NewKey()
-	reg := registry.New(registry.Config{DB: storetest.New(t), Seal: key, InternalHosts: []string{"127.0.0.1"}})
+	db := storetest.New(t)
+	reg := registry.New(registry.Config{DB: db, Seal: key, InternalHosts: []string{"127.0.0.1"}})
 	fake := connectorstest.NewConnector(t, bearer)
 	if _, err := reg.Create(ctx, admin, registry.Input{
 		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthUser, Enabled: true, AllowedGroups: []string{"sales"},
@@ -332,10 +413,60 @@ func TestATimeoutIsAToolError(t *testing.T) {
 	}
 	b := broker.New(broker.Config{
 		Connectors: reg, Forwarder: &client.Client{HTTP: &http.Client{}, CallTimeout: 100e6}, Tokens: connectorstest.StaticToken(bearer),
+		Audit: db.Audit(),
 	})
 	fake.Hang(true)
 	res, _ := b.Call(ctx, alice(), "fake__echo", json.RawMessage(`{}`))
 	if !res.IsError || !strings.Contains(text(t, res), "in time") {
 		t.Fatalf("hang %+v", res)
+	}
+}
+
+// rotating is a token source whose token a connector may have stopped
+// taking; Invalidate puts the good one back.
+type rotating struct {
+	current     string
+	invalidated []string
+}
+
+func (r *rotating) Token(context.Context, connectors.Connector, string) (string, error) {
+	return r.current, nil
+}
+
+func (r *rotating) Invalidate(_ context.Context, _ connectors.Connector, _, refused string) error {
+	r.invalidated = append(r.invalidated, refused)
+	r.current = bearer
+	return nil
+}
+
+// A connector that refuses the token gets one fresh token and one retry.
+func TestA401RefreshesTheTokenAndRetriesOnce(t *testing.T) {
+	t.Parallel()
+	src := &rotating{current: bearer}
+	f := newFixture(t, options{tokens: src})
+	if tools := f.b.Tools(ctx, alice()); len(tools) == 0 {
+		t.Fatal("no tools")
+	}
+	src.current = "tok-revoked"
+	res := call(t, f, alice(), "fake__echo", `{"n":1}`)
+	if res.IsError || text(t, res) != `{"n":1}` {
+		t.Fatalf("echo %+v", res)
+	}
+	if len(src.invalidated) != 1 || src.invalidated[0] != "tok-revoked" {
+		t.Fatalf("invalidated %v", src.invalidated)
+	}
+	if calls := f.fake.Calls(); len(calls) != 1 || calls[0].Bearer != bearer {
+		t.Fatalf("calls %+v", calls)
+	}
+
+	// Still refused after the retry: not connected, after one more
+	// invalidation and no more.
+	f.fake.Unauthorized(true)
+	res = call(t, f, alice(), "fake__echo", `{}`)
+	if want := reasons.Msg(reasons.MsgConnectorNotConnected, "Fake", "https://tapas.example.org/settings/connections"); !res.IsError || text(t, res) != want {
+		t.Fatalf("got %+v", res)
+	}
+	if len(src.invalidated) != 2 {
+		t.Fatalf("invalidated %v", src.invalidated)
 	}
 }

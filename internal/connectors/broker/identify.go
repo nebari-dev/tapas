@@ -10,16 +10,25 @@ import (
 )
 
 // identify refuses a caller whose token may not use connectors (D15) and
-// splits the tool's name.
+// splits the tool's name. A name longer than any Tapas offers is unknown,
+// so the audit row never holds an overlong name an agent made up. An
+// approved plan is applied by its owner in the browser, so it has no token
+// to check: the one that proposed it was checked then.
 func (b *Broker) identify(_ context.Context, c *call) *sdk.CallToolResult {
-	if !c.caller.MayUseConnectors() {
-		return errorResult(c, outcomeDeniedToken, reasons.Msg(reasons.MsgConnectorNotForAppTokens))
-	}
 	slug, tool, ok := connectors.SplitTool(c.name)
-	if !ok {
+	if ok && len(c.name) <= connectors.MaxToolName {
+		c.conn.Slug, c.tool = slug, tool
+	}
+	if c.phase != phaseApply && !c.caller.MayUseConnectors() {
+		msg := reasons.MsgConnectorNotForAppTokens
+		if c.caller.Token.ID == "" {
+			msg = reasons.MsgConnectorForAgents // a browser session
+		}
+		return errorResult(c, outcomeDeniedToken, reasons.Msg(msg))
+	}
+	if c.tool == "" {
 		return noSuchTool(c, outcomeDeniedAuthz)
 	}
-	c.conn.Slug, c.tool = slug, tool
 	return nil
 }
 

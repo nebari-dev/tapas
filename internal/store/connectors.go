@@ -15,7 +15,10 @@ import (
 // added. OAuthClientSecretSealed is the OAuth client secret as the gateway
 // sealed it for this row (nil: none); the clear value is never stored.
 // ToolModes maps an upstream tool name to read, write or off; Tools is the
-// last snapshot of the upstream tool list. Rev is new on every write.
+// last snapshot of the upstream tool list. OAuthIssuer and OAuthServer are
+// the authorization server pinned at the first discovery ("" and zero
+// before), OAuthServerMoved whether a later discovery named another
+// issuer. Rev is new on every write.
 type Connector struct {
 	ID, Slug, Name, CatalogID, URL, AuthMode string
 	Enabled                                  bool
@@ -23,6 +26,9 @@ type Connector struct {
 	OAuthClientSecretSealed                  []byte
 	OAuthAuthorizeURL, OAuthTokenURL         string
 	OAuthRevokeURL                           string
+	OAuthIssuer                              string
+	OAuthServer                              ConnectorAuthServer
+	OAuthServerMoved                         bool
 	Scopes, AllowedGroups                    []string
 	ToolModes                                map[string]string
 	Tools                                    []ConnectorTool
@@ -35,6 +41,18 @@ type ConnectorTool struct {
 	Name         string `json:"name"`
 	Description  string `json:"description,omitempty"`
 	ReadOnlyHint bool   `json:"readOnlyHint,omitempty"`
+}
+
+// ConnectorAuthServer is what a pinned authorization server's metadata
+// said: its endpoints, whether it names itself on the redirect (RFC 9207)
+// and its token endpoint's client authentication methods.
+type ConnectorAuthServer struct {
+	AuthorizeURL     string   `json:"authorizeUrl,omitempty"`
+	TokenURL         string   `json:"tokenUrl,omitempty"`
+	RevokeURL        string   `json:"revokeUrl,omitempty"`
+	RegistrationURL  string   `json:"registrationUrl,omitempty"`
+	IssParameter     bool     `json:"issParameter,omitempty"`
+	TokenAuthMethods []string `json:"tokenAuthMethods,omitempty"`
 }
 
 // Connectors is the connectors table.
@@ -118,6 +136,20 @@ func (x *Connectors) ListEnabled(ctx context.Context) ([]Connector, error) {
 // is no such row) and records changed, the names of the fields that changed,
 // on the audit log. Slug, catalog id and tools are not changed here.
 func (x *Connectors) Update(ctx context.Context, actor model.Actor, c Connector, changed []string) (Connector, error) {
+	return x.update(ctx, actor, c, changed, false)
+}
+
+// Move is Update for a change that makes what people connected unusable
+// (another address, authorization server or client): it also deletes
+// every connection to the connector in the same transaction, so one
+// stored while the change was being made (after the caller revoked the
+// others) does not survive it. ConnectorConnections.Put waits for or fails
+// against it, never lands after it.
+func (x *Connectors) Move(ctx context.Context, actor model.Actor, c Connector, changed []string) (Connector, error) {
+	return x.update(ctx, actor, c, changed, true)
+}
+
+func (x *Connectors) update(ctx context.Context, actor model.Actor, c Connector, changed []string, disconnect bool) (Connector, error) {
 	cols, err := connectorJSON(c)
 	if err != nil {
 		return Connector{}, err
@@ -129,6 +161,7 @@ func (x *Connectors) Update(ctx context.Context, actor model.Actor, c Connector,
 			OauthRegistration: c.OAuthRegistration, OauthClientID: c.OAuthClientID, OauthClientSecretSealed: c.OAuthClientSecretSealed,
 			OauthAuthorizeUrl: c.OAuthAuthorizeURL, OauthTokenUrl: c.OAuthTokenURL, OauthRevokeUrl: c.OAuthRevokeURL,
 			Scopes: cols.scopes, AllowedGroups: cols.groups, ToolModes: cols.modes,
+			OauthIssuer: c.OAuthIssuer, OauthServer: cols.server, OauthServerMoved: c.OAuthServerMoved,
 			Rev: newID(), UpdatedAt: dbtime.From(now()), ID: c.ID, Rev_2: c.Rev,
 		})
 		if err != nil {
@@ -141,9 +174,58 @@ func (x *Connectors) Update(ctx context.Context, actor model.Actor, c Connector,
 		if n == 0 {
 			return effect{}, ErrConflict
 		}
+		if disconnect {
+			if _, err := q.DeleteConnectorConnectionsForConnector(ctx, c.ID); err != nil {
+				return effect{}, err
+			}
+		}
 		return effect{audit: connectorAudit("connector.update", out, changed)}, nil
 	})
 	return out, err
+}
+
+// PinAuthServer pins the authorization server issuer, as server describes
+// it, on the connector with id when its rev is still rev and none is pinned
+// (ErrConflict otherwise; ErrNotFound when there is no such row). It is
+// audited.
+func (x *Connectors) PinAuthServer(ctx context.Context, actor model.Actor, id, rev, issuer string, server ConnectorAuthServer) (Connector, error) {
+	text, err := marshal(server, "{}")
+	if err != nil {
+		return Connector{}, err
+	}
+	var out Connector
+	err = x.s.mutate(ctx, actor, func(q *sqlcgen.Queries) (effect, error) {
+		n, err := q.PinConnectorAuthServer(ctx, sqlcgen.PinConnectorAuthServerParams{
+			OauthIssuer: issuer, OauthServer: text, Rev: newID(), UpdatedAt: dbtime.From(now()), ID: id, Rev_2: rev,
+		})
+		if err != nil {
+			return effect{}, err
+		}
+		if out, err = readConnector(q.GetConnector(ctx, id)); err != nil {
+			return effect{}, err
+		}
+		if n == 0 {
+			return effect{}, ErrConflict
+		}
+		return effect{audit: connectorAudit("connector.update", out, []string{"oauth.issuer"})}, nil
+	})
+	return out, err
+}
+
+// AuthServerMoved records that the metadata of the connector with id now
+// names another issuer than issuer, the one pinned; nothing is done when
+// another is pinned now or it is already recorded. It is audited.
+func (x *Connectors) AuthServerMoved(ctx context.Context, actor model.Actor, id, issuer string) error {
+	return x.s.mutate(ctx, actor, func(q *sqlcgen.Queries) (effect, error) {
+		n, err := q.MarkConnectorAuthServerMoved(ctx, sqlcgen.MarkConnectorAuthServerMovedParams{
+			Rev: newID(), UpdatedAt: dbtime.From(now()), ID: id, OauthIssuer: issuer,
+		})
+		if err != nil || n == 0 {
+			return effect{}, err
+		}
+		c, err := readConnector(q.GetConnector(ctx, id))
+		return effect{audit: connectorAudit("connector.update", c, []string{"oauth.serverMoved"})}, err
+	})
 }
 
 // SetTools replaces the snapshot of the upstream tool list of the connector
@@ -185,7 +267,7 @@ func (x *Connectors) Delete(ctx context.Context, actor model.Actor, id string) e
 }
 
 // connectorCols is the JSON text of a connector's list and map columns.
-type connectorCols struct{ scopes, groups, modes, tools string }
+type connectorCols struct{ scopes, groups, modes, tools, server string }
 
 func connectorJSON(c Connector) (connectorCols, error) {
 	var out connectorCols
@@ -203,7 +285,10 @@ func connectorJSON(c Connector) (connectorCols, error) {
 	if out.modes, err = marshal(modes, "{}"); err != nil {
 		return out, err
 	}
-	out.tools, err = marshal(nonNil(c.Tools), "[]")
+	if out.tools, err = marshal(nonNil(c.Tools), "[]"); err != nil {
+		return out, err
+	}
+	out.server, err = marshal(c.OAuthServer, "{}")
 	return out, err
 }
 
@@ -226,13 +311,14 @@ func readConnector(r sqlcgen.Connector, err error) (Connector, error) {
 		ID: r.ID, Slug: r.Slug, Name: r.Name, CatalogID: r.CatalogID, URL: r.Url, AuthMode: r.AuthMode, Enabled: r.Enabled,
 		OAuthRegistration: r.OauthRegistration, OAuthClientID: r.OauthClientID, OAuthClientSecretSealed: r.OauthClientSecretSealed,
 		OAuthAuthorizeURL: r.OauthAuthorizeUrl, OAuthTokenURL: r.OauthTokenUrl, OAuthRevokeURL: r.OauthRevokeUrl,
+		OAuthIssuer: r.OauthIssuer, OAuthServerMoved: r.OauthServerMoved,
 		Rev: r.Rev, CreatedAt: r.CreatedAt.Time(), UpdatedAt: r.UpdatedAt.Time(),
 		Scopes: []string{}, AllowedGroups: []string{}, ToolModes: map[string]string{}, Tools: []ConnectorTool{},
 	}
 	for _, col := range []struct {
 		text string
 		into any
-	}{{r.Scopes, &c.Scopes}, {r.AllowedGroups, &c.AllowedGroups}, {r.ToolModes, &c.ToolModes}, {r.Tools, &c.Tools}} {
+	}{{r.Scopes, &c.Scopes}, {r.AllowedGroups, &c.AllowedGroups}, {r.ToolModes, &c.ToolModes}, {r.Tools, &c.Tools}, {r.OauthServer, &c.OAuthServer}} {
 		if err := unmarshal(col.text, col.into); err != nil {
 			return Connector{}, err
 		}

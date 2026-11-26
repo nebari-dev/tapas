@@ -23,6 +23,8 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/cli/wiring"
 	"github.com/nebari-dev/javo/internal/config"
+	"github.com/nebari-dev/javo/internal/connectors"
+	"github.com/nebari-dev/javo/internal/connectors/vault"
 	"github.com/nebari-dev/javo/internal/features/authlocal"
 	"github.com/nebari-dev/javo/internal/gateway"
 	"github.com/nebari-dev/javo/internal/gateway/admin"
@@ -213,9 +215,14 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		outageGrace = oidc.OutageGrace.Duration
 	}
 	fp := on.fingerprinter
-	conns, err := wiring.Connectors(platform.Connectors, db, sessionsKey, on.sessionsKeyLasting)
+	conns, err := wiring.Connectors(platform.Connectors, db, sessionsKey, on.sessionsKeyLasting, platform.MCP.PublicURL)
 	if err != nil {
 		return err
+	}
+	var connTokens connectors.TokenSource
+	if conns.Vault != nil {
+		connTokens = conns.Vault
+		go vault.RunStateJanitor(ctx, db, platform.Sessions.SweepEvery.Duration)
 	}
 	aiLive := wiring.AISettings(platform.AI, db, sessionsKey)
 	aiSvc, err := wiring.AIService(ctx, platform.AI, aiLive, db, fp)
@@ -292,7 +299,10 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		AIFeatures:      platform.AI.Features,
 		AIIncludeOwners: platform.AI.Admin.IncludeOwners,
 		MCP:             platform.MCP,
-		Connectors:      conns,
+		Connectors:      conns.Registry,
+		ConnectorTokens: connTokens,
+		ConnectorVault:  conns.Vault,
+		ConnectorSignIn: conns.SignIn,
 		ConnectorHTTP:   httpx.Guard{PublicOnly: true, Internal: platform.Connectors.InternalHosts}.Client(),
 		TrustedAgents:   platform.Agents.TrustedAllowed(),
 		DeviceLoginOff:  !platform.Auth.DeviceLogin.IsEnabled(),

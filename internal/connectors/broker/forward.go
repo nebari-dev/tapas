@@ -6,14 +6,31 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/connectors/client"
 	"github.com/nebari-dev/javo/internal/reasons"
 )
 
+// invalidator is a token source that can replace a token a connector
+// refused (the vault).
+type invalidator interface {
+	Invalidate(ctx context.Context, c connectors.Connector, subject, refused string) error
+}
+
 // forward calls the connector's tool with the arguments unchanged and
-// answers its result as it came (the client caps its size).
+// answers its result as it came (the client caps its size). When the
+// connector refuses the token, a token source that can replace it is asked
+// to, and the call is tried once more.
 func (b *Broker) forward(ctx context.Context, c *call) *sdk.CallToolResult {
 	res, err := b.c.Forwarder.CallTool(ctx, client.Target{URL: c.conn.URL}, c.bearer, c.tool, c.args)
+	if inv, ok := b.c.Tokens.(invalidator); ok && errors.Is(err, client.ErrUnauthorized) {
+		if ierr := inv.Invalidate(ctx, c.conn, subject(c.caller, c.conn), c.bearer); ierr == nil {
+			if bearer, terr := b.bearer(ctx, c.caller, c.conn); terr == nil {
+				c.bearer = bearer
+				res, err = b.c.Forwarder.CallTool(ctx, client.Target{URL: c.conn.URL}, c.bearer, c.tool, c.args)
+			}
+		}
+	}
 	if err != nil {
 		if errors.Is(err, client.ErrUnauthorized) {
 			return errorResult(c, outcomeNotConnected, b.notConnected(c.conn))

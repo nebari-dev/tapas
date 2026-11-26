@@ -336,6 +336,10 @@ export function Settings() {
           <PartIcon part="secrets" size={16} />
           Secrets
         </NavLink>
+        <NavLink to="/settings/connections">
+          <PartIcon part="connectors" size={16} />
+          Connected accounts
+        </NavLink>
         {admin &&
           ADMIN.map((a) => (
             <NavLink key={a.to} to={`/settings/${a.to}`}>

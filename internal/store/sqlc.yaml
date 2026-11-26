@@ -86,6 +86,12 @@ sql:
             go_type: {import: github.com/nebari-dev/javo/internal/store/dbtime, type: Time}
           - column: "device_logins.last_poll_at"
             go_type: {import: github.com/nebari-dev/javo/internal/store/dbtime, type: Time}
+          - column: "connector_connections.expires_at"
+            go_type: {import: github.com/nebari-dev/javo/internal/store/dbtime, type: NullTime}
+          - column: "connector_connections.refreshing_until"
+            go_type: {import: github.com/nebari-dev/javo/internal/store/dbtime, type: Time}
+          - column: "connector_oauth_states.expires_at"
+            go_type: {import: github.com/nebari-dev/javo/internal/store/dbtime, type: Time}
   - engine: postgresql
     schema: dialect/schema.sql
     queries: dialect/queries.sql

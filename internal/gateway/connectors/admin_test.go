@@ -91,7 +91,7 @@ func TestAdminManagesAConnector(t *testing.T) {
 	}
 	c := apitest.Decode[adminConnector](t, w)
 	if c.ID == "" || c.Slug != "fake" || !c.OAuth.SecretStored || c.OAuth.Registration != "static" || c.ToolModes["echo"] != "read" ||
-		c.RedirectURI != "https://tapas.example.org/settings/connections/callback" {
+		c.RedirectURI != "https://tapas.example.org/settings/connections/callback/fake" {
 		t.Fatalf("created %+v", c)
 	}
 	bodies := []string{w.Body.String()}
@@ -140,6 +140,10 @@ func TestCreateFromACatalogueEntry(t *testing.T) {
 	w := f.Do("GET", "/api/admin/connectors/catalog", "", admin)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"google-calendar"`) {
 		t.Fatalf("catalog: %d %s", w.Code, w.Body)
+	}
+	// Each connector has its own redirect address: the prefix and its slug.
+	if p := apitest.Decode[struct{ RedirectURIPrefix string }](t, w).RedirectURIPrefix; p != "https://tapas.example.org/settings/connections/callback/" {
+		t.Fatalf("redirect prefix %q", p)
 	}
 	w = f.Do("POST", "/api/admin/connectors", `{"catalogId":"google-calendar","oauth":{"clientId":"client-1","clientSecret":"`+secret+`"},"allowedGroups":["*"]}`, admin)
 	if w.Code != http.StatusCreated {

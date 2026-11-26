@@ -71,11 +71,27 @@ type Connector struct {
 }
 
 // OAuth is how people sign in to a connector's vendor. Empty endpoints are
-// discovered from the MCP server.
+// discovered from the MCP server, once: Server is what the first discovery
+// found (nil before it), and every sign-in, refresh and revocation uses it.
 type OAuth struct {
 	Registration, ClientID            string
 	SecretStored                      bool
 	AuthorizeURL, TokenURL, RevokeURL string
+	Server                            *AuthServer
+}
+
+// AuthServer is the authorization server a connector was pinned to when its
+// MCP server's metadata was first read: its issuer and endpoints, whether it
+// names itself on the redirect (RFC 9207) and the client authentication
+// methods its token endpoint takes. Moved is set when the metadata later
+// named another issuer: nobody may start a sign-in until an admin saves the
+// connector again, which forgets the pin and what people connected.
+type AuthServer struct {
+	Issuer                                             string
+	AuthorizeURL, TokenURL, RevokeURL, RegistrationURL string
+	IssParameter                                       bool
+	TokenAuthMethods                                   []string
+	Moved                                              bool
 }
 
 // Tool is one tool the connector's MCP server listed. ReadOnlyHint is what
@@ -169,30 +185,6 @@ func Internal(host string, internalHosts []string) bool {
 	return slices.ContainsFunc(internalHosts, func(h string) bool { return strings.EqualFold(h, host) })
 }
 
-// SameOrigin reports whether a and b have the same scheme, host and port
-// (a default port counts as given).
-func SameOrigin(a, b string) bool {
-	ua, errA := url.Parse(a)
-	ub, errB := url.Parse(b)
-	if errA != nil || errB != nil {
-		return false
-	}
-	return strings.EqualFold(ua.Scheme, ub.Scheme) && strings.EqualFold(ua.Hostname(), ub.Hostname()) && port(ua) == port(ub)
-}
-
-func port(u *url.URL) string {
-	if p := u.Port(); p != "" {
-		return p
-	}
-	switch strings.ToLower(u.Scheme) {
-	case "https":
-		return "443"
-	case "http":
-		return "80"
-	}
-	return ""
-}
-
 // Validate refuses a connector an admin may not save, naming the first bad
 // field as a *FieldError. internalHosts are the hosts plain http may name.
 func (c Connector) Validate(internalHosts []string) error {
@@ -257,15 +249,18 @@ func SealContext(table, rowID, column string) []byte {
 	return []byte("javo connector v1\x00" + table + "\x00" + rowID + "\x00" + column)
 }
 
-// RedirectPath is the page of the UI a vendor sends a person back to after
-// they sign in there.
+// RedirectPath is where the UI's callback pages are: a vendor sends a
+// person back to RedirectPath/{slug} after they sign in there.
 const RedirectPath = "/settings/connections/callback"
 
-// RedirectURI is the one OAuth redirect address of a deployment, built from
-// its configured public URL (never from a request's Host); "" without one.
-func RedirectURI(publicURL string) string {
+// RedirectURI is the OAuth redirect address of the connector slug, built
+// from the deployment's configured public URL (never from a request's
+// Host); "" without one. Each connector has its own, so an answer can be
+// told apart by the page it reaches (the OAuth security BCP's defence
+// against mix-up). The slug is known before the connector is created.
+func RedirectURI(publicURL, slug string) string {
 	if publicURL == "" {
 		return ""
 	}
-	return strings.TrimRight(publicURL, "/") + RedirectPath
+	return strings.TrimRight(publicURL, "/") + RedirectPath + "/" + slug
 }

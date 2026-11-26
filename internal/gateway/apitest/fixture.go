@@ -39,7 +39,9 @@ import (
 	"github.com/nebari-dev/javo/internal/authz"
 	"github.com/nebari-dev/javo/internal/config"
 	"github.com/nebari-dev/javo/internal/connectors"
+	"github.com/nebari-dev/javo/internal/connectors/oauth"
 	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
+	"github.com/nebari-dev/javo/internal/connectors/vault"
 	"github.com/nebari-dev/javo/internal/core/registry"
 	"github.com/nebari-dev/javo/internal/diagnose"
 	"github.com/nebari-dev/javo/internal/executor"
@@ -56,9 +58,11 @@ import (
 	adminapi "github.com/nebari-dev/javo/internal/gateway/admin"
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/branding"
+	gwconnectors "github.com/nebari-dev/javo/internal/gateway/connectors"
 	"github.com/nebari-dev/javo/internal/gateway/gatewaytest"
 	"github.com/nebari-dev/javo/internal/gateway/nebi"
 	"github.com/nebari-dev/javo/internal/gateway/storage"
+	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/jobs/engine"
 	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/netprobe"
@@ -83,6 +87,8 @@ type Fixture struct {
 	AI *aisettings.Live
 	// Connectors is the connectors, with Options.Connectors; nil while off.
 	Connectors *connreg.Registry
+	// Vault is the connected accounts, with Options.Connectors.
+	Vault *vault.Vault
 	// Revalidator is the gateway's, for a proxy mounted on it.
 	Revalidator *authn.Revalidator
 	secure      bool
@@ -301,12 +307,30 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 		}
 	}
 	var conns *connreg.Registry
+	var vlt *vault.Vault
+	var signIn *oauth.Service
 	if o.Connectors {
 		key, err := secrets.NewKey()
 		if err != nil {
 			t.Fatal(err)
 		}
-		conns = connreg.New(connreg.Config{DB: db, Seal: key, InternalHosts: o.ConnectorInternalHosts})
+		// As the gateway wires them: the sign-in reads clients from a
+		// registry, the vault refreshes through the sign-in, and the
+		// registry the API uses drops connections through the vault.
+		hc := o.ConnectorHTTP
+		if hc == nil {
+			hc = httpx.Guard{PublicOnly: true, Internal: o.ConnectorInternalHosts}.Client()
+		}
+		clients := connreg.New(connreg.Config{DB: db, Seal: key, InternalHosts: o.ConnectorInternalHosts})
+		signIn = oauth.New(oauth.Config{
+			DB: db, Seal: key, Clients: clients, HTTP: hc, InternalHosts: o.ConnectorInternalHosts,
+			PublicURL: o.PublicURL, Now: o.Now,
+		})
+		vlt = vault.New(vault.Config{DB: db, Seal: key, OAuth: signIn, Now: o.Now})
+		conns = connreg.New(connreg.Config{DB: db, Seal: key, InternalHosts: o.ConnectorInternalHosts, Connections: vlt})
+		if o.ConnectorTokens == nil {
+			o.ConnectorTokens = vlt
+		}
 	}
 	rv := authn.NewRevalidator(providers, sessions, people, 0, o.Now)
 	var exp exposure.Backend = exposurepath.New(o.Urls)
@@ -338,9 +362,17 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 		NetworkPolicy: policy, Engines: o.Engines, ContainerImages: o.Images, Ready: o.Ready, PreviewsEnabled: o.Previews, Thumbnails: o.Thumbnails, PreviewsMaxPerApp: o.PreviewsMax, CodeHosts: o.CodeHosts, Backups: o.Backups,
 		Environments: o.Environments, PublicHost: o.PublicHost, PixiImage: o.PixiImage, LockAgents: o.LockAgents,
 		TrustedAgents: !o.NoTrustedAgents, DeviceLoginOff: o.NoDeviceLogin, Connectors: conns,
-		ConnectorTokens: o.ConnectorTokens, ConnectorHTTP: o.ConnectorHTTP,
+		ConnectorTokens: o.ConnectorTokens, ConnectorHTTP: o.ConnectorHTTP, ConnectorVault: vlt, ConnectorSignIn: signInOf(signIn),
 	})
-	return &Fixture{AI: live, Connectors: conns, T: t, Client: c, Db: db, People: people, Store: sessions, Tokens: tokens, Srv: srv, Revalidator: rv, secure: o.Urls.SecureCookies(o.Secure)}
+	return &Fixture{AI: live, Connectors: conns, Vault: vlt, T: t, Client: c, Db: db, People: people, Store: sessions, Tokens: tokens, Srv: srv, Revalidator: rv, secure: o.Urls.SecureCookies(o.Secure)}
+}
+
+// signInOf keeps a nil sign-in a nil interface.
+func signInOf(s *oauth.Service) gwconnectors.SignIn {
+	if s == nil {
+		return nil
+	}
+	return s
 }
 
 // aliceHash is alice's password as an argon2id hash with the smallest cost

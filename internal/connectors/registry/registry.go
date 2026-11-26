@@ -32,6 +32,15 @@ type Config struct {
 	// InternalHosts are the hosts a connector may be reached at over plain
 	// http (connectors.internalHosts in the platform config).
 	InternalHosts []string
+	// Connections disconnects everyone from a connector (the token vault);
+	// nil when nobody can connect.
+	Connections Connections
+}
+
+// Connections disconnects everyone from a connector: it revokes and deletes
+// their tokens.
+type Connections interface {
+	DeleteForConnector(ctx context.Context, actor model.Actor, c connectors.Connector) error
 }
 
 // Registry is the connectors an admin added.
@@ -154,7 +163,8 @@ func (r *Registry) ListEnabled(ctx context.Context) ([]connectors.Connector, err
 // is still its revision (store.ErrConflict otherwise; store.ErrNotFound
 // when there is none). The names of the changed fields go on the audit log.
 // A new address, new OAuth endpoints or a new client id need the client
-// secret again when one is stored, and drop what people connected.
+// secret again when one is stored, and drop what people connected; a new
+// auth mode drops what was connected too.
 func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in Input) (connectors.Connector, error) {
 	prev, err := r.c.DB.Connectors().Get(ctx, id)
 	if err != nil {
@@ -164,13 +174,27 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 		return connectors.Connector{}, store.ErrConflict
 	}
 	in.Slug, in.CatalogID = prev.Slug, prev.CatalogID
+	// Any change of the address is a move, even of its path or case: the
+	// vault sends a token only to the exact address it was issued for, and
+	// another path may name another authorization server. So is saving a
+	// connector whose MCP server now names another authorization server
+	// than the pinned one: the save is the admin trusting it.
+	moved := prev.URL != in.URL || prev.OAuthAuthorizeURL != in.AuthorizeURL ||
+		prev.OAuthTokenURL != in.TokenURL || prev.OAuthRevokeURL != in.RevokeURL || prev.OAuthServerMoved
+	if moved && prev.OAuthRegistration == connectors.RegistrationDynamic && in.ClientID == prev.OAuthClientID && in.ClientSecret == "" {
+		// A client Tapas registered belongs to the old server: drop it, so
+		// one is registered where sign-ins go now.
+		in.ClientID = ""
+	}
 	next := connectorOf(in)
 	if err := next.Validate(r.c.InternalHosts); err != nil {
 		return connectors.Connector{}, err
 	}
 	row := rowOf(next, prev)
-	moved := !connectors.SameOrigin(prev.URL, in.URL) || prev.OAuthAuthorizeURL != in.AuthorizeURL ||
-		prev.OAuthTokenURL != in.TokenURL || prev.OAuthRevokeURL != in.RevokeURL
+	if moved {
+		// The next sign-in discovers and pins the server again.
+		row.OAuthIssuer, row.OAuthServer, row.OAuthServerMoved = "", store.ConnectorAuthServer{}, false
+	}
 	newClient := prev.OAuthClientID != in.ClientID
 	secretChanged := false
 	switch {
@@ -190,14 +214,24 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 	case newClient:
 		row.OAuthRegistration = connectors.RegistrationStatic
 	}
-	if moved || newClient {
-		// A stored token must never be sent to a host other than the one it
-		// was issued for, nor used under another client.
-		if err := r.forgetConnections(ctx, actor, id); err != nil {
+	// A stored token must never be sent to a host other than the one it
+	// was issued for, nor used under another client. They are revoked where
+	// they were issued, with the client they were issued to. Switching whose
+	// account is used drops them too, so switching back does not silently
+	// revive a connection nobody made again.
+	forget := moved || newClient || prev.AuthMode != string(in.AuthMode)
+	if forget {
+		if err := r.forgetConnections(ctx, actor, viewOf(prev)); err != nil {
 			return connectors.Connector{}, err
 		}
 	}
-	saved, err := r.c.DB.Connectors().Update(ctx, actor, row, changedFields(prev, row, secretChanged))
+	save := r.c.DB.Connectors().Update
+	if forget {
+		// Move also drops a connection stored since the ones above were
+		// revoked (a sign-in that finished meanwhile).
+		save = r.c.DB.Connectors().Move
+	}
+	saved, err := save(ctx, actor, row, changedFields(prev, row, secretChanged))
 	if err != nil {
 		return connectors.Connector{}, err
 	}
@@ -207,21 +241,74 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 // Delete removes the connector with id, after what people connected to it
 // (store.ErrNotFound when there is none).
 func (r *Registry) Delete(ctx context.Context, actor model.Actor, id string) error {
-	if _, err := r.c.DB.Connectors().Get(ctx, id); err != nil {
+	prev, err := r.c.DB.Connectors().Get(ctx, id)
+	if err != nil {
 		return err
 	}
-	if err := r.forgetConnections(ctx, actor, id); err != nil {
+	if err := r.forgetConnections(ctx, actor, viewOf(prev)); err != nil {
 		return err
 	}
 	return r.c.DB.Connectors().Delete(ctx, actor, id)
 }
 
-// forgetConnections revokes and deletes every account connected to the
-// connector with id: on delete, and when its address, OAuth endpoints or
-// client change (people then connect again). Connections are not stored
-// yet, so there is nothing to do; the token vault does it here once they
-// are.
-func (r *Registry) forgetConnections(context.Context, model.Actor, string) error { return nil }
+// forgetConnections revokes and deletes every account connected to c (as
+// it is before the change): on delete, and when its address, OAuth
+// endpoints, client or auth mode change (people then connect again).
+func (r *Registry) forgetConnections(ctx context.Context, actor model.Actor, c connectors.Connector) error {
+	if r.c.Connections == nil {
+		return nil
+	}
+	return r.c.Connections.DeleteForConnector(ctx, actor, c)
+}
+
+// Registered stores the OAuth client Tapas registered itself (RFC 7591) on
+// c, which had none, when c.Rev is still its revision (store.ErrConflict
+// otherwise). secret is "" for a client without one.
+func (r *Registry) Registered(ctx context.Context, actor model.Actor, c connectors.Connector, clientID, secret string) (connectors.Connector, error) {
+	prev, err := r.c.DB.Connectors().Get(ctx, c.ID)
+	if err != nil {
+		return connectors.Connector{}, err
+	}
+	if prev.Rev != c.Rev || prev.OAuthClientID != "" {
+		return connectors.Connector{}, store.ErrConflict
+	}
+	row := prev
+	row.OAuthClientID, row.OAuthRegistration, row.OAuthClientSecretSealed = clientID, connectors.RegistrationDynamic, nil
+	if secret != "" {
+		if row.OAuthClientSecretSealed, err = r.c.Seal.Encrypt([]byte(secret), secretAD(c.ID)); err != nil {
+			return connectors.Connector{}, fmt.Errorf("seal the client secret: %w", err)
+		}
+	}
+	return view(r.c.DB.Connectors().Update(ctx, actor, row, changedFields(prev, row, secret != "")))
+}
+
+// Pin pins the authorization server s on c, which has none, when c.Rev is
+// still its revision (store.ErrConflict otherwise), and returns c as saved.
+func (r *Registry) Pin(ctx context.Context, actor model.Actor, c connectors.Connector, s connectors.AuthServer) (connectors.Connector, error) {
+	return view(r.c.DB.Connectors().PinAuthServer(ctx, actor, c.ID, c.Rev, s.Issuer, store.ConnectorAuthServer{
+		AuthorizeURL: s.AuthorizeURL, TokenURL: s.TokenURL, RevokeURL: s.RevokeURL, RegistrationURL: s.RegistrationURL,
+		IssParameter: s.IssParameter, TokenAuthMethods: s.TokenAuthMethods,
+	}))
+}
+
+// ServerMoved records that c's MCP server now names another authorization
+// server than the one pinned on c: no sign-in starts until an admin saves c
+// again.
+func (r *Registry) ServerMoved(ctx context.Context, actor model.Actor, c connectors.Connector) error {
+	if c.OAuth.Server == nil {
+		return nil
+	}
+	return r.c.DB.Connectors().AuthServerMoved(ctx, actor, c.ID, c.OAuth.Server.Issuer)
+}
+
+// SetTools replaces the snapshot of the connector's upstream tool list.
+func (r *Registry) SetTools(ctx context.Context, actor model.Actor, id string, tools []connectors.Tool) (connectors.Connector, error) {
+	rows := make([]store.ConnectorTool, 0, len(tools))
+	for _, t := range tools {
+		rows = append(rows, store.ConnectorTool{Name: t.Name, Description: t.Description, ReadOnlyHint: t.ReadOnlyHint})
+	}
+	return view(r.c.DB.Connectors().SetTools(ctx, actor, id, rows))
+}
 
 // ClientSecret opens the stored OAuth client secret of the connector with
 // id: "" when none is stored. It is for the OAuth client alone; never log
@@ -263,6 +350,7 @@ func changedFields(prev, next store.Connector, secretChanged bool) []string {
 	add("oauth.authorizeUrl", prev.OAuthAuthorizeURL != next.OAuthAuthorizeURL)
 	add("oauth.tokenUrl", prev.OAuthTokenURL != next.OAuthTokenURL)
 	add("oauth.revokeUrl", prev.OAuthRevokeURL != next.OAuthRevokeURL)
+	add("oauth.issuer", prev.OAuthIssuer != next.OAuthIssuer)
 	add("scopes", !slices.Equal(prev.Scopes, next.Scopes))
 	add("allowedGroups", !slices.Equal(prev.AllowedGroups, next.AllowedGroups))
 	add("toolModes", !maps.Equal(prev.ToolModes, next.ToolModes))
@@ -303,6 +391,14 @@ func viewOf(row store.Connector) connectors.Connector {
 		},
 		Scopes: row.Scopes, AllowedGroups: row.AllowedGroups, ToolModes: make(map[string]connectors.ToolMode, len(row.ToolModes)),
 		Tools: make([]connectors.Tool, 0, len(row.Tools)), Rev: row.Rev, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+	if row.OAuthIssuer != "" {
+		p := row.OAuthServer
+		c.OAuth.Server = &connectors.AuthServer{
+			Issuer: row.OAuthIssuer, AuthorizeURL: p.AuthorizeURL, TokenURL: p.TokenURL, RevokeURL: p.RevokeURL,
+			RegistrationURL: p.RegistrationURL, IssParameter: p.IssParameter, TokenAuthMethods: p.TokenAuthMethods,
+			Moved: row.OAuthServerMoved,
+		}
 	}
 	for k, v := range row.ToolModes {
 		c.ToolModes[k] = connectors.ToolMode(v)

@@ -178,6 +178,39 @@ type Connector struct {
 	Rev                     string
 	CreatedAt               dbtime.Time
 	UpdatedAt               dbtime.Time
+	OauthIssuer             string
+	OauthServer             string
+	OauthServerMoved        bool
+}
+
+type ConnectorConnection struct {
+	ID              string
+	ConnectorID     string
+	Subject         string
+	ConnectedBy     string
+	Resource        string
+	AccessSealed    []byte
+	RefreshSealed   []byte
+	Scopes          string
+	Status          string
+	ExpiresAt       dbtime.NullTime
+	RefreshingUntil dbtime.Time
+	Rev             string
+	CreatedAt       dbtime.Time
+	UpdatedAt       dbtime.Time
+}
+
+type ConnectorOauthState struct {
+	StateHash      []byte
+	ConnectorID    string
+	ConnectorRev   string
+	Person         string
+	Subject        string
+	VerifierSealed []byte
+	RedirectUri    string
+	Issuer         string
+	CreatedAt      dbtime.Time
+	ExpiresAt      dbtime.Time
 }
 
 type DeviceLogin struct {
