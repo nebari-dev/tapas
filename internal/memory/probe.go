@@ -6,7 +6,9 @@ import (
 )
 
 // startCheckPerson is a person no real account uses; the start check lists
-// their memories, which reads nothing of anyone's.
+// their memories, which reads nothing of anyone's. No real person can have this
+// name: every identity name ends in "-" and hex digits (naming.IdentityName),
+// and "check" is not hex.
 const startCheckPerson = "tapas-start-check"
 
 // Probe asks mem0 at url, through s, for the memories of a reserved person

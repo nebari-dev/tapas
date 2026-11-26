@@ -3,6 +3,7 @@ package helm
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -369,6 +370,10 @@ func TestMemoryConfigReachesTheConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render: %v\n%s", err, out)
 	}
+	off, err := render(t)
+	if err != nil {
+		t.Fatalf("render with memory off: %v\n%s", err, off)
+	}
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(platformConfigMap(t, out).Data["config.yaml"]), 0o600); err != nil {
 		t.Fatal(err)
@@ -395,4 +400,28 @@ func TestMemoryConfigReachesTheConfigFile(t *testing.T) {
 			}
 		}
 	}
+	// Reading mem0's Secret is the mem0 pack's Role. Memory adds no cluster-wide
+	// access: the ClusterRoles and ClusterRoleBindings are the same with it on
+	// as with it off.
+	if got, want := clusterRBAC(t, out), clusterRBAC(t, off); !reflect.DeepEqual(got, want) {
+		t.Errorf("cluster-scoped RBAC changes with memory on:\n got %v\nwant %v", got, want)
+	}
+}
+
+// clusterRBAC returns the rendered ClusterRoles and ClusterRoleBindings, by kind and name.
+func clusterRBAC(t *testing.T, out string) map[string]any {
+	t.Helper()
+	got := map[string]any{}
+	for _, o := range docs(t, out) {
+		switch r := o.(type) {
+		case *rbacv1.ClusterRole:
+			got["ClusterRole/"+r.Name] = r.Rules
+		case *rbacv1.ClusterRoleBinding:
+			got["ClusterRoleBinding/"+r.Name] = struct {
+				Subjects []rbacv1.Subject
+				RoleRef  rbacv1.RoleRef
+			}{r.Subjects, r.RoleRef}
+		}
+	}
+	return got
 }

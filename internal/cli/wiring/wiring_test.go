@@ -3,6 +3,7 @@ package wiring
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 	"time"
@@ -256,26 +257,30 @@ func TestStaleGroupsMountNoGroupFolder(t *testing.T) {
 	}
 }
 
-// With memory off no service is built, so nothing ever talks to mem0. On, the
-// service is built from the config and the key.
-func TestMemory(t *testing.T) {
-	tests := []struct {
-		name    string
-		cfg     config.MemoryCfg
-		key     string
-		wantNil bool
-	}{
-		{"off builds nothing", config.MemoryCfg{Enabled: false, URL: "http://mem0"}, "k", true},
-		{"on builds a service", config.MemoryCfg{
-			Enabled: true, URL: "http://mem0",
-			Timeout: metav1.Duration{Duration: time.Second}, AddTimeout: metav1.Duration{Duration: time.Minute},
-		}, "k", false},
+// With memory off no service is built, so nothing ever talks to mem0. With it
+// on, the service sends its requests to the configured address with the key.
+func TestMemoryIsNilWhenOffAndTalksToTheConfiguredURLWithTheKeyWhenOn(t *testing.T) {
+	var gotKey, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotKey, gotPath = r.Header.Get("X-API-Key"), r.URL.Path
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+	on := config.MemoryCfg{
+		Enabled: true, URL: srv.URL,
+		Timeout: metav1.Duration{Duration: time.Second}, AddTimeout: metav1.Duration{Duration: time.Minute},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Memory(tt.cfg, tt.key); (got == nil) != tt.wantNil {
-				t.Fatalf("Memory = %v, want nil %v", got, tt.wantNil)
-			}
-		})
+	if got := Memory(config.MemoryCfg{Enabled: false, URL: srv.URL}, "k"); got != nil {
+		t.Fatalf("Memory with memory off = %v, want nil", got)
+	}
+	svc := Memory(on, "the-admin-key")
+	if svc == nil {
+		t.Fatal("Memory with memory on = nil")
+	}
+	if _, err := svc.List(context.Background(), "alice"); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if gotKey != "the-admin-key" || gotPath != "/memories" {
+		t.Errorf("mem0 saw key %q on path %q, want the key on /memories", gotKey, gotPath)
 	}
 }

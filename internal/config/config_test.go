@@ -161,7 +161,7 @@ func TestLoadRejectsBadMemoryConfig(t *testing.T) {
 		{"enabled without url", local + "memory:\n  enabled: true\n  apiKeySecret:\n    namespace: mem0\n", "memory.url"},
 		{"url not http", local + mem("ftp://x", "mem0"), "memory.url"},
 		{"url without host", local + mem("http://", "mem0"), "memory.url"},
-		{"url with user and password", local + mem("http://admin:s3cret@mem0:8000", "mem0"), "memory.url"},
+		{"url with user and password", local + mem("http://admin:hunter2@mem0:8000", "mem0"), "memory.url"},
 		{"url with user only", local + mem("http://admin@mem0:8000", "mem0"), "memory.url"},
 		{"url with password and bad port", local + mem("http://u:hunter2@mem0:badport", "mem0"), "memory.url"},
 		{"url with password and wrong scheme", local + mem("ftp://u:hunter2@mem0", "mem0"), "memory.url"},
