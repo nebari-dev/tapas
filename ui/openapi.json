@@ -241,6 +241,137 @@
         ],
         "type": "object"
       },
+      "AdminConnector": {
+        "additionalProperties": false,
+        "properties": {
+          "allowedGroups": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "authMode": {
+            "enum": [
+              "user",
+              "shared"
+            ],
+            "type": "string"
+          },
+          "catalogId": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "oauth": {
+            "$ref": "#/components/schemas/AdminOAuth"
+          },
+          "redirectUri": {
+            "description": "Paste this at the vendor as the OAuth redirect address",
+            "type": "string"
+          },
+          "rev": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "toolModes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "tools": {
+            "description": "The last snapshot of the server's tool list",
+            "items": {
+              "$ref": "#/components/schemas/ToolView"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rev",
+          "catalogId",
+          "slug",
+          "name",
+          "url",
+          "authMode",
+          "enabled",
+          "oauth",
+          "scopes",
+          "allowedGroups",
+          "toolModes",
+          "tools",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "AdminOAuth": {
+        "additionalProperties": false,
+        "properties": {
+          "authorizeUrl": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "registration": {
+            "description": "static: pasted; dynamic: registered by Tapas (RFC 7591); empty: no client yet",
+            "enum": [
+              "static",
+              "dynamic",
+              ""
+            ],
+            "type": "string"
+          },
+          "revokeUrl": {
+            "type": "string"
+          },
+          "secretStored": {
+            "description": "A client secret is stored",
+            "type": "boolean"
+          },
+          "tokenUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "secretStored",
+          "registration"
+        ],
+        "type": "object"
+      },
       "AdminStorageOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -997,6 +1128,96 @@
         ],
         "type": "object"
       },
+      "CatalogEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "authMode": {
+            "enum": [
+              "user",
+              "shared"
+            ],
+            "type": "string"
+          },
+          "docs": {
+            "description": "The vendor's documentation of its MCP server",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "oauth": {
+            "$ref": "#/components/schemas/Endpoints"
+          },
+          "oauthEndpoints": {
+            "enum": [
+              "discovered",
+              "static"
+            ],
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "setup": {
+            "description": "What to do at the vendor",
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "toolModes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "url": {
+            "description": "The vendor's hosted MCP server; empty: the admin fills it in",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "url",
+          "authMode",
+          "scopes",
+          "toolModes",
+          "oauthEndpoints",
+          "oauth",
+          "setup",
+          "docs"
+        ],
+        "type": "object"
+      },
+      "CatalogOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "Change": {
         "additionalProperties": false,
         "properties": {
@@ -1121,6 +1342,79 @@
           "plans",
           "dropped"
         ],
+        "type": "object"
+      },
+      "ConnectorInput": {
+        "additionalProperties": false,
+        "properties": {
+          "allowedGroups": {
+            "description": "Groups whose members may use it; * is everyone; empty is nobody",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "authMode": {
+            "description": "user: each person connects their own account; shared: one account an admin connects, used for everyone allowed",
+            "enum": [
+              "user",
+              "shared"
+            ],
+            "type": "string"
+          },
+          "catalogId": {
+            "description": "The catalogue entry this starts from; what is left out is taken from it. Fixed once created",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "oauth": {
+            "$ref": "#/components/schemas/OAuthInput"
+          },
+          "rev": {
+            "description": "Required on PUT: the rev the change was made on",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "scopes": {
+            "description": "OAuth scopes asked for",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "slug": {
+            "description": "Short name, the prefix of its tools (slug__tool): 2 to 31 lowercase letters and digits. Fixed once created",
+            "maxLength": 31,
+            "type": "string"
+          },
+          "toolModes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Tool name to read, write or off; a tool not listed is a write",
+            "type": "object"
+          },
+          "url": {
+            "description": "The MCP server's https address",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "CreateInputBody": {
@@ -1739,6 +2033,21 @@
           "refs",
           "actions"
         ],
+        "type": "object"
+      },
+      "Endpoints": {
+        "additionalProperties": false,
+        "properties": {
+          "authorizeUrl": {
+            "type": "string"
+          },
+          "revokeUrl": {
+            "type": "string"
+          },
+          "tokenUrl": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "Engine": {
@@ -2992,6 +3301,24 @@
         },
         "type": "object"
       },
+      "ListOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminConnector"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "LockPlace": {
         "additionalProperties": false,
         "properties": {
@@ -3218,6 +3545,37 @@
           "text",
           "action"
         ],
+        "type": "object"
+      },
+      "OAuthInput": {
+        "additionalProperties": false,
+        "properties": {
+          "authorizeUrl": {
+            "description": "Static authorize endpoint; empty: discovered from the MCP server",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "clientId": {
+            "description": "The OAuth client id from the vendor; empty: Tapas registers a client itself when the vendor allows it",
+            "maxLength": 512,
+            "type": "string"
+          },
+          "clientSecret": {
+            "description": "Write-only: replaces the stored secret; leave out to keep it, which only works while the address origin, the endpoints and the client id stay the same",
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "revokeUrl": {
+            "description": "Static revocation endpoint (RFC 7009), optional",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "tokenUrl": {
+            "description": "Static token endpoint, set together with authorizeUrl",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "Owner": {
@@ -5388,6 +5746,26 @@
         ],
         "type": "object"
       },
+      "ToolView": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "readOnlyHint": {
+            "description": "What the server claimed; only a suggestion for its mode",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "readOnlyHint"
+        ],
+        "type": "object"
+      },
       "TotalsStruct": {
         "additionalProperties": false,
         "properties": {
@@ -7191,6 +7569,484 @@
           }
         },
         "summary": "Bring back apps from a database backup; they wait for a release (platform admins)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/connectors": {
+      "get": {
+        "operationId": "adminListConnectors",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Every connector (platform admins)",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "With catalogId, what the body leaves out is taken from that catalogue entry. The client secret is stored encrypted and never returned. Each change is on the audit log with the names of the fields, never their values.",
+        "operationId": "adminCreateConnector",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminConnector"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Add a connector (platform admins)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/connectors/catalog": {
+      "get": {
+        "operationId": "adminConnectorCatalog",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "The built-in catalogue of connectors (platform admins)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/connectors/{id}": {
+      "delete": {
+        "operationId": "adminDeleteConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Remove a connector and everyone's connection to it (platform admins)",
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "operationId": "adminGetConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminConnector"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "One connector (platform admins)",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "rev must be the connector's current rev (409 otherwise). A new address origin, new OAuth endpoints or a new client id need the client secret again when one is stored, and disconnect everyone who connected.",
+        "operationId": "adminUpdateConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminConnector"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Change a connector (platform admins)",
         "tags": [
           "admin"
         ]
