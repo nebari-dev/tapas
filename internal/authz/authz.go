@@ -99,6 +99,10 @@ const (
 	ActManageSecret Action = "ManageSecret" // see, create, change, delete one's own secret
 	ActUseSecret    Action = "UseSecret"    // give one's own secret to one's own app or job
 	ActInjectSecret Action = "InjectSecret" // the controller hands a secret's value to an app's pod or a job's run
+	// ActUseConnector lists and calls a connector's tools. Like secrets, a
+	// platform admin gets none from admin rights: admins configure
+	// connectors, groups grant their use.
+	ActUseConnector Action = "UseConnector"
 )
 
 // Object is what the action is about. Which fields matter depends on the action.
@@ -118,6 +122,16 @@ type Object struct {
 	Idle *IdleAsk
 	// Secret is the secret for ActManageSecret, ActUseSecret and ActInjectSecret.
 	Secret *model.Secret
+	// Connector is the connector for ActUseConnector.
+	Connector *ConnectorAsk
+}
+
+// ConnectorAsk is what ActUseConnector needs to know of a connector: whether
+// it is on, and the groups that may use it ("*" is every member; none is
+// nobody).
+type ConnectorAsk struct {
+	Enabled bool
+	Groups  []string
 }
 
 // IdleAsk is an idle stop timeout in minutes (0 is Off) and the policy that
@@ -222,6 +236,8 @@ func Decide(p Principal, roles []Role, act Action, obj Object) Decision {
 			return deny(reasons.MsgSecretsOwnerOnly)
 		}
 		return injectSecret(obj, "same-owner")
+	case ActUseConnector:
+		return useConnector(p, roles, obj.Connector)
 	case ActManageTemplates:
 		if admin {
 			return allow("platform-admin")
@@ -232,6 +248,26 @@ func Decide(p Principal, roles []Role, act Action, obj Object) Decision {
 		return deny(reasons.MsgTemplateAdminOnly)
 	}
 	return deny(reasons.MsgInvalidRequest)
+}
+
+// useConnector allows a signed-in person in one of the connector's groups,
+// or any member when the groups hold "*". Admin rights grant nothing here.
+// Every refusal is "not found", so it does not reveal that a connector
+// exists.
+func useConnector(p Principal, roles []Role, c *ConnectorAsk) Decision {
+	if c == nil || !c.Enabled || !signedIn(p) {
+		return deny(reasons.MsgNotFound)
+	}
+	for _, g := range p.Groups {
+		// "*" means every member, never a group of that name.
+		if g != "*" && slices.Contains(c.Groups, g) {
+			return allow("group:" + g)
+		}
+	}
+	if slices.Contains(c.Groups, "*") && slices.Contains(roles, RoleMember) {
+		return allow("member")
+	}
+	return deny(reasons.MsgNotFound)
 }
 
 // secretTarget is the owner of what a secret goes into: exactly one of the
