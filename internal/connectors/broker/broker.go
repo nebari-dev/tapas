@@ -92,7 +92,13 @@ type call struct {
 	listed *sdk.Tool
 	// plan is the stored id of the plan the call became or applies.
 	plan string
+	// approved is the connector an approved plan was asked for; applying
+	// refuses any other one.
+	approved approvedConnector
 }
+
+// approvedConnector pins a plan to a connector by id and address.
+type approvedConnector struct{ ID, URL string }
 
 // phase is what a call's steps run for.
 type phase int

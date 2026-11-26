@@ -14,6 +14,7 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/authz"
 	"github.com/nebari-dev/javo/internal/connectors"
+	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
 	"github.com/nebari-dev/javo/internal/connectors/policy"
 	"github.com/nebari-dev/javo/internal/connectors/registry"
 )
@@ -155,6 +156,39 @@ func TestApplyingChecksAgain(t *testing.T) {
 		p := pl(t, f)
 		if _, err := f.reg.Update(ctx, admin, f.conn.ID, registry.Input{
 			Slug: "fake", Name: "Fake", URL: f.fake.URL, AuthMode: connectors.AuthShared, Enabled: false, Rev: f.conn.Rev,
+			AllowedGroups: []string{"sales"}, ToolModes: f.conn.ToolModes,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := as(f, owner()).Apply(ctx, p); err == nil || len(f.fake.Calls()) != 0 {
+			t.Fatalf("applied: %v, calls %v", err, f.fake.Calls())
+		}
+	})
+	// The person approved a call to one server: a connector moved to
+	// another address, or deleted and made again under the same short name,
+	// is not that one.
+	t.Run("moved", func(t *testing.T) {
+		f := newFixture(t, options{})
+		p := pl(t, f)
+		elsewhere := connectorstest.NewConnector(t, bearer)
+		if _, err := f.reg.Update(ctx, admin, f.conn.ID, registry.Input{
+			Slug: "fake", Name: "Fake", URL: elsewhere.URL, AuthMode: connectors.AuthShared, Enabled: true, Rev: f.conn.Rev,
+			AllowedGroups: []string{"sales"}, ToolModes: f.conn.ToolModes,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := as(f, owner()).Apply(ctx, p); err == nil || len(f.fake.Calls()) != 0 || len(elsewhere.Calls()) != 0 {
+			t.Fatalf("applied: %v, calls %v and %v", err, f.fake.Calls(), elsewhere.Calls())
+		}
+	})
+	t.Run("made again", func(t *testing.T) {
+		f := newFixture(t, options{})
+		p := pl(t, f)
+		if err := f.reg.Delete(ctx, admin, f.conn.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.reg.Create(ctx, admin, registry.Input{
+			Slug: "fake", Name: "Fake", URL: f.fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
 			AllowedGroups: []string{"sales"}, ToolModes: f.conn.ToolModes,
 		}); err != nil {
 			t.Fatal(err)

@@ -19,6 +19,15 @@ import (
 // arguments, a JSON object.
 const argumentsParam = "arguments"
 
+// connectorParam and urlParam are the proposal's parameters that pin the
+// connector the person approved a call to: its id and its address. A
+// connector moved elsewhere, or deleted and made again under the same short
+// name, is not that one, and the plan fails.
+const (
+	connectorParam = "connector"
+	urlParam       = "url"
+)
+
 // Action is the connector-call catalog action (D18): planning a write
 // repeats the call's checks and asks the policy, and applying an approved
 // one checks again and forwards exactly the stored arguments once.
@@ -66,7 +75,7 @@ func (a *action) Plan(ctx context.Context, p actions.Proposal) (actions.Planned,
 	return actions.Planned{
 		Proposal: actions.Proposal{
 			Action: actions.ConnectorCall, Target: p.Target, Owner: c.caller.Principal.ID,
-			Params: map[string]string{argumentsParam: args.String()},
+			Params: map[string]string{argumentsParam: args.String(), connectorParam: c.conn.ID, urlParam: c.conn.URL},
 		},
 		TargetName: c.conn.Name, Summary: c.conn.Name + ": " + c.tool, Changes: changes,
 		Destructive: destructive(c.listed),
@@ -103,6 +112,7 @@ func (a *action) Apply(ctx context.Context, p actions.Proposal) error {
 func (a *action) newCall(ctx context.Context, ph phase, p actions.Proposal) *call {
 	return &call{
 		phase: ph, caller: a.callerOf(ctx), name: p.Target, args: json.RawMessage(p.Params[argumentsParam]), started: a.b.c.Now(),
+		approved: approvedConnector{ID: p.Params[connectorParam], URL: p.Params[urlParam]},
 	}
 }
 
@@ -162,6 +172,8 @@ func refusal(c *call, res *sdk.CallToolResult) error {
 		status = http.StatusForbidden
 	case outcomeDeniedAuthz:
 		status = http.StatusNotFound
+	case outcomeConnectorChanged:
+		status = http.StatusConflict
 	case outcomeNotConnected:
 		status = http.StatusConflict
 	case outcomeToolError:

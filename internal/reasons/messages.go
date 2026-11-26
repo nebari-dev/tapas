@@ -339,6 +339,7 @@ const (
 	MsgConnectorSignInExpired       MessageCode = "ConnectorSignInExpired"
 	MsgConnectorNeedsOAuthClient    MessageCode = "ConnectorNeedsOAuthClient"
 	MsgConnectorToolNotFound        MessageCode = "ConnectorToolNotFound"
+	MsgConnectorCallChanged         MessageCode = "ConnectorCallChanged"
 	MsgConnectorDeniedByPolicy      MessageCode = "ConnectorDeniedByPolicy" // arg: the policy's reason, a sentence without its full stop
 	MsgConnectorNotForAppTokens     MessageCode = "ConnectorNotForAppTokens"
 	MsgConnectorSessionOnly         MessageCode = "ConnectorSessionOnly"
@@ -684,6 +685,7 @@ var messages = map[MessageCode]string{
 	MsgConnectorSignInExpired:       "This sign-in has expired or was already used. Start connecting again.",
 	MsgConnectorNeedsOAuthClient:    "This connector needs an OAuth client: create one at the vendor with the redirect address shown here, then paste its client id and secret.",
 	MsgConnectorToolNotFound:        "No such tool.",
+	MsgConnectorCallChanged:         "The connector was changed after this was asked, so the call was not made. Ask again.",
 	MsgConnectorDeniedByPolicy:      "Not allowed by the platform's policy: %s.",
 	MsgConnectorNotForAppTokens:     "An app's or job's own API token cannot use connectors, unless the app is your own coding agent. Use a personal token from Settings.",
 	MsgConnectorSessionOnly:         "Only a person signed in in the browser can connect or disconnect an account. No API token can.",

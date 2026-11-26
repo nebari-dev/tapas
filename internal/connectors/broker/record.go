@@ -24,6 +24,9 @@ const (
 	outcomeNotConnected  = "not_connected"
 	outcomeUpstreamError = "upstream_error"
 	outcomeTimeout       = "timeout"
+	// outcomeConnectorChanged: an approved call whose connector moved or was
+	// made again since it was asked.
+	outcomeConnectorChanged = "connector_changed"
 	// outcomeProposed is a write that became a plan; nothing was forwarded.
 	outcomeProposed = "proposed"
 )

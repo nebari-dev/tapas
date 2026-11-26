@@ -9,6 +9,7 @@ import (
 
 	"github.com/nebari-dev/javo/internal/authz"
 	"github.com/nebari-dev/javo/internal/connectors"
+	"github.com/nebari-dev/javo/internal/reasons"
 	"github.com/nebari-dev/javo/internal/store"
 )
 
@@ -27,6 +28,9 @@ func (b *Broker) authorize(ctx context.Context, c *call) *sdk.CallToolResult {
 	c.conn = conn
 	if !allowed(c.caller, conn) {
 		return noSuchTool(c, outcomeDeniedAuthz)
+	}
+	if c.phase == phaseApply && (conn.ID != c.approved.ID || conn.URL != c.approved.URL) {
+		return errorResult(c, outcomeConnectorChanged, reasons.Msg(reasons.MsgConnectorCallChanged))
 	}
 	return nil
 }
