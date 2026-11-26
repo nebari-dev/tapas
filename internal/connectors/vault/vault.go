@@ -342,7 +342,7 @@ func (v *Vault) Delete(ctx context.Context, actor model.Actor, c connectors.Conn
 }
 
 // DeleteForConnector disconnects everyone from c, as Delete does each: when
-// c is removed, or its address, endpoints or client change.
+// c is removed, or its address, endpoints, client or auth mode change.
 func (v *Vault) DeleteForConnector(ctx context.Context, actor model.Actor, c connectors.Connector) error {
 	rows, err := v.c.DB.ConnectorConnections().ForConnector(ctx, c.ID)
 	if err != nil {

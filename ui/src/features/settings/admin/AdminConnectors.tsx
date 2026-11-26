@@ -382,7 +382,7 @@ function ConnectorForm({
             spellCheck={false}
             onChange={(e) => set('url', e.target.value)}
           />
-          {existing && <span className="hint">Moving it to another server disconnects everyone who connected.</span>}
+          {existing && <span className="hint">Changing it disconnects everyone who connected.</span>}
           {err('url')}
         </div>
         <div className="field" role="group" aria-labelledby={ids.auth}>
@@ -391,6 +391,7 @@ function ConnectorForm({
           </span>
           <Segmented label="Who signs in" value={d.authMode} options={AUTH_MODES} onChange={(v) => set('authMode', v)} />
           <span className="hint">{AUTH_HINTS[d.authMode]}</span>
+          {existing && <span className="hint">Changing it disconnects everyone who connected.</span>}
         </div>
         <div className="field">
           <span className="field-label">Redirect address</span>

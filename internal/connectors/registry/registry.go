@@ -163,7 +163,8 @@ func (r *Registry) ListEnabled(ctx context.Context) ([]connectors.Connector, err
 // is still its revision (store.ErrConflict otherwise; store.ErrNotFound
 // when there is none). The names of the changed fields go on the audit log.
 // A new address, new OAuth endpoints or a new client id need the client
-// secret again when one is stored, and drop what people connected.
+// secret again when one is stored, and drop what people connected; a new
+// auth mode drops what was connected too.
 func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in Input) (connectors.Connector, error) {
 	prev, err := r.c.DB.Connectors().Get(ctx, id)
 	if err != nil {
@@ -202,16 +203,19 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 	case newClient:
 		row.OAuthRegistration = connectors.RegistrationStatic
 	}
-	if moved || newClient {
-		// A stored token must never be sent to a host other than the one it
-		// was issued for, nor used under another client. They are revoked
-		// where they were issued, with the client they were issued to.
+	// A stored token must never be sent to a host other than the one it
+	// was issued for, nor used under another client. They are revoked where
+	// they were issued, with the client they were issued to. Switching whose
+	// account is used drops them too, so switching back does not silently
+	// revive a connection nobody made again.
+	forget := moved || newClient || prev.AuthMode != string(in.AuthMode)
+	if forget {
 		if err := r.forgetConnections(ctx, actor, viewOf(prev)); err != nil {
 			return connectors.Connector{}, err
 		}
 	}
 	save := r.c.DB.Connectors().Update
-	if moved || newClient {
+	if forget {
 		// Move also drops a connection stored since the ones above were
 		// revoked (a sign-in that finished meanwhile).
 		save = r.c.DB.Connectors().Move
@@ -238,7 +242,7 @@ func (r *Registry) Delete(ctx context.Context, actor model.Actor, id string) err
 
 // forgetConnections revokes and deletes every account connected to c (as
 // it is before the change): on delete, and when its address, OAuth
-// endpoints or client change (people then connect again).
+// endpoints, client or auth mode change (people then connect again).
 func (r *Registry) forgetConnections(ctx context.Context, actor model.Actor, c connectors.Connector) error {
 	if r.c.Connections == nil {
 		return nil

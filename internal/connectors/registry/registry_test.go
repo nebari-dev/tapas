@@ -343,6 +343,31 @@ func TestAMoveRemovesAConnectionStoredWhileItWasSaved(t *testing.T) {
 	}
 }
 
+// Switching whose account a connector uses drops what was connected, so
+// switching back later does not revive an old company-wide (or personal)
+// connection nobody chose again. It keeps the client secret.
+func TestAnAuthModeChangeForgetsConnections(t *testing.T) {
+	t.Parallel()
+	f := &forgetter{}
+	r := newRegistryWith(t, f)
+	in := fakeInput()
+	in.AuthMode = connectors.AuthShared
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.ClientSecret = ""
+	for _, mode := range []connectors.AuthMode{connectors.AuthUser, connectors.AuthShared} {
+		in.Rev, in.AuthMode = c.Rev, mode
+		if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(f.forgot) != 2 || !c.OAuth.SecretStored {
+		t.Fatalf("forgot %v, secret stored %v", f.forgot, c.OAuth.SecretStored)
+	}
+}
+
 // A client Tapas registered itself is stored on the connector, its secret
 // sealed, marked dynamic; a stale rev is refused.
 func TestRegisteredStoresADynamicClient(t *testing.T) {
