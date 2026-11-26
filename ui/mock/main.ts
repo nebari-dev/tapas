@@ -617,6 +617,74 @@ const secrets: { name: string; note: string; createdAt: string; updatedAt: strin
 // The weekly report's runs get the warehouse password; changing its secrets changes this copy.
 const weekly = { ...weeklyDetail, env: [{ name: 'PGPASSWORD', secret: 'WAREHOUSE_PASSWORD' }, { name: 'REGION', value: 'emea' }] }
 const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join('')
+// Connectors (Settings, Connectors). ?connectors=off answers as a platform with connectors.enabled false.
+const connectorsOff = params.get('connectors') === 'off'
+const connectorRedirect = `${window.location.origin}/settings/connections/callback`
+const connectorCatalog = [
+  {
+    id: 'chat', slug: 'chat', name: 'Team chat', url: 'https://mcp.example.org/chat', authMode: 'user', scopes: ['channels:read', 'chat:write'],
+    toolModes: { list_channels: 'read' }, oauthEndpoints: 'discovered', oauth: {},
+    setup: 'Create an OAuth app at the vendor, add the redirect address shown here, then paste its client id and client secret.',
+    docs: 'https://docs.example.org/chat-mcp',
+  },
+  {
+    id: 'notes', slug: 'notes', name: 'Notes', url: 'https://mcp.example.org/notes', authMode: 'user', scopes: [], toolModes: {},
+    oauthEndpoints: 'discovered', oauth: {}, setup: 'Nothing to create at the vendor: Tapas registers its own OAuth client. Leave the client id and secret empty.', docs: '',
+  },
+  {
+    id: 'tickets', slug: 'tickets', name: 'Tickets', url: '', authMode: 'shared', scopes: ['tickets:read'], toolModes: {}, oauthEndpoints: 'static',
+    oauth: { authorizeUrl: 'https://tickets.example.org/oauth/authorize', tokenUrl: 'https://tickets.example.org/oauth/token' },
+    setup: 'Type the address of your own tickets server, then paste the OAuth client you made there.', docs: '',
+  },
+]
+type MockConnector = Record<string, unknown> & { id: string; rev: string; slug: string; name: string; oauth: Record<string, unknown> }
+let connectorRev = 10
+const connectors: MockConnector[] = [
+  {
+    id: 'c-1', rev: 'r-1', catalogId: 'chat', slug: 'chat', name: 'Team chat', url: 'https://mcp.example.org/chat', authMode: 'user', enabled: true,
+    oauth: { clientId: 'client-1', secretStored: true, registration: 'static', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
+    scopes: ['channels:read', 'chat:write'], allowedGroups: ['data-science', 'ops'], toolModes: { list_channels: 'read', search: 'read' },
+    tools: [
+      { name: 'list_channels', description: 'List the channels you can see', readOnlyHint: true },
+      { name: 'search', description: 'Search messages', readOnlyHint: true },
+      { name: 'read_thread', description: 'Read a thread', readOnlyHint: true },
+      { name: 'post_message', description: 'Post a message to a channel', readOnlyHint: false },
+    ],
+    redirectUri: connectorRedirect, updatedAt: at(-86400 * 3),
+  },
+  {
+    id: 'c-2', rev: 'r-2', catalogId: '', slug: 'wiki', name: 'Company wiki', url: 'https://wiki.example.org/mcp', authMode: 'shared', enabled: false,
+    oauth: { clientId: '', secretStored: false, registration: '', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
+    scopes: [], allowedGroups: ['*'], toolModes: {}, tools: [], redirectUri: connectorRedirect, updatedAt: at(-86400),
+  },
+]
+// The admin connector the mock answers for a request body, as the gateway would store it (the secret is never returned).
+function connectorFrom(b: Record<string, unknown>, prev?: MockConnector): MockConnector {
+  const entry = connectorCatalog.find((e) => e.id === (prev?.catalogId ?? b.catalogId))
+  const o = (b.oauth ?? {}) as Record<string, string>
+  const clientId = o.clientId ?? ''
+  const secretStored = clientId !== '' && (!!o.clientSecret || (!!prev?.oauth.secretStored && prev.oauth.clientId === clientId))
+  return {
+    id: prev?.id ?? `c-${hex(4)}`,
+    rev: `r-${++connectorRev}`,
+    catalogId: prev?.catalogId ?? b.catalogId ?? '',
+    slug: prev?.slug ?? String(b.slug ?? entry?.slug ?? ''),
+    name: (b.name as string) || entry?.name || '',
+    url: (b.url as string) || entry?.url || '',
+    authMode: b.authMode ?? entry?.authMode ?? 'user',
+    enabled: !!b.enabled,
+    oauth: {
+      clientId, secretStored, registration: clientId ? 'static' : '',
+      authorizeUrl: o.authorizeUrl ?? '', tokenUrl: o.tokenUrl ?? '', revokeUrl: o.revokeUrl ?? '',
+    },
+    scopes: b.scopes ?? entry?.scopes ?? [],
+    allowedGroups: b.allowedGroups ?? [],
+    toolModes: b.toolModes ?? entry?.toolModes ?? {},
+    tools: prev?.tools ?? [],
+    redirectUri: connectorRedirect,
+    updatedAt: new Date().toISOString(),
+  }
+}
 
 // The mock signs in a platform admin, so Settings shows the admin pages.
 const admin = { ...me, roles: ['platform-admin', 'member'] }
@@ -917,6 +985,36 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.pathname === '/api/admin/agents' && me.roles.includes('platform-admin')) {
     if (req.method === 'PUT') agentSettings = { ...agentSettings, allowTrusted: (await req.json()).allowTrusted }
     return reply(200, agentSettings)
+  }
+  if (url.pathname.startsWith('/api/admin/connectors')) {
+    if (connectorsOff) return reply(409, { status: 409, title: 'Connectors are off on this platform (connectors.enabled in the platform config).' })
+    if (key === 'GET /api/admin/connectors/catalog') return reply(200, { items: connectorCatalog })
+    if (key === 'GET /api/admin/connectors') return reply(200, { items: connectors })
+    if (key === 'POST /api/admin/connectors') {
+      const b = await req.json()
+      const slug = b.slug || connectorCatalog.find((e) => e.id === b.catalogId)?.slug
+      if (!/^[a-z][a-z0-9]{1,30}$/.test(slug ?? ''))
+        return reply(422, { status: 422, title: 'Something in this form is not valid. Check it and try again.', errors: [{ location: 'body.slug', message: 'Use 2 to 31 lowercase letters and digits, starting with a letter, such as slack.' }] })
+      if (connectors.some((c) => c.slug === slug)) return reply(409, { status: 409, title: `A connector called ${slug} already exists. Pick another short name.` })
+      const c = connectorFrom({ ...b, slug })
+      connectors.push(c)
+      connectors.sort((x, y) => x.slug.localeCompare(y.slug))
+      return reply(201, c)
+    }
+    const one = url.pathname.match(/^\/api\/admin\/connectors\/([^/]+)$/)
+    const i = one ? connectors.findIndex((c) => c.id === one[1]) : -1
+    if (i < 0) return reply(404, { status: 404, title: 'No such connector, or you may not use it.' })
+    if (req.method === 'GET') return reply(200, connectors[i])
+    if (req.method === 'DELETE') {
+      connectors.splice(i, 1)
+      return reply(204, null)
+    }
+    if (req.method === 'PUT') {
+      const b = await req.json()
+      if (b.rev !== connectors[i].rev) return reply(409, { status: 409, title: 'Someone else saved this connector in the meantime. Reload it and make your change again.' })
+      connectors[i] = connectorFrom(b, connectors[i])
+      return reply(200, connectors[i])
+    }
   }
   if (url.pathname === '/api/admin/ai' && me.roles.includes('platform-admin')) {
     if (req.method === 'PUT') {

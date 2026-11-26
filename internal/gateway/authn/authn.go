@@ -314,21 +314,33 @@ func (a *Authenticator) tokenPrincipal(ctx context.Context, w http.ResponseWrite
 	return p.Principal, tok, true
 }
 
-// LiveToken returns the record of an API token that works now, by the same
+// LiveCaller returns the record of an API token that works now, by the same
 // checks as a request with it (its app or job still wants it, its owner's
-// groups are recent enough), or token.ErrInvalid.
-func (a *Authenticator) LiveToken(ctx context.Context, text string) (token.Token, error) {
+// groups are recent enough), with its owner and what its app may do as a
+// coding agent; token.ErrInvalid when it does not work. The owner gets no
+// admin role: nothing it is used for (the MCP endpoint) is admin work.
+func (a *Authenticator) LiveCaller(ctx context.Context, text string) (token.Token, authz.Principal, AgentCaps, error) {
 	tok, err := a.Tokens.Authenticate(ctx, text)
 	if err != nil {
-		return token.Token{}, err
+		return token.Token{}, authz.Principal{}, AgentCaps{}, err
 	}
-	switch _, why, err := a.liveToken(ctx, tok); {
+	owner, why, err := a.liveToken(ctx, tok)
+	switch {
 	case err != nil:
-		return token.Token{}, err
+		return token.Token{}, authz.Principal{}, AgentCaps{}, err
 	case why != "":
-		return token.Token{}, token.ErrInvalid
+		return token.Token{}, authz.Principal{}, AgentCaps{}, token.ErrInvalid
 	}
-	return tok, nil
+	var caps AgentCaps
+	if tok.App != nil && a.Agents != nil {
+		if caps, err = a.Agents(ctx, *tok.App); err != nil {
+			return token.Token{}, authz.Principal{}, AgentCaps{}, err
+		}
+		caps = capsOf(caps, tok)
+	}
+	p := owner.Principal
+	p.MemberOnly = true
+	return tok, p, caps, nil
 }
 
 // tokenOwner is the principal of a live token, and the template of the job

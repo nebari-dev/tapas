@@ -24,6 +24,7 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/capacity"
 	"github.com/nebari-dev/javo/internal/config"
+	"github.com/nebari-dev/javo/internal/connectors"
 	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
 	ctrljobs "github.com/nebari-dev/javo/internal/controller/jobs"
 	"github.com/nebari-dev/javo/internal/controller/workspace"
@@ -202,6 +203,13 @@ type Config struct {
 	// Connectors is the connectors platform admins add; nil while
 	// connectors are off (connectors.enabled), when their routes answer 409.
 	Connectors *connreg.Registry
+	// ConnectorTokens gives connector calls their bearer; nil means nobody
+	// is connected, so no connector tool is offered.
+	ConnectorTokens connectors.TokenSource
+	// ConnectorHTTP reaches connectors: the guarded client (httpx.Guard
+	// with connectors.internalHosts). nil is one that allows no internal
+	// host.
+	ConnectorHTTP *http.Client
 	// TrustedAgents is agents.allowTrusted: owners may let their coding
 	// agents act without asking, unless a platform admin switched it off.
 	TrustedAgents bool
@@ -370,7 +378,7 @@ func NewServer(cfg Config) *Server {
 		http.Redirect(w, r, apiDocsRoute, http.StatusMovedPermanently)
 	}))
 	if cfg.MCP.Enabled {
-		mountMCP(mux, api.OpenAPI(), ws.DescribeActions(), a.LiveToken, cfg.MCP.PublicURL)
+		mountMCP(mux, api.OpenAPI(), ws.DescribeActions(), a, cfg)
 	}
 	if !cfg.DeviceLoginOff {
 		mux.Handle("GET "+llmsRoute, noSniff(a.WithOrigin(llmsHandler(cfg.MCP.PublicURL))))

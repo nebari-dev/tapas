@@ -30,6 +30,8 @@ import (
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/branding"
 	"github.com/nebari-dev/javo/internal/gateway/proxy"
+	"github.com/nebari-dev/javo/internal/httpx"
+	"github.com/nebari-dev/javo/internal/memory"
 	"github.com/nebari-dev/javo/internal/plans"
 	"github.com/nebari-dev/javo/internal/sizes"
 	"github.com/nebari-dev/javo/internal/store"
@@ -220,6 +222,12 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 	if err != nil {
 		return err
 	}
+	// Memory is built here when it is on. Recall, learning and the memories
+	// API take the service from this point. The check runs beside start, so a
+	// mem0 that is down is logged and never holds the gateway back.
+	if mem := wiring.Memory(platform.Memory, on.memoryKey); mem != nil {
+		go func() { _ = memory.Probe(ctx, mem, platform.Memory.URL) }()
+	}
 	proposals := &plans.Service{DB: db, TTL: platform.Plans.TTL.Duration}
 	go proposals.RunJanitor(ctx, time.Minute)
 	go apps.TrustJanitor{DB: db, Policy: apps.TrustPolicy{Config: platform.Agents.TrustedAllowed(), DB: db}, Now: time.Now}.Run(ctx, time.Minute)
@@ -285,6 +293,7 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		AIIncludeOwners: platform.AI.Admin.IncludeOwners,
 		MCP:             platform.MCP,
 		Connectors:      conns,
+		ConnectorHTTP:   httpx.Guard{PublicOnly: true, Internal: platform.Connectors.InternalHosts}.Client(),
 		TrustedAgents:   platform.Agents.TrustedAllowed(),
 		DeviceLoginOff:  !platform.Auth.DeviceLogin.IsEnabled(),
 		Environments:    wiring.EnvironmentSource(platform),

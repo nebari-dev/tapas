@@ -312,6 +312,7 @@ const ADMIN: { to: string; label: string; icon: Part }[] = [
   { to: 'storage', label: 'Storage', icon: 'storage' },
   { to: 'ai', label: 'AI', icon: 'ai' },
   { to: 'agents', label: 'Agents', icon: 'trust' },
+  { to: 'connectors', label: 'Connectors', icon: 'connectors' },
 ]
 
 /** Settings: API tokens and secrets, and for platform admins the admin pages beside them. */

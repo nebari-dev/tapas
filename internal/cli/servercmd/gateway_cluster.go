@@ -92,6 +92,10 @@ func (o *gatewayOptions) clusterParts(ctx context.Context, common *commonFlags, 
 	if err != nil {
 		return none, err
 	}
+	memoryKey, err := memoryKeyOf(ctx, c, platform.Memory)
+	if err != nil {
+		return none, err
+	}
 	// c reads straight from the API server (no cache), as files.Pods needs.
 	pods, err := files.NewPods(files.PodsConfig{
 		Client: c, Namespace: wsNamespace, Image: o.filesImage, IdleAfter: o.filesIdleAfter,
@@ -121,5 +125,6 @@ func (o *gatewayOptions) clusterParts(ctx context.Context, common *commonFlags, 
 		cluster: kubeview.Of(c), machines: machines, apps: workloads, runs: workloads.Runs(),
 		policy: &netprobe.Store{Facts: db.Facts()}, homes: lister, usage: lister,
 		sessionsKey: sessionsKey, sessionsKeyLasting: o.sessionsKeySecret != "", fingerprinter: fp, internalHost: o.internalHost,
+		memoryKey: memoryKey,
 	}, nil
 }

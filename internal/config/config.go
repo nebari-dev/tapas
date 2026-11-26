@@ -65,6 +65,9 @@ type Platform struct {
 	Thumbnails ThumbnailsCfg `json:"thumbnails"`
 	// Nebi lets apps and jobs run in a person's Nebi environment; off by default.
 	Nebi NebiCfg `json:"nebi"`
+	// Memory turns on mem0-backed memory for the gateway's callers; off by
+	// default, and only for executor kubernetes.
+	Memory MemoryCfg `json:"memory"`
 	// Environments configures how apps and jobs get their pixi environments.
 	Environments EnvironmentsCfg `json:"environments"`
 	// Branding is the white-label name, logo, favicon and accent of the UI.
@@ -235,6 +238,32 @@ type NebiCfg struct {
 	// as their owner. The picked environments install with
 	// environments.pixiImage.
 	URL string `json:"url,omitempty"`
+}
+
+// MemoryCfg turns on mem0-backed memory. While Enabled is false the gateway
+// never talks to mem0 and never reads its key.
+type MemoryCfg struct {
+	Enabled bool `json:"enabled"`
+	// URL is the mem0 pack's Service address, such as
+	// http://mem0-nebari-mem0.mem0.svc:8000.
+	URL string `json:"url"`
+	// Timeout bounds search, list, get and delete calls; default 10s.
+	Timeout metav1.Duration `json:"timeout"`
+	// AddTimeout bounds add calls, which are slower because mem0 runs model
+	// extraction inline; default 120s.
+	AddTimeout metav1.Duration `json:"addTimeout"`
+	// APIKeySecret is where mem0's admin key lives.
+	APIKeySecret SecretKeyRef `json:"apiKeySecret"`
+}
+
+// SecretKeyRef names one key of a Secret in a namespace.
+type SecretKeyRef struct {
+	// Namespace is required when memory is on.
+	Namespace string `json:"namespace"`
+	// Name defaults to mem0-admin-key, the mem0 pack's own default.
+	Name string `json:"name"`
+	// Key defaults to api-key, the mem0 pack's own default.
+	Key string `json:"key"`
 }
 
 // AICfg configures the model features. With Enabled false no provider is
@@ -834,6 +863,10 @@ func (p *Platform) applyDefaults() {
 	setDur(&p.API.Tokens.GroupsMaxAge, 7*24*time.Hour)
 	p.API.Limits = p.API.Limits.WithDefaults()
 	setDur(&p.AI.Timeout, 60*time.Second)
+	setDur(&p.Memory.Timeout, 10*time.Second)
+	setDur(&p.Memory.AddTimeout, 120*time.Second)
+	setStr(&p.Memory.APIKeySecret.Name, "mem0-admin-key")
+	setStr(&p.Memory.APIKeySecret.Key, "api-key")
 	setDur(&p.Plans.TTL, 10*time.Minute)
 	if p.AI.DailyTokensPerUser == 0 {
 		p.AI.DailyTokensPerUser = 200000
@@ -941,6 +974,33 @@ func (p Platform) Validate() error {
 		}
 		if p.Auth.OIDC == nil {
 			bad("nebi", "enabled needs auth.oidc: Nebi is asked with the person's OIDC ID token")
+		}
+	}
+	if m := p.Memory; m.Enabled {
+		if u, err := url.Parse(m.URL); m.URL == "" || err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			bad("memory.url", "enabled needs mem0's http or https address with a host (the value is not shown: it may hold a credential)")
+		} else if u.User != nil {
+			// Not echoed: the value may hold a password, and Go would send it to mem0 as Basic auth.
+			bad("memory.url", "must not carry a user name or password: mem0's key comes from apiKeySecret")
+		} else if strings.ContainsAny(m.URL, "?#") {
+			bad("memory.url", "must be mem0's address only, without a query or fragment (the value is not shown: it may hold a token)")
+		}
+		positive("memory.timeout", m.Timeout)
+		positive("memory.addTimeout", m.AddTimeout)
+		if n := m.APIKeySecret.Name; n != "" {
+			if msgs := validation.IsDNS1123Subdomain(n); len(msgs) > 0 {
+				bad("memory.apiKeySecret.name", "%q is not a valid Secret name: %s", n, strings.Join(msgs, "; "))
+			}
+		}
+		if k := m.APIKeySecret.Key; k != "" {
+			if msgs := validation.IsConfigMapKey(k); len(msgs) > 0 {
+				bad("memory.apiKeySecret.key", "%q is not a valid Secret data key: %s", k, strings.Join(msgs, "; "))
+			}
+		}
+		if ns := m.APIKeySecret.Namespace; ns == "" {
+			bad("memory.apiKeySecret.namespace", "required with memory.enabled: the namespace of mem0's admin key Secret")
+		} else if msgs := validation.IsDNS1123Label(ns); len(msgs) > 0 {
+			bad("memory.apiKeySecret.namespace", "%q is not a valid namespace name: %s", ns, strings.Join(msgs, "; "))
 		}
 	}
 	if !p.Auth.Local.Enabled && p.Auth.OIDC == nil {

@@ -3,12 +3,14 @@ package helm
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -355,4 +357,71 @@ func TestTrustedProxySecretIsMountedForTheGateway(t *testing.T) {
 			t.Errorf("%s: Secret edge-proxy is not mounted", engine)
 		}
 	}
+}
+
+// The memory section is passed through as written, and turning it on gives
+// the chart no rights in mem0's namespace: the mem0 pack's own Role lets the
+// gateway read its key Secret there.
+func TestMemoryConfigReachesTheConfigFile(t *testing.T) {
+	t.Parallel()
+	out, err := render(t, "--set", "config.memory.enabled=true",
+		"--set", "config.memory.url=http://mem0-nebari-mem0.mem0.svc:8000",
+		"--set", "config.memory.apiKeySecret.namespace=mem0")
+	if err != nil {
+		t.Fatalf("render: %v\n%s", err, out)
+	}
+	off, err := render(t)
+	if err != nil {
+		t.Fatalf("render with memory off: %v\n%s", err, off)
+	}
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(platformConfigMap(t, out).Data["config.yaml"]), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("config.Load of the rendered memory section: %v", err)
+	}
+	m := p.Memory
+	if !m.Enabled || m.URL != "http://mem0-nebari-mem0.mem0.svc:8000" || m.APIKeySecret.Namespace != "mem0" ||
+		m.APIKeySecret.Name != "mem0-admin-key" || m.APIKeySecret.Key != "api-key" {
+		t.Fatalf("memory = %+v", m)
+	}
+	allowed := map[string]bool{"javo-system": true, "javo-apps": true} // the release and workspace namespaces
+	for _, o := range docs(t, out) {
+		switch r := o.(type) {
+		case *rbacv1.Role:
+			if !allowed[r.Namespace] {
+				t.Errorf("Role %s in namespace %q", r.Name, r.Namespace)
+			}
+		case *rbacv1.RoleBinding:
+			if !allowed[r.Namespace] {
+				t.Errorf("RoleBinding %s in namespace %q", r.Name, r.Namespace)
+			}
+		}
+	}
+	// Reading mem0's Secret is the mem0 pack's Role. Memory adds no cluster-wide
+	// access: the ClusterRoles and ClusterRoleBindings are the same with it on
+	// as with it off.
+	if got, want := clusterRBAC(t, out), clusterRBAC(t, off); !reflect.DeepEqual(got, want) {
+		t.Errorf("cluster-scoped RBAC changes with memory on:\n got %v\nwant %v", got, want)
+	}
+}
+
+// clusterRBAC returns the rendered ClusterRoles and ClusterRoleBindings, by kind and name.
+func clusterRBAC(t *testing.T, out string) map[string]any {
+	t.Helper()
+	got := map[string]any{}
+	for _, o := range docs(t, out) {
+		switch r := o.(type) {
+		case *rbacv1.ClusterRole:
+			got["ClusterRole/"+r.Name] = r.Rules
+		case *rbacv1.ClusterRoleBinding:
+			got["ClusterRoleBinding/"+r.Name] = struct {
+				Subjects []rbacv1.Subject
+				RoleRef  rbacv1.RoleRef
+			}{r.Subjects, r.RoleRef}
+		}
+	}
+	return got
 }

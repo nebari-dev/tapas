@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -55,6 +56,7 @@ import (
 	"github.com/nebari-dev/javo/internal/jobs/engines/marimo"
 	"github.com/nebari-dev/javo/internal/jobs/engines/papermill"
 	"github.com/nebari-dev/javo/internal/jobs/engines/quarto"
+	"github.com/nebari-dev/javo/internal/memory"
 	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/secrets"
 	"github.com/nebari-dev/javo/internal/storage/ids"
@@ -138,6 +140,19 @@ func CodeHosts(p config.Platform) *registry.Registry[codehost.Host] {
 	gh := p.Source.Previews.GitHub
 	r.Register(codehostgithub.New(codehostgithub.Config{APIURL: gh.APIURL, TokenFile: gh.TokenFile}))
 	return r
+}
+
+// Memory is the memory service over the mem0 pack when memory.enabled, or nil
+// when it is off: then nothing talks to mem0. key is mem0's admin key; adding
+// memories gets its own, longer timeout because mem0 asks a model to extract
+// them.
+func Memory(c config.MemoryCfg, key string) *memory.Service {
+	if !c.Enabled {
+		return nil
+	}
+	client := memory.NewMem0(c.URL, key, &http.Client{Timeout: c.Timeout.Duration},
+		memory.WithAddClient(&http.Client{Timeout: c.AddTimeout.Duration}))
+	return memory.NewService(client, nil)
 }
 
 // EnvironmentSource is the environment manager apps and jobs may pick a
