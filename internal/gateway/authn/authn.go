@@ -483,6 +483,16 @@ func ViaAgentToken(ctx context.Context) bool {
 	return caps.Deploy && restricted(ctx)
 }
 
+// AgentCapsOf is what the coding agent's app token the request came with
+// may do as an agent (Authenticator.Agents); zero for any other request.
+func AgentCapsOf(ctx context.Context) AgentCaps {
+	if !viaAppToken(ctx) {
+		return AgentCaps{}
+	}
+	caps, _ := ctx.Value(agentKey{}).(AgentCaps)
+	return caps
+}
+
 // ViaAgentModelToken reports whether the request came with the token of a
 // coding agent that may use the gateway's model (Authenticator.Agents).
 func ViaAgentModelToken(ctx context.Context) bool {

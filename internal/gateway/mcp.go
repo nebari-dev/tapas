@@ -45,26 +45,62 @@ func tokenVerifier(live liveCaller, roles config.Roles) auth.TokenVerifier {
 		if tok.ExpiresAt != nil {
 			info.Expiration = *tok.ExpiresAt
 		}
-		caller := connectors.Caller{Principal: p, Roles: authz.RolesOf(p, roles), Token: tok, AgentApp: caps != (authn.AgentCaps{})}
-		if caller.AgentApp {
-			caller.Agent = tok.App.Short
-		}
-		mcp.SetCaller(info, caller)
+		mcp.SetCaller(info, connectorCaller(p, roles, tok, caps))
 		return info, nil
 	}
 }
 
+// connectorCaller is who calls a connector: p with tok, whose app may act
+// as a coding agent with caps.
+func connectorCaller(p authz.Principal, roles config.Roles, tok token.Token, caps authn.AgentCaps) connectors.Caller {
+	c := connectors.Caller{Principal: p, Roles: authz.RolesOf(p, roles), Token: tok, AgentApp: caps != (authn.AgentCaps{})}
+	if c.AgentApp {
+		c.Agent = tok.App.Short
+	}
+	return c
+}
+
+// requestCaller is who an API request calls a connector as: its token's
+// owner with the token, or the person in their browser session.
+func requestCaller(roles config.Roles) func(context.Context) connectors.Caller {
+	return func(ctx context.Context) connectors.Caller {
+		tok, _ := authn.APIToken(ctx)
+		return connectorCaller(authn.User(ctx), roles, tok, authn.AgentCapsOf(ctx))
+	}
+}
+
+// connectorBroker is the broker of connectors' tools; nil while connectors
+// are off. A binary built with the tag local has none (mcp_local.go).
+type connectorBroker = *broker.Broker
+
+// newConnectorBroker is the one broker the MCP endpoint and the plans'
+// connector-call action share.
+func newConnectorBroker(cfg Config) connectorBroker {
+	if cfg.Connectors == nil {
+		return nil
+	}
+	return broker.New(broker.Config{
+		Connectors: cfg.Connectors, Forwarder: &client.Client{HTTP: connectorHTTP(cfg)}, Tokens: cfg.ConnectorTokens, Audit: cfg.Store.Audit(),
+		PublicURL: cfg.MCP.PublicURL, Now: cfg.Now,
+	})
+}
+
+// connectorActions are the catalog actions b adds: connector-call.
+func connectorActions(b connectorBroker, roles config.Roles) []actions.Action {
+	if b == nil {
+		return nil
+	}
+	return []actions.Action{b.Action(requestCaller(roles))}
+}
+
 // mountMCP serves the agent endpoint at /mcp on mux, over the API mux
-// serves, and the metadata that says where it is. With connectors on, their
-// tools are offered next to Tapas's own. A binary built with the tag local
-// carries none of this (mcp_local.go).
-func mountMCP(mux *http.ServeMux, doc *huma.OpenAPI, acts []actions.Info, a *authn.Authenticator, cfg Config) {
+// serves, and the metadata that says where it is. With connectors on (cb),
+// their tools are offered next to Tapas's own. A binary built with the tag
+// local carries none of this (mcp_local.go).
+func mountMCP(mux *http.ServeMux, doc *huma.OpenAPI, acts []actions.Info, a *authn.Authenticator, cfg Config, cb connectorBroker) {
 	var b mcp.Broker
-	if cfg.Connectors != nil {
-		b = broker.New(broker.Config{
-			Connectors: cfg.Connectors, Forwarder: &client.Client{HTTP: connectorHTTP(cfg)}, Tokens: cfg.ConnectorTokens, Audit: cfg.Store.Audit(),
-			PublicURL: cfg.MCP.PublicURL, Now: cfg.Now,
-		})
+	if cb != nil {
+		b = cb
 	}
 	mux.Handle(mcp.Route, mcp.NewHandler(mcp.Config{
 		API: mux, Doc: doc, Actions: acts, Broker: b,

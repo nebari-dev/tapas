@@ -326,6 +326,7 @@ func NewServer(cfg Config) *Server {
 	limits := cfg.API.Limits.WithDefaults()
 	logStreams := streams.New(limits.StreamsPerPerson)
 	run := workspace.Platform{Exposure: cfg.Exposure, PublicHost: cfg.PublicHost, PixiImage: cfg.PixiImage, LockAgents: cfg.LockAgents}
+	cb := newConnectorBroker(cfg)
 	ws := apps.New(apps.Config{
 		Run:   run,
 		Store: cfg.Store, Cluster: cfg.Cluster, Namespaces: nss, Homes: cfg.Homes, Sizing: sz, Exposure: cfg.Exposure,
@@ -337,6 +338,7 @@ func NewServer(cfg Config) *Server {
 		Plans: cfg.Plans, AI: cfg.AI, AIFeatures: cfg.AIFeatures, AIIncludeOwners: cfg.AIIncludeOwners,
 		People: cfg.People, Sharing: cfg.Sharing, StaleAfter: cfg.StaleAfter,
 		Streams: logStreams, ThumbnailDecodes: limits.ThumbnailDecodes, Agent: cfg.Agent,
+		ExtraActions: connectorActions(cb, cfg.Roles),
 	})
 	ws.Register(api)
 	(&secrets.API{DB: cfg.Store, Roles: cfg.Roles}).Register(api)
@@ -386,7 +388,7 @@ func NewServer(cfg Config) *Server {
 		http.Redirect(w, r, apiDocsRoute, http.StatusMovedPermanently)
 	}))
 	if cfg.MCP.Enabled {
-		mountMCP(mux, api.OpenAPI(), ws.DescribeActions(), a, cfg)
+		mountMCP(mux, api.OpenAPI(), ws.DescribeActions(), a, cfg, cb)
 	}
 	if !cfg.DeviceLoginOff {
 		mux.Handle("GET "+llmsRoute, noSniff(a.WithOrigin(llmsHandler(cfg.MCP.PublicURL))))
