@@ -353,7 +353,7 @@ func TestMem0AnswersMapToErrorsThatNeverCarryTheKeyOrTheBody(t *testing.T) {
 		contains []string
 	}{
 		{name: "401 is refused", status: 401, sentinel: ErrRefused},
-		{name: "404 is not found", status: 404, sentinel: ErrNotFound},
+		{name: "404 on a search names method path and status", status: 404, contains: []string{"POST", "/search", "404"}},
 		{name: "400 names method path and status", status: 400, body: body, contains: []string{"POST", "/search", "400"}},
 		{name: "500 names method path and status", status: 500, body: body, contains: []string{"POST", "/search", "500"}},
 		{name: "an oversized body errors", status: 200, body: strings.Repeat("a", maxBody+1), contains: []string{"POST", "/search", "larger than"}},
@@ -496,5 +496,47 @@ func TestMem0WithANilClientUsesATenSecondTimeout(t *testing.T) {
 	c := NewMem0("http://mem0.invalid", testKey, nil, WithAddClient(nil))
 	if c.client.Timeout != 10*time.Second || c.addClient.Timeout != 10*time.Second {
 		t.Errorf("timeouts = %v, %v; want 10s", c.client.Timeout, c.addClient.Timeout)
+	}
+}
+
+// A 404 means "no such memory" only for a get or delete by id. The mem0
+// pack's allowlist answers 404 for any route it does not allow, so for
+// search, list and add it is a wrong address or a changed pack, and must not
+// look like an empty result.
+func TestMem0A404IsNotFoundOnlyForByIDCalls(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+	c := NewMem0(srv.URL, testKey, srv.Client())
+	ctx := context.Background()
+	tests := []struct {
+		name         string
+		run          func() error
+		wantNotFound bool
+		contains     []string
+	}{
+		{"get", func() error { _, err := c.Get(ctx, idA); return err }, true, nil},
+		{"delete", func() error { return c.Delete(ctx, idA) }, true, nil},
+		{"search", func() error { _, err := c.Search(ctx, "alice", "", "q", 5); return err }, false, []string{"POST", "/search", "404"}},
+		{"list", func() error { _, err := c.List(ctx, "alice"); return err }, false, []string{"GET", "/memories", "404"}},
+		{"add", func() error {
+			_, err := c.Add(ctx, "alice", "", []Message{{Role: "user", Text: "hi"}})
+			return err
+		}, false, []string{"POST", "/memories", "404"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if err == nil {
+				t.Fatal("want an error")
+			}
+			if got := errors.Is(err, ErrNotFound); got != tt.wantNotFound {
+				t.Errorf("errors.Is(ErrNotFound) = %v, want %v (err %v)", got, tt.wantNotFound, err)
+			}
+			for _, s := range tt.contains {
+				if !strings.Contains(err.Error(), s) {
+					t.Errorf("err %q lacks %q", err, s)
+				}
+			}
+		})
 	}
 }

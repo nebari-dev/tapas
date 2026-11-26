@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"log/slog"
 )
 
 // WriteCheck decides whether msgs may be remembered for owner. Nil from it
@@ -29,7 +30,7 @@ func (s *Service) Search(ctx context.Context, owner, agent, query string, limit 
 	if err != nil {
 		return nil, err
 	}
-	return ownedBy(owner, got), nil
+	return keep(owner, agent, got), nil
 }
 
 // Add remembers what msgs say for owner, once the write check allows it.
@@ -54,7 +55,7 @@ func (s *Service) List(ctx context.Context, owner string) ([]Memory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ownedBy(owner, got), nil
+	return keep(owner, "", got), nil
 }
 
 // Get returns the memory with id if it is owner's; another person's is
@@ -89,14 +90,22 @@ func checkScopes(owner, agent string) error {
 	return checkAgent(agent)
 }
 
-// ownedBy keeps the memories whose UserID is exactly owner, so a store that
-// returns someone else's cannot leak it.
-func ownedBy(owner string, in []Memory) []Memory {
+// keep returns the memories whose UserID is exactly owner and, when agent is
+// set, whose AgentID is exactly agent, so a store that returns someone else's
+// cannot leak it. When it drops any it logs one warning with the count and
+// the dropped ids: never memory text and never another person's name.
+func keep(owner, agent string, in []Memory) []Memory {
 	out := make([]Memory, 0, len(in))
+	var dropped []string
 	for _, m := range in {
-		if m.UserID == owner {
+		if m.UserID == owner && (agent == "" || m.AgentID == agent) {
 			out = append(out, m)
+		} else {
+			dropped = append(dropped, m.ID)
 		}
+	}
+	if len(dropped) > 0 {
+		slog.Warn("memory.foreign_dropped", "count", len(dropped), "ids", dropped)
 	}
 	return out
 }
