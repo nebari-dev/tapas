@@ -4,10 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/nebari-dev/javo/internal/connectors/client"
 	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
@@ -105,5 +110,65 @@ func TestARedirectIsNotFollowed(t *testing.T) {
 	}
 	if fake.Requests() != 0 {
 		t.Fatalf("the redirect target was reached %d times", fake.Requests())
+	}
+}
+
+// serveTools starts an MCP server (no auth) listing tools, pageSize per
+// page.
+func serveTools(t *testing.T, pageSize int, tools ...*sdk.Tool) string {
+	t.Helper()
+	server := sdk.NewServer(&sdk.Implementation{Name: "fake", Version: "1"}, &sdk.ServerOptions{PageSize: pageSize})
+	for _, tl := range tools {
+		server.AddTool(tl, func(context.Context, *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+			return &sdk.CallToolResult{}, nil
+		})
+	}
+	s := httptest.NewServer(sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, nil))
+	t.Cleanup(s.Close)
+	return s.URL
+}
+
+func tool(name string) *sdk.Tool {
+	return &sdk.Tool{Name: name, Description: "a tool", InputSchema: map[string]any{"type": "object"}}
+}
+
+// A tool whose description, title or whole definition is past its cap is
+// left out; the others are listed.
+func TestOversizedToolsAreLeftOut(t *testing.T) {
+	t.Parallel()
+	long := func(n int) string { return strings.Repeat("x", n) }
+	verbose, titled, annotated, huge := tool("verbose"), tool("titled"), tool("annotated"), tool("huge")
+	verbose.Description = long(client.MaxToolDescription + 1)
+	titled.Title = long(client.MaxToolTitle + 1)
+	annotated.Annotations = &sdk.ToolAnnotations{Title: long(client.MaxToolTitle + 1)}
+	huge.InputSchema = map[string]any{"type": "object", "description": long(client.MaxTool)}
+	url := serveTools(t, 2, tool("small"), verbose, titled, annotated, huge, tool("other"))
+	tools, err := newClient().ListTools(ctx, client.Target{URL: url}, "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, tl := range tools {
+		names = append(names, tl.Name)
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"other", "small"}) {
+		t.Fatalf("tools %v", names)
+	}
+}
+
+// A list whose tools together pass MaxToolList bytes is refused, however
+// small each page is.
+func TestAToolListPastTheTotalCapIsRefused(t *testing.T) {
+	t.Parallel()
+	var tools []*sdk.Tool
+	for i := range client.MaxToolList/(client.MaxToolDescription) + 1 {
+		tl := tool(fmt.Sprintf("t%d", i))
+		tl.Description = strings.Repeat("x", client.MaxToolDescription)
+		tools = append(tools, tl)
+	}
+	url := serveTools(t, 5, tools...)
+	if got, err := newClient().ListTools(ctx, client.Target{URL: url}, "tok"); !errors.Is(err, client.ErrTooLarge) || got != nil {
+		t.Fatalf("%d tools, %v", len(got), err)
 	}
 }

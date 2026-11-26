@@ -41,6 +41,14 @@ const (
 	MaxBody   = 4 << 20
 	MaxResult = 1 << 20
 	MaxTools  = 1000
+	// MaxToolList is the most bytes (as JSON) of all the tools a connector
+	// lists, over every page; a longer list is refused whole.
+	MaxToolList = 1 << 20
+	// A tool larger than MaxTool bytes (as JSON), or whose description or
+	// title is longer than these, is left out of the list.
+	MaxTool            = 64 << 10
+	MaxToolDescription = 8 << 10
+	MaxToolTitle       = 256
 )
 
 // Errors a call fails with, by class. Their text holds nothing the
@@ -63,18 +71,30 @@ type Client struct {
 
 var _ Forwarder = (*Client)(nil)
 
-// ListTools lists every tool of the connector.
+// ListTools lists every tool of the connector, leaving out the ones past
+// their size caps. More than MaxTools tools, or MaxToolList bytes of them
+// (counting the ones left out), is ErrTooLarge.
 func (c *Client) ListTools(ctx context.Context, t Target, bearer string) ([]*sdk.Tool, error) {
 	var tools []*sdk.Tool
 	err := c.session(ctx, t, bearer, or(c.ListTimeout, ListTimeout), func(ctx context.Context, cs *sdk.ClientSession) error {
+		seen, size := 0, 0
 		for tl, err := range cs.Tools(ctx, nil) {
 			if err != nil {
 				return err
 			}
-			if len(tools) == MaxTools {
+			b, err := json.Marshal(tl)
+			if err != nil {
+				return err
+			}
+			if seen++; seen > MaxTools {
 				return ErrTooLarge
 			}
-			tools = append(tools, tl)
+			if size += len(b); size > MaxToolList {
+				return ErrTooLarge
+			}
+			if fits(tl, len(b)) {
+				tools = append(tools, tl)
+			}
 		}
 		return nil
 	})
@@ -111,6 +131,12 @@ func (c *Client) CallTool(ctx context.Context, t Target, bearer, name string, ar
 		return nil, err
 	}
 	return res, nil
+}
+
+// fits reports whether tl, size bytes as JSON, is within the per-tool caps.
+func fits(tl *sdk.Tool, size int) bool {
+	return size <= MaxTool && len(tl.Description) <= MaxToolDescription && len(tl.Title) <= MaxToolTitle &&
+		(tl.Annotations == nil || len(tl.Annotations.Title) <= MaxToolTitle)
 }
 
 func or(d, def time.Duration) time.Duration {
