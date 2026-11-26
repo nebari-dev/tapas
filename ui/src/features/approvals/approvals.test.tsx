@@ -64,6 +64,27 @@ const del = plan({
   },
 })
 
+/** Claude Code asks to post a message in the Chat connector, which cannot be taken back. */
+const post = plan({
+  id: 'p4',
+  source: 'mcp:claude-code',
+  requestedBy: { token: 'laptop' },
+  createdAt: minutesAgo(1),
+  expiresAt: inMinutes(9),
+  planned: {
+    action: 'connector-call',
+    target: 'chat__post_message',
+    targetName: 'Chat',
+    params: { arguments: '{"channel":"c-1","text":"hello"}' },
+    summary: 'Chat: post_message',
+    destructive: true,
+    changes: [
+      { field: 'channel', from: '', to: '"c-1"' },
+      { field: 'text', from: '', to: '"hello"' },
+    ],
+  },
+})
+
 const ATTACH_Q = 'Let the Sales dashboard app use your secret STRIPE_KEY?'
 
 const chips = (card: HTMLElement) => within(within(card).getByRole('list', { name: 'What happens' })).getAllByRole('listitem').map((li) => li.textContent)
@@ -192,6 +213,29 @@ describe('Approvals inbox', () => {
     await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete Research lab' }))
     await waitFor(() => expect(calls.count('POST', '/api/plans/p2/approve')).toBe(1))
     expect(await within(card).findByText('Deleted. Files in its home folder are kept.')).toBeTruthy()
+  })
+
+  it('shows a connector call with every value it sends, and asks before one that cannot be undone', async () => {
+    const calls = mockApi({
+      'GET /api/me': { body: me },
+      'GET /api/plans': [{ body: [post] }, { body: [] }],
+      'POST /api/plans/p4/approve': { body: { ...post, state: 'applied' } },
+    })
+    renderApp('/approvals')
+    const card = await screen.findByRole('article', { name: 'Let Claude Code run post_message in Chat?' })
+    expect(card.querySelector('.say')?.textContent).toBe('Chat gets this call once, with exactly these values.')
+    const values = within(card).getByRole('group', { name: 'Values sent' })
+    expect(within(values).getByText('channel').nextElementSibling?.textContent).toBe('"c-1"')
+    expect(within(values).getByText('text').nextElementSibling?.textContent).toBe('"hello"')
+    expect(chips(card)).toEqual(['Acts in Chat', "Can't be undone"])
+    await userEvent.click(within(card).getByRole('button', { name: 'Details' }))
+    const details = within(card).getByRole('group', { name: 'Details' })
+    expect(within(details).getByText('Connector').nextElementSibling?.textContent).toBe('Chat')
+    expect(within(details).queryByText('App')).toBeNull()
+    await userEvent.click(within(card).getByRole('button', { name: 'Run post_message' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Run post_message in Chat?' })).getByRole('button', { name: 'Run post_message' }))
+    await waitFor(() => expect(calls.count('POST', '/api/plans/p4/approve')).toBe(1))
+    expect(await within(card).findByText('Done. Chat took the call.')).toBeTruthy()
   })
 
   it('counts waiting requests on the sidebar item', async () => {

@@ -591,6 +591,12 @@ button.tree-twist:hover{background:var(--hover);color:var(--text)}
 .det dt{color:var(--text-2)}
 .det dd{margin:0;overflow-wrap:anywhere}
 .det code{white-space:normal;overflow-wrap:anywhere}
+/* A connector call's values, shown on the card itself as Details shows its rows. */
+.rq .values{margin:0 0 10px;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 18px;font-size:var(--fs-xs);background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.rq .values>div{display:contents}
+.rq .values dt{color:var(--text-2)}
+.rq .values dd{margin:0;overflow-wrap:anywhere}
+.rq .values code{white-space:normal;overflow-wrap:anywhere}
 .rq-done{margin:0;display:flex;align-items:center;gap:10px;font-size:var(--fs-sm);color:var(--text-2)}
 .rq-done svg{flex:none;color:var(--ok)}
 .rq-done.bad svg{color:var(--err)}
