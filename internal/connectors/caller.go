@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/nebari-dev/javo/internal/actions"
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/authz"
 )
@@ -23,7 +24,22 @@ type Caller struct {
 	AgentApp bool
 	// Client is what the MCP client calls itself; display only.
 	Client string
+	// Propose stores p as a plan for this caller through POST /api/plans,
+	// with the caller's own credentials, so the scope, owner and pending
+	// cap checks of any proposal apply. A refusal by that route is a
+	// *ProposalRefused. nil when the caller cannot propose.
+	Propose func(ctx context.Context, p actions.Proposal) (Proposed, error)
 }
+
+// Proposed is a plan a proposal became: its handle and the page its owner
+// approves it at.
+type Proposed struct{ ID, ApproveURL string }
+
+// ProposalRefused is a proposal the plans route turned down; Text is its
+// answer, for the agent.
+type ProposalRefused struct{ Text string }
+
+func (e *ProposalRefused) Error() string { return e.Text }
 
 // MayUseConnectors reports whether c's token may reach connectors at all:
 // a personal token, or the token of a coding agent's app. Any other app's

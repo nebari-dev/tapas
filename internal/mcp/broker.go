@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nebari-dev/javo/internal/actions"
 	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/reasons"
 )
@@ -47,10 +48,27 @@ func callerOf(req sdk.Request) (connectors.Caller, bool) {
 	return c, ok
 }
 
-// brokerMiddleware adds b's tools to the last page of tools/list, and
+// proposer is how the caller of req proposes a connector call: through
+// the plans route with req's own credentials, exactly as the propose tools
+// do.
+func (cfg Config) proposer(req *sdk.CallToolRequest) func(context.Context, actions.Proposal) (connectors.Proposed, error) {
+	return func(ctx context.Context, p actions.Proposal) (connectors.Proposed, error) {
+		plan, refused, err := cfg.propose(ctx, req, p)
+		switch {
+		case err != nil:
+			return connectors.Proposed{}, err
+		case refused != nil:
+			return connectors.Proposed{}, &connectors.ProposalRefused{Text: refused.Content[0].(*sdk.TextContent).Text}
+		}
+		return connectors.Proposed{ID: plan.ID, ApproveURL: cfg.approveURL(plan.ID)}, nil
+	}
+}
+
+// brokerMiddleware adds cfg.Broker's tools to the last page of tools/list, and
 // sends tools/call of a name holding connectors.ToolSeparator to b, never
 // to Tapas's own tools (whose names never hold it).
-func brokerMiddleware(b Broker) sdk.Middleware {
+func brokerMiddleware(cfg Config) sdk.Middleware {
+	b := cfg.Broker
 	return func(next sdk.MethodHandler) sdk.MethodHandler {
 		return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
 			switch method {
@@ -73,6 +91,7 @@ func brokerMiddleware(b Broker) sdk.Middleware {
 				if !ok {
 					return errorResult(reasons.Msg(reasons.MsgConnectorToolNotFound)), nil
 				}
+				c.Propose = cfg.proposer(call)
 				if res, ok := b.Call(ctx, c, call.Params.Name, call.Params.Arguments); ok {
 					return res, nil
 				}

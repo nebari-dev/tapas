@@ -91,7 +91,7 @@ func NewHandler(cfg Config) http.Handler {
 		server.AddTool(t.tool, t.handle)
 	}
 	if cfg.Broker != nil {
-		server.AddReceivingMiddleware(brokerMiddleware(cfg.Broker))
+		server.AddReceivingMiddleware(brokerMiddleware(cfg))
 	}
 	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{SessionTimeout: SessionIdle})
 	authed := auth.RequireBearerToken(cfg.Verify, &auth.RequireBearerTokenOptions{
@@ -314,23 +314,41 @@ func proposeTool(cfg Config, a actions.Info) tool {
 				prop.Params[p.Name] = v
 			}
 		}
-		body, _ := json.Marshal(map[string]any{"source": "mcp:" + clientName(req.Session), "proposal": prop})
-		res, err := cfg.call(ctx, req, http.MethodPost, "/api/plans", body)
-		if err != nil || res.IsError {
+		plan, res, err := cfg.propose(ctx, req, prop)
+		if err != nil || res != nil {
 			return res, err
 		}
-		var plan struct {
-			ID      string          `json:"id"`
-			Planned actions.Planned `json:"planned"`
-		}
-		_ = json.Unmarshal([]byte(res.Content[0].(*sdk.TextContent).Text), &plan)
 		out := map[string]any{
 			"planId": plan.ID, "state": "awaiting_approval", "summary": plan.Planned.Summary, "changes": plan.Planned.Changes,
-			"approveUrl": strings.TrimRight(cfg.PublicURL, "/") + "/approvals/" + url.PathEscape(plan.ID),
+			"approveUrl": cfg.approveURL(plan.ID),
 		}
 		b, _ := json.Marshal(out)
 		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(b)}}, StructuredContent: out}, nil
 	}}
+}
+
+// proposedPlan is the part of the plans route's answer the tools use.
+type proposedPlan struct {
+	ID      string          `json:"id"`
+	Planned actions.Planned `json:"planned"`
+}
+
+// propose stores prop as a plan through POST /api/plans as the caller of
+// req, from the agent that names itself in req's session. A refusal is
+// answered as the tool error res, with the route's own words.
+func (cfg Config) propose(ctx context.Context, req *sdk.CallToolRequest, prop actions.Proposal) (plan proposedPlan, res *sdk.CallToolResult, err error) {
+	body, _ := json.Marshal(map[string]any{"source": "mcp:" + clientName(req.Session), "proposal": prop})
+	res, err = cfg.call(ctx, req, http.MethodPost, "/api/plans", body)
+	if err != nil || res.IsError {
+		return proposedPlan{}, res, err
+	}
+	_ = json.Unmarshal([]byte(res.Content[0].(*sdk.TextContent).Text), &plan)
+	return plan, nil, nil
+}
+
+// approveURL is the page plan id is approved at.
+func (cfg Config) approveURL(id string) string {
+	return strings.TrimRight(cfg.PublicURL, "/") + "/approvals/" + url.PathEscape(id)
 }
 
 func ptr[T any](v T) *T { return &v }
