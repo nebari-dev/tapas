@@ -17,8 +17,8 @@ import (
 
 type myConnector struct {
 	ID, Slug, Name, AuthMode, Status, ConnectURL, ConnectedAt, CatalogID string
-	Connected                                                 bool
-	Tools                                                     []struct{ Name, Mode string }
+	Connected                                                            bool
+	Tools                                                                []struct{ Name, Mode string }
 }
 
 type adminView struct {
