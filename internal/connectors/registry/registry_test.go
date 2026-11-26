@@ -394,6 +394,28 @@ func TestRegisteredStoresADynamicClient(t *testing.T) {
 	}
 }
 
+// A client Tapas registered belongs to the server it registered at: moving
+// the connector drops it (and its secret) instead of asking the admin for
+// a secret they never had, so the next sign-in registers a new one.
+func TestAMoveDropsARegisteredClient(t *testing.T) {
+	t.Parallel()
+	r, _ := newRegistry(t)
+	in := fakeInput()
+	in.ClientID, in.ClientSecret = "", ""
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, err = r.Registered(ctx, alice, c, "dyn-1", secret); err != nil {
+		t.Fatal(err)
+	}
+	in.Rev, in.ClientID, in.URL = c.Rev, "dyn-1", "https://mcp.example.org/v2/mcp"
+	c, err = r.Update(ctx, alice, c.ID, in)
+	if err != nil || c.OAuth.ClientID != "" || c.OAuth.SecretStored || c.OAuth.Registration != "" {
+		t.Fatalf("moved: %+v, %v", c.OAuth, err)
+	}
+}
+
 func TestSetToolsReplacesTheSnapshot(t *testing.T) {
 	t.Parallel()
 	r, _ := newRegistry(t)
