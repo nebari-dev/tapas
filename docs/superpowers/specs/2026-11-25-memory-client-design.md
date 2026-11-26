@@ -85,11 +85,11 @@ type SecretKeyRef struct {
 }
 ```
 
-`Platform.Memory MemoryCfg `json:"memory"``. Defaults in `applyDefaults`: timeout 10s, addTimeout 120s, name `mem0-admin-key`, key `api-key` (the mem0 pack's defaults). `Validate`: when enabled, `memory.url` must be an `http`/`https` URL with a host; `memory.apiKeySecret.namespace` must be set and a valid DNS-1123 label. `misplaced()`: `memory` only with executor kubernetes.
+`Platform.Memory MemoryCfg `json:"memory"``. Defaults in `applyDefaults`: timeout 10s, addTimeout 120s, name `mem0-admin-key`, key `api-key` (the mem0 pack's defaults). `Validate`: when enabled, `memory.url` must be an `http`/`https` URL with a host; `memory.apiKeySecret.namespace` must be set and a valid DNS-1123 label; `memory.timeout` and `memory.addTimeout` must be positive (unset takes the default; a negative value is refused, naming the key); `memory.apiKeySecret.name` must be a valid Secret name (DNS-1123 subdomain) and `memory.apiKeySecret.key` a valid Secret data key. `misplaced()`: `memory` only with executor kubernetes.
 
 ### Key read (`internal/cli/servercmd`, tapas#15)
 
-In `clusterParts` (gateway only), when `platform.Memory.Enabled`: read Secret `apiKeySecret.namespace/name` with the existing cache-less controller-runtime client; take `data[key]`, `strings.TrimSpace`; empty or missing is an error `"Secret ns/name has no \"key\""`; a read error is wrapped `"read the mem0 key Secret ns/name: %w"`. The value goes into a new `gatewayParts.memoryKey`. Never logged, never in an error. The `local` stand-in is unaffected (memory is refused for non-Kubernetes executors at load).
+In `clusterParts` (gateway only), when `platform.Memory.Enabled`: read Secret `apiKeySecret.namespace/name` with the existing cache-less controller-runtime client; take `data[key]` exactly as stored, not trimmed (mem0 v2.2.1 compares `ADMIN_API_KEY` to `X-API-Key` exactly, so a padded value can never work); empty or missing is an error `"Secret ns/name has no \"key\""`; a value with leading or trailing whitespace (`unicode.IsSpace`) is an error naming the Secret and key but not the value; a read error is wrapped `"read the mem0 key Secret ns/name: %w"`. The value goes into a new `gatewayParts.memoryKey`. Never logged, never in an error. The `local` stand-in is unaffected (memory is refused for non-Kubernetes executors at load).
 
 No RBAC change in the Tapas chart and no `+kubebuilder:rbac` marker: the mem0 pack's chart creates a Role in mem0's namespace allowing `get` on that one Secret, bound to the ServiceAccount named in its `callers` values. The gateway's account is `javo-controller` with SQLite and `javo-gateway` with Postgres (`javo.account` in `_helpers.tpl`).
 
@@ -139,7 +139,7 @@ type Client interface {
 | Optional features are a config section with `Enabled`, validated in `Validate` with `bad(key, ...)`, defaults in `applyDefaults` | [inferred] | internal/config/config.go:221-241, 869-922 | no |
 | Settings that mean nothing on some executors are refused by `misplaced()` | [inferred] | internal/config/executor.go:79-111 | no |
 | Cluster-only reads live in `*_cluster.go`, gateway inputs travel in `gatewayParts` | [inferred] | internal/cli/servercmd/gateway_cluster.go:43-97, host.go:125-151 | no |
-| Secret values read at start: refuse empty, TrimSpace, never in errors | [inferred] | internal/cli/servercmd/common_cluster.go:29-35, internal/controller/secretskey/secretskey.go | no |
+| Secret values read at start: refuse empty, never in errors (the mem0 key is refused when padded, not trimmed, because mem0 compares it exactly) | [inferred] | internal/cli/servercmd/common_cluster.go:29-35, internal/controller/secretskey/secretskey.go | no |
 | Wiring is the only composition root; an off feature is a nil dependency | [documented: internal/cli/wiring/wiring.go:1-4] | internal/cli/wiring/wiring.go:142-285 | n/a |
 | Hand-rolled HTTP clients: one `do`, status to sentinel errors, size-limited bodies, error texts carry the path, never a token | [inferred] | internal/features/envnebi/nebi.go:37-250 | no |
 | Fakes for tests live in `<pkg>test` packages that implement the production interface and record calls | [inferred] | internal/ai/aitest/scripted.go | no |
@@ -243,7 +243,7 @@ memory.Service ← memory.Client (Mem0 in production, memorytest.Fake in tests),
 | Boundary | Seam | Real/fake | Level | Proves |
 |---|---|---|---|---|
 | Config | `config.Parse` | real | unit, table-driven | defaults, validation errors name the key, refusal on docker/process |
-| Key read | controller-runtime `client.Client` | `fake.NewClientBuilder` with the Secret in another namespace | unit | value read and trimmed; missing Secret, missing key and empty value fail with the Secret's name and never the value |
+| Key read | controller-runtime `client.Client` | `fake.NewClientBuilder` with the Secret in another namespace | unit | value read as stored; missing Secret, missing key, empty value and a value with leading or trailing whitespace fail with the Secret's name and never the value (neither as text nor as the byte-slice form a formatted Secret would print) |
 | mem0 client | `*http.Client` against `httptest` | fake mem0 server modelled on the pack's allowlist and mem0 v2.2.1 responses | unit, table-driven | requests carry X-API-Key and the scope rules; status mapping; `200 null`; id check; no key in errors |
 | Service | `memory.Client` | `memorytest.Fake` | unit | ownership on get/delete, foreign results dropped, empty owner refused, WriteCheck honoured |
 | Probe | `*Service` over `httptest` | fake | unit | ready and unreachable log lines |
@@ -257,7 +257,7 @@ Defined by the builder under the owner's delegation (2026-11-25).
 
 | # | Item | Proof | Check method | Evidence |
 |---|------|-------|--------------|----------|
-| 1 | An admin turns memory on and the gateway reads mem0's key from mem0's namespace at start | With `memory.enabled` and `apiKeySecret.namespace: mem0`, `memoryKeyOf` on a cluster holding Secret `mem0/mem0-admin-key` returns its trimmed `api-key`; the same call with the Secret absent, the key absent, or an empty value returns an error naming `mem0/mem0-admin-key` and not containing the value | automated: `go test ./internal/cli/servercmd -run Memory` | |
+| 1 | An admin turns memory on and the gateway reads mem0's key from mem0's namespace at start | With `memory.enabled` and `apiKeySecret.namespace: mem0`, `memoryKeyOf` on a cluster holding Secret `mem0/mem0-admin-key` returns its `api-key`; the same call with the Secret absent, the key absent, an empty value, or a padded value returns an error naming `mem0/mem0-admin-key` and not containing the value | automated: `go test ./internal/cli/servercmd -run Memory` | |
 | 2 | A memory misconfiguration fails at load and says what is wrong | `memory.enabled` without `url`, with a non-http URL, without `apiKeySecret.namespace`, or under executor docker or process, each fails `config.Parse` with an error naming the key; an unset section loads with memory off | automated: `go test ./internal/config -run Memory` | |
 | 3 | Tapas can add, search, list, get and delete one person's memories in the real mem0 pack | Against the mem0 pack server image (allowlist on) with pgvector and the fake model in Docker: an add for alice, then search and list for alice find it, get by id returns it with alice's id, delete removes it, and a get afterwards is `ErrNotFound` | automated: `bash scripts/test/mem0-integration.sh` (not in CI; Docker and a mem0 pack checkout at a pinned commit); narrated: its transcript | |
 | 4 | One person can never read or delete another person's memory through the service | With memories for alice and bob seeded in `memorytest.Fake`: `Get(alice, bobsID)` and `Delete(alice, bobsID)` return `ErrNotFound` and the fake records no delete call; `Search`/`List` for alice never return bob's memory even when the client returns it; an empty owner is refused before any client call | automated: `go test ./internal/memory -run Service` | |

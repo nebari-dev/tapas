@@ -4,6 +4,7 @@ package servercmd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -42,9 +43,19 @@ func TestMemoryKeyIsReadFromMem0sNamespace(t *testing.T) {
 		mustHide string
 	}{
 		{
-			name: "trims the value",
-			objs: []client.Object{memSecret("mem0", "mem0-admin-key", map[string][]byte{"api-key": []byte("abc123\n")})},
+			name: "returns the value as stored",
+			objs: []client.Object{memSecret("mem0", "mem0-admin-key", map[string][]byte{"api-key": []byte("abc123")})},
 			want: "abc123",
+		},
+		{
+			name:    "trailing newline is refused, not trimmed",
+			objs:    []client.Object{memSecret("mem0", "mem0-admin-key", map[string][]byte{"api-key": []byte("pad-secret-1\n")})},
+			wantErr: []string{"mem0/mem0-admin-key", "api-key", "whitespace"}, mustHide: "pad-secret-1\n",
+		},
+		{
+			name:    "leading space is refused, not trimmed",
+			objs:    []client.Object{memSecret("mem0", "mem0-admin-key", map[string][]byte{"api-key": []byte(" pad-secret-2")})},
+			wantErr: []string{"mem0/mem0-admin-key", "api-key", "whitespace"}, mustHide: " pad-secret-2",
 		},
 		{
 			name:    "no Secret",
@@ -84,8 +95,15 @@ func TestMemoryKeyIsReadFromMem0sNamespace(t *testing.T) {
 					t.Errorf("error %q lacks %q", err, s)
 				}
 			}
-			if tt.mustHide != "" && strings.Contains(err.Error(), tt.mustHide) {
-				t.Errorf("error %q holds a key value", err)
+			// The value, exactly as stored, must not appear as text, nor as the
+			// Go byte-slice form an error gets from formatting the Secret or
+			// its Data.
+			if tt.mustHide != "" {
+				for _, form := range []string{tt.mustHide, strings.TrimSpace(tt.mustHide), fmt.Sprint([]byte(tt.mustHide))} {
+					if strings.Contains(err.Error(), form) {
+						t.Errorf("error %q holds a key value (%q)", err, form)
+					}
+				}
 			}
 			if got != "" {
 				t.Errorf("key %q returned with an error", got)
