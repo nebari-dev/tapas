@@ -38,6 +38,7 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/authz"
 	"github.com/nebari-dev/javo/internal/config"
+	"github.com/nebari-dev/javo/internal/connectors"
 	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
 	"github.com/nebari-dev/javo/internal/core/registry"
 	"github.com/nebari-dev/javo/internal/diagnose"
@@ -166,8 +167,13 @@ type Options struct {
 	Mcp bool
 	// PublicURL is mcp.publicURL, the address agents reach the gateway at.
 	PublicURL string
-	// Connectors turns connectors on (Fixture.Connectors).
-	Connectors bool
+	// Connectors turns connectors on (Fixture.Connectors), with plain http
+	// allowed to ConnectorInternalHosts. ConnectorTokens and ConnectorHTTP
+	// are Config's.
+	Connectors             bool
+	ConnectorInternalHosts []string
+	ConnectorTokens        connectors.TokenSource
+	ConnectorHTTP          *http.Client
 	// AgentModel serves the coding agents' model endpoint.
 	AgentModel *agentproxy.Proxy
 	// Agent is the admin's agent model and template.
@@ -300,7 +306,7 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 		if err != nil {
 			t.Fatal(err)
 		}
-		conns = connreg.New(connreg.Config{DB: db, Seal: key})
+		conns = connreg.New(connreg.Config{DB: db, Seal: key, InternalHosts: o.ConnectorInternalHosts})
 	}
 	rv := authn.NewRevalidator(providers, sessions, people, 0, o.Now)
 	var exp exposure.Backend = exposurepath.New(o.Urls)
@@ -332,6 +338,7 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 		NetworkPolicy: policy, Engines: o.Engines, ContainerImages: o.Images, Ready: o.Ready, PreviewsEnabled: o.Previews, Thumbnails: o.Thumbnails, PreviewsMaxPerApp: o.PreviewsMax, CodeHosts: o.CodeHosts, Backups: o.Backups,
 		Environments: o.Environments, PublicHost: o.PublicHost, PixiImage: o.PixiImage, LockAgents: o.LockAgents,
 		TrustedAgents: !o.NoTrustedAgents, DeviceLoginOff: o.NoDeviceLogin, Connectors: conns,
+		ConnectorTokens: o.ConnectorTokens, ConnectorHTTP: o.ConnectorHTTP,
 	})
 	return &Fixture{AI: live, Connectors: conns, T: t, Client: c, Db: db, People: people, Store: sessions, Tokens: tokens, Srv: srv, Revalidator: rv, secure: o.Urls.SecureCookies(o.Secure)}
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/branding"
 	"github.com/nebari-dev/javo/internal/gateway/proxy"
+	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/plans"
 	"github.com/nebari-dev/javo/internal/sizes"
 	"github.com/nebari-dev/javo/internal/store"
@@ -285,6 +286,7 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		AIIncludeOwners: platform.AI.Admin.IncludeOwners,
 		MCP:             platform.MCP,
 		Connectors:      conns,
+		ConnectorHTTP:   httpx.Guard{PublicOnly: true, Internal: platform.Connectors.InternalHosts}.Client(),
 		TrustedAgents:   platform.Agents.TrustedAllowed(),
 		DeviceLoginOff:  !platform.Auth.DeviceLogin.IsEnabled(),
 		Environments:    wiring.EnvironmentSource(platform),
