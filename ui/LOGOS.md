@@ -38,6 +38,23 @@ Dash cryptocurrency, not Plotly Dash; it has no Visual Studio Code icon.
 | whybook | whybook.svg | Whybook's own icon (the `svgstr` of `epiIcon`, copied verbatim) from https://github.com/openteams-ai/whybook/blob/9c486c5cda9f52679253e347bead3c07950fbb61/src/icons.ts (tag v0.5.1) | Apache-2.0 | own |
 | custom | none | Lucide `square-terminal` (not a product) | ISC | text colour |
 
+## Connector logos
+
+`ConnectorLogo` in `src/components/KindLogo.tsx` maps each connector catalogue id (internal/connectors/catalog) to a logo.
+The full-colour files are copied verbatim from gilbarbara/logos (CC0 1.0) at commit
+`875d71c5a8e4aa90a33f8b3ea15b8945de9cc183`. It has only HubSpot's wordmark, so HubSpot's sprocket comes from
+Simple Icons as above. A custom connector gets the Lucide `plug` icon.
+
+| Catalogue id | File | Source | License | Colour |
+|---|---|---|---|---|
+| slack | slack.svg | https://github.com/gilbarbara/logos/blob/875d71c5a8e4aa90a33f8b3ea15b8945de9cc183/logos/slack-icon.svg | CC0 1.0 | own |
+| github | github.svg | https://github.com/gilbarbara/logos/blob/875d71c5a8e4aa90a33f8b3ea15b8945de9cc183/logos/github-icon.svg | CC0 1.0 | text colour (one-colour mark) |
+| notion | notion.svg | https://github.com/gilbarbara/logos/blob/875d71c5a8e4aa90a33f8b3ea15b8945de9cc183/logos/notion-icon.svg | CC0 1.0 | own |
+| hubspot | hubspot.svg | Simple Icons `hubspot` | CC0 1.0 | #ff7a59 |
+| google-gmail | gmail.svg | https://github.com/gilbarbara/logos/blob/875d71c5a8e4aa90a33f8b3ea15b8945de9cc183/logos/google-gmail.svg | CC0 1.0 | own |
+| google-calendar | googlecalendar.svg | https://github.com/gilbarbara/logos/blob/875d71c5a8e4aa90a33f8b3ea15b8945de9cc183/logos/google-calendar.svg | CC0 1.0 | own |
+| google-drive | googledrive.svg | https://github.com/gilbarbara/logos/blob/875d71c5a8e4aa90a33f8b3ea15b8945de9cc183/logos/google-drive.svg | CC0 1.0 | own |
+
 (1) The Voila icon colours its two paths through JupyterLab theme classes that do not apply outside JupyterLab.
 The vendored copy drops the `<style>` block and writes the light-theme colours (#268380, #f8e14b) as `fill`
 attributes; the paths are unchanged.

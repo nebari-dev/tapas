@@ -1,4 +1,4 @@
-import { Container, Globe, House, SquareTerminal, Terminal, type LucideIcon } from 'lucide-react'
+import { Container, Globe, House, Plug, SquareTerminal, Terminal, type LucideIcon } from 'lucide-react'
 import bokeh from '../assets/logos/bokeh.svg'
 import claudeCode from '../assets/logos/claudecode.svg'
 import vscode from '../assets/logos/vscode.png'
@@ -22,6 +22,13 @@ import rstudio from '../assets/logos/rstudioide.svg'
 import streamlit from '../assets/logos/streamlit.svg'
 import voila from '../assets/logos/voila.svg'
 import whybook from '../assets/logos/whybook.svg'
+import github from '../assets/logos/github.svg'
+import gmail from '../assets/logos/gmail.svg'
+import googleCalendar from '../assets/logos/googlecalendar.svg'
+import googleDrive from '../assets/logos/googledrive.svg'
+import hubspot from '../assets/logos/hubspot.svg'
+import notion from '../assets/logos/notion.svg'
+import slack from '../assets/logos/slack.svg'
 
 // Project logos vendored from pinned sources; ui/LOGOS.md records each one.
 // A logo with a tint is a one-colour mark drawn in that colour; the others
@@ -68,11 +75,30 @@ export function kindSite(kind: string): string | undefined {
  * inline draws it at icon size with no tile, for use inside a button or a line of text.
  */
 export function KindLogo({ kind, big = false, inline = false }: { kind: string; big?: boolean; inline?: boolean }) {
+  return <Mark logo={LOGOS[kind]} icon={ICONS[kind] ?? SquareTerminal} big={big} inline={inline} />
+}
+
+// Vendor logos of the connector catalogue (internal/connectors/catalog),
+// keyed by catalogue id; ui/LOGOS.md records each one.
+const CONNECTOR_LOGOS: Record<string, Logo> = {
+  slack: { src: slack },
+  github: { src: github, tint: 'var(--text)' },
+  notion: { src: notion },
+  hubspot: { src: hubspot, tint: '#ff7a59' },
+  'google-gmail': { src: gmail },
+  'google-calendar': { src: googleCalendar },
+  'google-drive': { src: googleDrive },
+}
+
+/** A connector's mark: its vendor's logo for a catalogue entry, a plug for a custom connector. */
+export function ConnectorLogo({ catalogId, inline = false }: { catalogId: string; inline?: boolean }) {
+  return <Mark logo={CONNECTOR_LOGOS[catalogId]} icon={Plug} inline={inline} />
+}
+
+function Mark({ logo, icon: Icon, big = false, inline = false }: { logo?: Logo; icon: LucideIcon; big?: boolean; inline?: boolean }) {
   const size = inline ? 16 : big ? 28 : 21
   const cls = inline ? 'logo inline' : 'logo'
-  const logo = LOGOS[kind]
   if (!logo) {
-    const Icon = ICONS[kind] ?? SquareTerminal
     return (
       <div className={cls} aria-hidden="true">
         <Icon size={size} />
