@@ -1,6 +1,7 @@
 // Package connectorstest holds fakes for testing connectors without a
 // network beyond httptest: an MCP connector that records every call with
-// the bearer it was made with.
+// the bearer it was made with, and the OAuth authorization server its
+// tokens come from.
 package connectorstest
 
 import (
@@ -36,6 +37,8 @@ type Connector struct {
 	URL string
 
 	mu           sync.Mutex
+	as           *AuthServer
+	hideHint     bool
 	bearers      []string
 	calls        []Call
 	lists        int
@@ -50,7 +53,28 @@ type Connector struct {
 // when the test ends.
 func NewConnector(t *testing.T, bearers ...string) *Connector {
 	t.Helper()
-	c := &Connector{bearers: bearers, release: make(chan struct{})}
+	c := &Connector{bearers: bearers}
+	c.start(t, nil)
+	return c
+}
+
+// NewOAuthConnector starts a connector that accepts the access tokens as
+// issued for its URL, and publishes RFC 9728 metadata naming as as its
+// authorization server. It stops when the test ends.
+func NewOAuthConnector(t *testing.T, as *AuthServer) *Connector {
+	t.Helper()
+	c := &Connector{as: as}
+	c.start(t, as)
+	return c
+}
+
+// metadataPath is where an OAuth connector publishes its RFC 9728 metadata:
+// the well-known path with its MCP path appended.
+const metadataPath = "/.well-known/oauth-protected-resource/mcp"
+
+func (c *Connector) start(t *testing.T, as *AuthServer) {
+	t.Helper()
+	c.release = make(chan struct{})
 	server := sdk.NewServer(&sdk.Implementation{Name: "fake", Version: "1"}, nil)
 	server.AddTool(&sdk.Tool{
 		Name: "echo", Description: "Answers its arguments",
@@ -70,9 +94,26 @@ func NewConnector(t *testing.T, bearers ...string) *Connector {
 			return next(ctx, method, req)
 		}
 	})
+	mux := http.NewServeMux()
 	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, nil)
-	authed := auth.RequireBearerToken(c.verify, &auth.RequireBearerTokenOptions{AllowMissingExpiration: true})(h)
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	opts := &auth.RequireBearerTokenOptions{AllowMissingExpiration: true}
+	var base string
+	if as != nil {
+		mux.HandleFunc("GET "+metadataPath, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": c.URL, "authorization_servers": []string{as.URL}})
+		})
+	}
+	authed := func(w http.ResponseWriter, r *http.Request) {
+		o := *opts
+		c.mu.Lock()
+		if as != nil && !c.hideHint {
+			o.ResourceMetadataURL = base + metadataPath
+		}
+		c.mu.Unlock()
+		auth.RequireBearerToken(c.verify, &o)(h).ServeHTTP(w, r)
+	}
+	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 		c.mu.Lock()
 		c.requests++
 		refuse := c.unauthorized
@@ -82,20 +123,25 @@ func NewConnector(t *testing.T, bearers ...string) *Connector {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		authed.ServeHTTP(w, r)
-	}))
+		authed(w, r)
+	})
+	s := httptest.NewServer(mux)
 	t.Cleanup(func() {
 		close(c.release)
 		s.Close()
 	})
+	base = s.URL
 	c.URL = s.URL + "/mcp"
-	return c
 }
 
 func (c *Connector) verify(_ context.Context, raw string, _ *http.Request) (*auth.TokenInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !slices.Contains(c.bearers, raw) {
+	if c.as != nil {
+		if !c.as.Valid(raw, c.URL) {
+			return nil, auth.ErrInvalidToken
+		}
+	} else if !slices.Contains(c.bearers, raw) {
 		return nil, auth.ErrInvalidToken
 	}
 	return &auth.TokenInfo{UserID: raw}, nil
@@ -155,6 +201,14 @@ func (c *Connector) Unauthorized(on bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.unauthorized = on
+}
+
+// HideMetadataHint leaves the metadata address out of its 401 answers
+// while on, so a client has to find the metadata at the well-known path.
+func (c *Connector) HideMetadataHint(on bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.hideHint = on
 }
 
 // Hang makes its tools never answer while on, until the caller gives up.

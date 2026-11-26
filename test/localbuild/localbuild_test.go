@@ -72,6 +72,8 @@ var notImported = []leftOut{
 	{path: javo + "mcp"},
 	{path: javo + "connectors/broker"},
 	{path: javo + "connectors/client"},
+	{path: javo + "connectors/oauth"},
+	{path: javo + "connectors/connectorstest"},
 	{path: "github.com/modelcontextprotocol/go-sdk"},
 	{path: javo + "features/authoidc"},
 	{path: "github.com/coreos/go-oidc"},
