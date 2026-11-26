@@ -349,8 +349,17 @@ func TestArgumentsMustBeASmallJSONObject(t *testing.T) {
 	f := newFixture(t, options{})
 	big := `{"text":"` + strings.Repeat("x", broker.MaxArguments) + `"}`
 	// A name given twice, at any depth, is refused: the policy and the
-	// connector could each read a different one of the two values.
-	for _, args := range []string{`[1]`, `"x"`, `null`, `{`, big, `{"text":"a","text":"b"}`, `{"q":{"a":1,"a":2}}`, `{"l":[{"a":1,"a":2}]}`} {
+	// connector could each read a different one of the two values. So is a
+	// pair of names that differ only by case or a case-folding look-alike
+	// (a decoder that folds case reads them as one), and a name holding an
+	// invisible, control or direction character, which a person approving
+	// could not see.
+	for _, args := range []string{
+		`[1]`, `"x"`, `null`, `{`, big,
+		`{"text":"a","text":"b"}`, `{"q":{"a":1,"a":2}}`, `{"l":[{"a":1,"a":2}]}`,
+		`{"to":"a","To":"b"}`, `{"scope":1,"\u017fcope":2}`, `{"k":1,"\u212a":2}`, `{"q":{"ab":1,"AB":2}}`,
+		`{"amount\u200b":5}`, `{"a\u202e":1}`, `{"a\u0007":1}`, `{"a\u2028":1}`,
+	} {
 		if res := call(t, f, alice(), "fake__echo", args); !res.IsError {
 			t.Errorf("%.20s: %+v", args, res)
 		}

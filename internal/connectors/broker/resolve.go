@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"slices"
+	"strings"
+	"unicode"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -42,9 +44,12 @@ func (b *Broker) resolve(ctx context.Context, c *call) *sdk.CallToolResult {
 }
 
 // namesOnce reports whether data is one JSON value in which no object names
-// a field twice. Parsers disagree on which of two values wins, so the policy
-// and the connector could each act on a different one; such arguments are
-// refused.
+// a field twice and every name can be seen. Parsers disagree on which of two
+// values wins, and some fold case, so two names that differ only by case (or
+// by a letter that folds to another, such as the long s) count as the same
+// name: the policy and the connector could each act on a different value.
+// A name with a control, invisible or direction character could read as
+// another name to the person approving. Such arguments are refused.
 func namesOnce(data []byte) bool {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	if !valueNamesOnce(dec) {
@@ -66,10 +71,10 @@ func valueNamesOnce(dec *json.Decoder) bool {
 		for dec.More() {
 			k, err := dec.Token()
 			name, ok := k.(string)
-			if err != nil || !ok || seen[name] {
+			if err != nil || !ok || !visible(name) || seen[folded(name)] {
 				return false
 			}
-			seen[name] = true
+			seen[folded(name)] = true
 			if !valueNamesOnce(dec) {
 				return false
 			}
@@ -85,4 +90,24 @@ func valueNamesOnce(dec *json.Decoder) bool {
 	}
 	_, err = dec.Token() // the closing bracket
 	return err == nil
+}
+
+// folded is name with each letter replaced by the smallest letter it folds
+// to (unicode.SimpleFold), so names that differ only by case are equal.
+func folded(name string) string {
+	return strings.Map(func(r rune) rune {
+		least := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			least = min(least, f)
+		}
+		return least
+	}, name)
+}
+
+// visible reports whether name holds no control, format (zero-width, text
+// direction) or line or paragraph separator character.
+func visible(name string) bool {
+	return !strings.ContainsFunc(name, func(r rune) bool {
+		return unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp)
+	})
 }
