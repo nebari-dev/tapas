@@ -75,4 +75,5 @@ The gateway refuses to start with memory on when `url` is missing, is not an `ht
 - Memory needs the Kubernetes executor. With the Docker or process executor the gateway refuses to start when `memory` is set.
 - The key is read once, at start. After the key changes (a new Secret, or a rotation in mem0), restart the gateway so it reads the new one.
 - The gateway needs mem0's key Secret to exist when it starts, and fails to start until it does. Install the mem0 pack first, or expect the gateway pod to restart until the Secret appears.
+- Memories belong to the person's identity name, which is never given to anyone else. `javo user remove` leaves a person's memories in mem0, as it leaves their home files; if the same person comes back (`javo user add --reuse-person`), they get them again.
 - mem0 has no per-person access control: anything holding its admin key can read every person's memories. Tapas scopes each call to one person and keeps the key to the gateway, and the pack's NetworkPolicy lets only the pods in `callers` connect. Do not add other callers or share the Secret.
