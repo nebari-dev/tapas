@@ -43,7 +43,7 @@ func TestConnectorConnectionsPutGetListDelete(t *testing.T) {
 		ConnectorID: c.ID, Subject: "alice", ConnectedBy: "alice", Resource: c.URL,
 		Scopes: []string{"read"}, ExpiresAt: expires,
 	}
-	got, err := s.ConnectorConnections().Put(ctx, alice, in, sealedTokens("a1", "r1"))
+	got, err := s.ConnectorConnections().Put(ctx, alice, in, c.Rev, sealedTokens("a1", "r1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestConnectorConnectionsPutGetListDelete(t *testing.T) {
 	// Connecting again replaces the row, under a new id the ciphertexts are
 	// bound to. No expiry is stored as none.
 	in.ExpiresAt = time.Time{}
-	again, err := s.ConnectorConnections().Put(ctx, alice, in, sealedTokens("a2", ""))
+	again, err := s.ConnectorConnections().Put(ctx, alice, in, c.Rev, sealedTokens("a2", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestConnectorConnectionsPutGetListDelete(t *testing.T) {
 	other := createConnector(t, s, "other")
 	if _, err := s.ConnectorConnections().Put(ctx, alice, store.ConnectorConnection{
 		ConnectorID: other.ID, Subject: "", ConnectedBy: "alice", Resource: other.URL,
-	}, sealedTokens("shared", "")); err != nil {
+	}, other.Rev, sealedTokens("shared", "")); err != nil {
 		t.Fatal(err)
 	}
 	mine, err := s.ConnectorConnections().ForSubject(ctx, "alice")
@@ -99,6 +99,32 @@ func TestConnectorConnectionsPutGetListDelete(t *testing.T) {
 	}
 }
 
+// A connection is stored only for the connector revision its sign-in ran
+// on: tokens from a code exchange that raced an admin's change are not
+// kept under the new configuration.
+func TestConnectorConnectionPutNeedsTheConnectorRevision(t *testing.T) {
+	t.Parallel()
+	s := storetest.New(t)
+	c := createConnector(t, s, "fake")
+	changed := c
+	changed.URL = "https://mcp.example.org/moved"
+	changed, err := s.Connectors().Update(ctx, alice, changed, []string{"url"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := store.ConnectorConnection{ConnectorID: c.ID, Subject: "alice", ConnectedBy: "alice", Resource: c.URL}
+	if _, err := s.ConnectorConnections().Put(ctx, alice, in, c.Rev, sealedTokens("a1", "")); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("Put on the old revision = %v, want ErrConflict", err)
+	}
+	if _, err := s.ConnectorConnections().Get(ctx, c.ID, "alice"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("a connection was stored: %v", err)
+	}
+	in.Resource = changed.URL
+	if _, err := s.ConnectorConnections().Put(ctx, alice, in, changed.Rev, sealedTokens("a1", "")); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A refresh claim is won by one caller at a time, for the rev it read; the
 // winner's new tokens are guarded by that rev too.
 func TestConnectorConnectionRefreshClaimAndTokens(t *testing.T) {
@@ -106,7 +132,7 @@ func TestConnectorConnectionRefreshClaimAndTokens(t *testing.T) {
 	s := storetest.New(t)
 	c := createConnector(t, s, "fake")
 	conns := s.ConnectorConnections()
-	row, err := conns.Put(ctx, alice, store.ConnectorConnection{ConnectorID: c.ID, Subject: "alice", ConnectedBy: "alice", Resource: c.URL}, sealedTokens("a1", "r1"))
+	row, err := conns.Put(ctx, alice, store.ConnectorConnection{ConnectorID: c.ID, Subject: "alice", ConnectedBy: "alice", Resource: c.URL}, c.Rev, sealedTokens("a1", "r1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +183,8 @@ func TestConnectorConnectionsDeleteForSubjectSparesShared(t *testing.T) {
 		{ConnectorID: c.ID, Subject: "bob", ConnectedBy: "bob", Resource: c.URL},
 		{ConnectorID: shared.ID, Subject: "", ConnectedBy: "alice", Resource: shared.URL},
 	} {
-		if _, err := conns.Put(ctx, alice, in, sealedTokens("a", "")); err != nil {
+		rev := map[string]string{c.ID: c.Rev, shared.ID: shared.Rev}[in.ConnectorID]
+		if _, err := conns.Put(ctx, alice, in, rev, sealedTokens("a", "")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -182,7 +209,7 @@ func TestConnectorConnectionWritesAreAuditedWithoutTokens(t *testing.T) {
 	s := storetest.New(t)
 	c := createConnector(t, s, "fake")
 	conns := s.ConnectorConnections()
-	row, err := conns.Put(ctx, alice, store.ConnectorConnection{ConnectorID: c.ID, Subject: "alice", ConnectedBy: "alice", Resource: c.URL}, sealedTokens("SENTINEL-ACCESS", "SENTINEL-REFRESH"))
+	row, err := conns.Put(ctx, alice, store.ConnectorConnection{ConnectorID: c.ID, Subject: "alice", ConnectedBy: "alice", Resource: c.URL}, c.Rev, sealedTokens("SENTINEL-ACCESS", "SENTINEL-REFRESH"))
 	if err != nil {
 		t.Fatal(err)
 	}

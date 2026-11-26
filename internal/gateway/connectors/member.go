@@ -171,7 +171,11 @@ func (a *API) registerMember(api huma.API) {
 		if g.Subject == "" && !a.admin(u) || g.Subject != "" && !a.mayUse(u, g.Connector) {
 			return nil, notFound(nil)
 		}
-		if err := a.Vault.Put(ctx, authn.Actor(ctx), g.Connector, g.Subject, g.Tokens); err != nil {
+		if err := a.Vault.Put(ctx, authn.Actor(ctx), g.Connector, g.Subject, g.Tokens); errors.Is(err, store.ErrConflict) {
+			// An admin changed the connector during the exchange: the tokens
+			// belong to its old configuration and are not kept.
+			return nil, signInFailed(connectors.ErrSignInExpired)
+		} else if err != nil {
 			return nil, problem.Internal("store a connection", err)
 		}
 		conn, ok, err := a.connection(ctx, g.Connector.ID, g.Subject)

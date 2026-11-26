@@ -53,6 +53,18 @@ func (q *Queries) DeleteConnectorConnection(ctx context.Context, arg DeleteConne
 	return result.RowsAffected()
 }
 
+const deleteConnectorConnectionsForConnector = `-- name: DeleteConnectorConnectionsForConnector :execrows
+DELETE FROM connector_connections WHERE connector_id = $1
+`
+
+func (q *Queries) DeleteConnectorConnectionsForConnector(ctx context.Context, connectorID string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteConnectorConnectionsForConnector, connectorID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteConnectorConnectionsForSubject = `-- name: DeleteConnectorConnectionsForSubject :execrows
 DELETE FROM connector_connections WHERE subject = $1 AND subject <> ''
 `
@@ -239,6 +251,26 @@ func (q *Queries) ListConnectorConnectionsForSubject(ctx context.Context, subjec
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockConnectorRev = `-- name: LockConnectorRev :execrows
+UPDATE connectors SET rev = rev WHERE id = $1 AND rev = $2
+`
+
+type LockConnectorRevParams struct {
+	ID  string
+	Rev string
+}
+
+// Takes the connector's row lock when it is still at rev, so a connection
+// is stored only for the revision it was obtained under, and an admin's
+// change waits for it (and then removes it) or makes it fail.
+func (q *Queries) LockConnectorRev(ctx context.Context, arg LockConnectorRevParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, lockConnectorRev, arg.ID, arg.Rev)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setConnectorConnectionStatus = `-- name: SetConnectorConnectionStatus :execrows

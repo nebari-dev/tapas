@@ -118,6 +118,20 @@ func (x *Connectors) ListEnabled(ctx context.Context) ([]Connector, error) {
 // is no such row) and records changed, the names of the fields that changed,
 // on the audit log. Slug, catalog id and tools are not changed here.
 func (x *Connectors) Update(ctx context.Context, actor model.Actor, c Connector, changed []string) (Connector, error) {
+	return x.update(ctx, actor, c, changed, false)
+}
+
+// Move is Update for a change that makes what people connected unusable
+// (another address, authorization server or client): it also deletes
+// every connection to the connector in the same transaction, so one
+// stored while the change was being made (after the caller revoked the
+// others) does not survive it. ConnectorConnections.Put waits for or fails
+// against it, never lands after it.
+func (x *Connectors) Move(ctx context.Context, actor model.Actor, c Connector, changed []string) (Connector, error) {
+	return x.update(ctx, actor, c, changed, true)
+}
+
+func (x *Connectors) update(ctx context.Context, actor model.Actor, c Connector, changed []string, disconnect bool) (Connector, error) {
 	cols, err := connectorJSON(c)
 	if err != nil {
 		return Connector{}, err
@@ -140,6 +154,11 @@ func (x *Connectors) Update(ctx context.Context, actor model.Actor, c Connector,
 		}
 		if n == 0 {
 			return effect{}, ErrConflict
+		}
+		if disconnect {
+			if _, err := q.DeleteConnectorConnectionsForConnector(ctx, c.ID); err != nil {
+				return effect{}, err
+			}
 		}
 		return effect{audit: connectorAudit("connector.update", out, changed)}, nil
 	})

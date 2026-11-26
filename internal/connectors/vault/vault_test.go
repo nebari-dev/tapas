@@ -146,7 +146,7 @@ func TestSwappedCiphertextDoesNotOpen(t *testing.T) {
 	// bob's row gets alice's sealed access token.
 	if _, err := f.db.ConnectorConnections().Put(ctx, alice, store.ConnectorConnection{
 		ConnectorID: f.conn.ID, Subject: "bob", ConnectedBy: "bob", Resource: f.conn.URL, ExpiresAt: time.Now().Add(time.Hour),
-	}, func(string) ([]byte, []byte, error) { return aliceRow.AccessSealed, nil, nil }); err != nil {
+	}, f.conn.Rev, func(string) ([]byte, []byte, error) { return aliceRow.AccessSealed, nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := f.v.Token(ctx, f.conn, "bob"); err == nil || got != "" {

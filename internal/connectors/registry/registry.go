@@ -207,7 +207,13 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 			return connectors.Connector{}, err
 		}
 	}
-	saved, err := r.c.DB.Connectors().Update(ctx, actor, row, changedFields(prev, row, secretChanged))
+	save := r.c.DB.Connectors().Update
+	if moved || newClient {
+		// Move also drops a connection stored since the ones above were
+		// revoked (a sign-in that finished meanwhile).
+		save = r.c.DB.Connectors().Move
+	}
+	saved, err := save(ctx, actor, row, changedFields(prev, row, secretChanged))
 	if err != nil {
 		return connectors.Connector{}, err
 	}

@@ -256,11 +256,18 @@ func TestDeleteRemovesTheConnector(t *testing.T) {
 }
 
 // forgetter records which connectors' connections were dropped, and with
-// which address: the one the tokens were issued for.
-type forgetter struct{ forgot []string }
+// which address: the one the tokens were issued for. then, when set, runs
+// after each.
+type forgetter struct {
+	forgot []string
+	then   func(c connectors.Connector)
+}
 
 func (f *forgetter) DeleteForConnector(_ context.Context, _ model.Actor, c connectors.Connector) error {
 	f.forgot = append(f.forgot, c.Slug+"@"+c.URL)
+	if f.then != nil {
+		f.then(c)
+	}
 	return nil
 }
 
@@ -298,6 +305,39 @@ func TestAddressChangeAndDeleteForgetConnections(t *testing.T) {
 	want := "fake@https://mcp.example.org/mcp fake@https://other.example.org/mcp"
 	if strings.Join(f.forgot, " ") != want {
 		t.Fatalf("forgot %v, want %s", f.forgot, want)
+	}
+}
+
+// A sign-in that finishes while an admin moves the connector (its tokens
+// stored after the old connections were revoked, before the move is
+// saved) leaves no connection behind: the move removes it.
+func TestAMoveRemovesAConnectionStoredWhileItWasSaved(t *testing.T) {
+	t.Parallel()
+	db := storetest.New(t)
+	key, err := secrets.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &forgetter{}
+	r := registry.New(registry.Config{DB: db, Seal: key, Connections: f})
+	in := fakeInput()
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.then = func(c connectors.Connector) {
+		if _, err := db.ConnectorConnections().Put(ctx, alice, store.ConnectorConnection{
+			ConnectorID: c.ID, Subject: "bob", ConnectedBy: "bob", Resource: c.URL,
+		}, c.Rev, func(string) ([]byte, []byte, error) { return []byte("sealed"), nil, nil }); err != nil {
+			t.Error(err)
+		}
+	}
+	in.Rev, in.URL = c.Rev, "https://other.example.org/mcp"
+	if _, err := r.Update(ctx, alice, c.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	if left, err := db.ConnectorConnections().ForConnector(ctx, c.ID); err != nil || len(left) != 0 {
+		t.Fatalf("connections after the move: %+v, %v", left, err)
 	}
 }
 

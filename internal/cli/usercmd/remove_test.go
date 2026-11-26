@@ -342,7 +342,7 @@ func TestUserRemoveDeletesTheirConnectedAccounts(t *testing.T) {
 	for _, subject := range []string{local.UserID("alice"), "bob-1", ""} {
 		if _, err := e.db.ConnectorConnections().Put(ctx, cliActor, store.ConnectorConnection{
 			ConnectorID: conn.ID, Subject: subject, Resource: conn.URL,
-		}, func(string) ([]byte, []byte, error) { return []byte("sealed"), nil, nil }); err != nil {
+		}, conn.Rev, func(string) ([]byte, []byte, error) { return []byte("sealed"), nil, nil }); err != nil {
 			t.Fatal(err)
 		}
 	}

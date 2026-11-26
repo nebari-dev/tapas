@@ -143,14 +143,16 @@ func (v *Vault) open(id, column string, sealed []byte) (string, error) {
 }
 
 // Put stores t as subject's connection to c (subject "" for the company's),
-// replacing any there was. actor connected it.
+// replacing any there was. actor connected it. When c is no longer at
+// c.Rev (an admin changed it while the tokens were obtained) nothing is
+// stored and the error is store.ErrConflict.
 func (v *Vault) Put(ctx context.Context, actor model.Actor, c connectors.Connector, subject string, t Tokens) error {
 	if t.Access == "" {
 		return errors.New("vault: no access token to store")
 	}
 	_, err := v.c.DB.ConnectorConnections().Put(ctx, actor, store.ConnectorConnection{
 		ConnectorID: c.ID, Subject: subject, ConnectedBy: actor.Person, Resource: c.URL, Scopes: t.Scopes, ExpiresAt: t.Expiry,
-	}, func(id string) ([]byte, []byte, error) { return v.seal(id, t) })
+	}, c.Rev, func(id string) ([]byte, []byte, error) { return v.seal(id, t) })
 	return err
 }
 

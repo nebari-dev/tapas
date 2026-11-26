@@ -71,9 +71,11 @@ func connectionAudit(action string, c Connector, subject string, detail any) *au
 
 // Put stores c as the connection of c.Subject to c.ConnectorID, replacing
 // any there was, under a new id and rev; seal gets the new id. It is
-// active, with no refresh claim. A missing connector is ErrNotFound. It is
+// active, with no refresh claim. A missing connector is ErrNotFound, one
+// whose revision is no longer connectorRev (the revision the tokens were
+// obtained under) ErrConflict, checked in the same transaction. It is
 // audited.
-func (x *ConnectorConnections) Put(ctx context.Context, actor model.Actor, c ConnectorConnection, seal sealTokensFunc) (ConnectorConnection, error) {
+func (x *ConnectorConnections) Put(ctx context.Context, actor model.Actor, c ConnectorConnection, connectorRev string, seal sealTokensFunc) (ConnectorConnection, error) {
 	c.ID, c.Rev, c.Status = newID(), newID(), ConnectionActive
 	var err error
 	if c.AccessSealed, c.RefreshSealed, err = seal(c.ID); err != nil {
@@ -86,9 +88,16 @@ func (x *ConnectorConnections) Put(ctx context.Context, actor model.Actor, c Con
 	t := dbtime.From(now())
 	var out ConnectorConnection
 	err = x.s.mutate(ctx, actor, func(q *sqlcgen.Queries) (effect, error) {
+		locked, err := q.LockConnectorRev(ctx, sqlcgen.LockConnectorRevParams{ID: c.ConnectorID, Rev: connectorRev})
+		if err != nil {
+			return effect{}, err
+		}
 		conn, err := readConnector(q.GetConnector(ctx, c.ConnectorID))
 		if err != nil {
 			return effect{}, err
+		}
+		if locked == 0 {
+			return effect{}, ErrConflict
 		}
 		if err := q.UpsertConnectorConnection(ctx, sqlcgen.UpsertConnectorConnectionParams{
 			ID: c.ID, ConnectorID: c.ConnectorID, Subject: c.Subject, ConnectedBy: c.ConnectedBy, Resource: c.Resource,

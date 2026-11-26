@@ -7,6 +7,12 @@ ON CONFLICT (connector_id, subject) DO UPDATE SET id = excluded.id, connected_by
     scopes = excluded.scopes, status = excluded.status, expires_at = excluded.expires_at, refreshing_until = 0,
     rev = excluded.rev, created_at = excluded.created_at, updated_at = excluded.updated_at;
 
+-- Takes the connector's row lock when it is still at rev, so a connection
+-- is stored only for the revision it was obtained under, and an admin's
+-- change waits for it (and then removes it) or makes it fail.
+-- name: LockConnectorRev :execrows
+UPDATE connectors SET rev = rev WHERE id = $1 AND rev = $2;
+
 -- name: GetConnectorConnection :one
 SELECT * FROM connector_connections WHERE connector_id = $1 AND subject = $2;
 
@@ -34,6 +40,9 @@ UPDATE connector_connections SET status = $1, refreshing_until = 0, updated_at =
 
 -- name: DeleteConnectorConnection :execrows
 DELETE FROM connector_connections WHERE connector_id = $1 AND subject = $2;
+
+-- name: DeleteConnectorConnectionsForConnector :execrows
+DELETE FROM connector_connections WHERE connector_id = $1;
 
 -- name: DeleteConnectorConnectionsForSubject :execrows
 DELETE FROM connector_connections WHERE subject = $1 AND subject <> '';
