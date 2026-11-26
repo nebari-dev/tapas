@@ -3540,6 +3540,10 @@
             ],
             "type": "string"
           },
+          "catalogId": {
+            "description": "The catalogue entry it was made from, for its vendor's logo; empty for a custom one",
+            "type": "string"
+          },
           "connectUrl": {
             "description": "The page to connect it at",
             "type": "string"
@@ -3583,6 +3587,7 @@
         "required": [
           "id",
           "slug",
+          "catalogId",
           "name",
           "authMode",
           "connected",

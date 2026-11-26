@@ -708,7 +708,7 @@ function myConnector(c: MockConnector) {
     .map((t) => ({ name: `${c.slug}__${t.name}`, mode: modes[t.name] ?? 'write' }))
     .filter((t) => t.mode !== 'off')
   return {
-    id: c.id, slug: c.slug, name: c.name, authMode: c.authMode, connected: !!conn,
+    id: c.id, catalogId: c.catalogId ?? '', slug: c.slug, name: c.name, authMode: c.authMode, connected: !!conn,
     ...(conn ? { status: conn.status, connectedAt: conn.connectedAt } : {}),
     connectUrl: `${window.location.origin}/settings/connections`, tools,
   }

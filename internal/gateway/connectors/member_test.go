@@ -15,7 +15,7 @@ import (
 )
 
 type myConnector struct {
-	ID, Slug, Name, AuthMode, Status, ConnectURL, ConnectedAt string
+	ID, Slug, Name, AuthMode, Status, ConnectURL, ConnectedAt, CatalogID string
 	Connected                                                 bool
 	Tools                                                     []struct{ Name, Mode string }
 }
@@ -99,6 +99,26 @@ func (f *oauthFixture) mine(t *testing.T, c *http.Cookie) []myConnector {
 		t.Fatalf("list: %d %s", w.Code, w.Body)
 	}
 	return apitest.Decode[struct{ Items []myConnector }](t, w).Items
+}
+
+// A member's list says which catalogue entry each connector was made from,
+// so the page can show its vendor's logo without the admin-only catalogue.
+func TestAMembersListNamesEachConnectorsCatalogueEntry(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	body := fmt.Sprintf(`{"catalogId":"github","slug":"gh","name":"Code","url":%q,"authMode":"user","enabled":true,
+		"oauth":{"clientId":%q,"clientSecret":%q},"allowedGroups":["sales"]}`, f.mcp.URL, connectorstest.ClientID, connectorstest.ClientSecret)
+	if w := f.Do("POST", "/api/admin/connectors", body, f.admin); w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body)
+	}
+	f.create(t, "user")
+	got := map[string]string{}
+	for _, c := range f.mine(t, f.Session(apitest.AliceID, "sales")) {
+		got[c.Slug] = c.CatalogID
+	}
+	if got["gh"] != "github" || got["fake"] != "" || len(got) != 2 {
+		t.Fatalf("catalogue ids %v", got)
+	}
 }
 
 // A person connects their own account; someone else cannot finish their

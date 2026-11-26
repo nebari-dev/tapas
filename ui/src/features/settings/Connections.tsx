@@ -9,7 +9,6 @@ import { EmptyState } from '../../components/EmptyState'
 import { ConnectorLogo } from '../../components/KindLogo'
 import { problemText } from '../../lib/http'
 import { useConnectAccount, useDisconnectAccount, useMyConnectors } from '../../lib/queries'
-import { useConnectors, useIsAdmin } from './admin/queries'
 
 /** "2 Nov 2026". */
 function day(iso: string): string {
@@ -36,17 +35,7 @@ function toolsLine(c: MyConnector): string {
   return `Tools: ${parts.join('; ')}`
 }
 
-/**
- * The catalogue entry each connector was made from, so it shows its vendor's
- * logo. Only admins can read that; for everyone else every row has the plug.
- */
-function useCatalogIds(): Map<string, string> {
-  const admin = useIsAdmin()
-  const list = useConnectors(admin).data ?? []
-  return new Map(list.map((c) => [c.id, c.catalogId]))
-}
-
-function ConnectionRow({ c, catalogId, onError }: { c: MyConnector; catalogId: string; onError: (msg: string) => void }) {
+function ConnectionRow({ c, onError }: { c: MyConnector; onError: (msg: string) => void }) {
   const connect = useConnectAccount()
   const disconnect = useDisconnectAccount()
   const [asking, setAsking] = useState(false)
@@ -60,7 +49,7 @@ function ConnectionRow({ c, catalogId, onError }: { c: MyConnector; catalogId: s
   const user = c.authMode === 'user'
   return (
     <li className="con-row" aria-label={c.name}>
-      <ConnectorLogo catalogId={catalogId} />
+      <ConnectorLogo catalogId={c.catalogId} />
       <div className="con-main">
         <h3 className="con-name">{c.name}</h3>
         <span className="faint small">{user ? 'You sign in with your own account' : 'One account for the whole company'}</span>
@@ -111,7 +100,6 @@ function ConnectionRow({ c, catalogId, onError }: { c: MyConnector; catalogId: s
 /** Settings, Connected accounts: every connector the person may use, and their own sign-in to each. */
 export function Connections() {
   const q = useMyConnectors()
-  const logos = useCatalogIds()
   const [error, setError] = useState('')
   const list = q.data ?? []
   return (
@@ -138,7 +126,7 @@ export function Connections() {
           <Card>
             <ul className="con-list" aria-label="Connected accounts">
               {list.map((c) => (
-                <ConnectionRow key={c.id} c={c} catalogId={logos.get(c.id) ?? ''} onError={setError} />
+                <ConnectionRow key={c.id} c={c} onError={setError} />
               ))}
             </ul>
           </Card>

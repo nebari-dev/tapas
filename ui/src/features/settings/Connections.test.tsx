@@ -10,6 +10,7 @@ afterEach(() => {
 
 const chat = {
   id: 'c-1',
+  catalogId: '',
   slug: 'chat',
   name: 'Team chat',
   authMode: 'user',
@@ -51,6 +52,13 @@ describe('Connected accounts', () => {
     expect(within(await row('Tickets')).getByRole('button', { name: 'Connect Tickets' })).toBeTruthy()
     expect((await row('Docs')).textContent).toContain('Needs reconnecting')
     expect(within(await row('Docs')).getByRole('button', { name: 'Reconnect Docs' })).toBeTruthy()
+  })
+
+  it("shows each catalogue connector's vendor logo to a member, and a plug for a custom one", async () => {
+    api({ 'GET /api/connectors': { body: { items: [{ ...chat, catalogId: 'slack', name: 'Slack' }, tickets] } } })
+    renderApp('/settings/connections')
+    expect((await row('Slack')).querySelector('.mark')).not.toBeNull()
+    expect((await row('Tickets')).querySelector('svg.lucide-plug')).not.toBeNull()
   })
 
   it('shows a company-wide connector without a button: the admin connects it', async () => {

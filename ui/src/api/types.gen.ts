@@ -1315,6 +1315,10 @@ export type MyConnector = {
      */
     authMode: 'user' | 'shared';
     /**
+     * The catalogue entry it was made from, for its vendor's logo; empty for a custom one
+     */
+    catalogId: string;
+    /**
      * The page to connect it at
      */
     connectUrl: string;

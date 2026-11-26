@@ -47,6 +47,7 @@ type MyTool struct {
 type MyConnector struct {
 	ID          string     `json:"id"`
 	Slug        string     `json:"slug"`
+	CatalogID   string     `json:"catalogId" doc:"The catalogue entry it was made from, for its vendor's logo; empty for a custom one"`
 	Name        string     `json:"name"`
 	AuthMode    string     `json:"authMode" enum:"user,shared" doc:"user: you connect your own account; shared: an admin connected one account for everyone"`
 	Connected   bool       `json:"connected" doc:"A connection exists (yours, or the shared one)"`
@@ -360,7 +361,7 @@ func find(all []vault.Connection, connectorID string) (vault.Connection, bool) {
 
 func (a *API) myView(c connectors.Connector, conn vault.Connection, connected bool) MyConnector {
 	v := MyConnector{
-		ID: c.ID, Slug: c.Slug, Name: c.Name, AuthMode: string(c.AuthMode), Connected: connected,
+		ID: c.ID, Slug: c.Slug, CatalogID: c.CatalogID, Name: c.Name, AuthMode: string(c.AuthMode), Connected: connected,
 		ConnectURL: a.connectURL(), Tools: []MyTool{},
 	}
 	if connected {
