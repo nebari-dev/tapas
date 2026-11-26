@@ -55,6 +55,8 @@ type Platform struct {
 	AI AICfg `json:"ai"`
 	// MCP configures the agent endpoint at /mcp.
 	MCP MCPCfg `json:"mcp"`
+	// Connectors lets agents reach vendors' MCP servers through Tapas.
+	Connectors ConnectorsCfg `json:"connectors"`
 	// Agents configures what coding-agent apps may be allowed to do.
 	Agents AgentsCfg `json:"agents"`
 	// Plans configures proposed changes waiting for approval.
@@ -313,6 +315,19 @@ type MCPCfg struct {
 	// address the request came to. Default: urls.scheme://urls.uiHost when
 	// uiHost is set.
 	PublicURL string `json:"publicURL"`
+}
+
+// ConnectorsCfg configures connectors: MCP servers of vendors (Slack,
+// GitHub and so on) that platform admins add and people connect their own
+// accounts to. Off by default. On, the gateway needs a sessions key that
+// survives restarts (the connectors' secrets are sealed with it) and
+// mcp.publicURL (the OAuth redirect address is built from it).
+type ConnectorsCfg struct {
+	Enabled bool `json:"enabled"`
+	// InternalHosts are host names (no scheme or port) a connector may be
+	// reached at over plain http and at a private address: in-cluster MCP
+	// servers. Every other connector address must be https and public.
+	InternalHosts []string `json:"internalHosts,omitempty"`
 }
 
 // AgentsCfg configures coding-agent apps (templates of category agents).
@@ -905,6 +920,14 @@ func (p Platform) Validate() error {
 		bad("idleStop.defaultMinutes", "0 (Off) needs allowOff: set a default between %d and %d", is.MinMinutes, is.MaxMinutes)
 	} else if is.DefaultMinutes != 0 && (is.DefaultMinutes < is.MinMinutes || is.DefaultMinutes > is.MaxMinutes) {
 		bad("idleStop.defaultMinutes", "%d is outside %d to %d (0 is Off)", is.DefaultMinutes, is.MinMinutes, is.MaxMinutes)
+	}
+	if p.Connectors.Enabled && p.MCP.PublicURL == "" {
+		bad("connectors", "enabled needs mcp.publicURL (or urls.uiHost): the OAuth redirect address is built from it")
+	}
+	for i, h := range p.Connectors.InternalHosts {
+		if h == "" || strings.ContainsAny(h, ":/@?# \t") {
+			bad(fmt.Sprintf("connectors.internalHosts[%d]", i), "%q is not a host name such as mcp-slack.tapas.svc (no scheme, port or path)", h)
+		}
 	}
 	if p.AI.Enabled && (p.AI.Provider == "" || p.AI.Model == "") {
 		bad("ai", "enabled needs ai.provider and ai.model")
