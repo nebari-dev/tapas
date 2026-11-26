@@ -254,3 +254,89 @@ func TestDeleteRemovesTheConnector(t *testing.T) {
 		t.Fatalf("second Delete = %v", err)
 	}
 }
+
+// forgetter records which connectors' connections were dropped, and with
+// which address: the one the tokens were issued for.
+type forgetter struct{ forgot []string }
+
+func (f *forgetter) DeleteForConnector(_ context.Context, _ model.Actor, c connectors.Connector) error {
+	f.forgot = append(f.forgot, c.Slug+"@"+c.URL)
+	return nil
+}
+
+func newRegistryWith(t *testing.T, f *forgetter) *registry.Registry {
+	t.Helper()
+	key, err := secrets.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry.New(registry.Config{DB: storetest.New(t), Seal: key, Connections: f})
+}
+
+// A new address or client drops what people connected, for the address
+// they connected to; other changes keep it. Deleting drops it too.
+func TestAddressChangeAndDeleteForgetConnections(t *testing.T) {
+	t.Parallel()
+	f := &forgetter{}
+	r := newRegistryWith(t, f)
+	in := fakeInput()
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Rev, in.Name = c.Rev, "Renamed"
+	if c, err = r.Update(ctx, alice, c.ID, in); err != nil || len(f.forgot) != 0 {
+		t.Fatalf("rename: %v, forgot %v", err, f.forgot)
+	}
+	in.Rev, in.URL = c.Rev, "https://other.example.org/mcp"
+	if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Delete(ctx, alice, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	want := "fake@https://mcp.example.org/mcp fake@https://other.example.org/mcp"
+	if strings.Join(f.forgot, " ") != want {
+		t.Fatalf("forgot %v, want %s", f.forgot, want)
+	}
+}
+
+// A client Tapas registered itself is stored on the connector, its secret
+// sealed, marked dynamic; a stale rev is refused.
+func TestRegisteredStoresADynamicClient(t *testing.T) {
+	t.Parallel()
+	r, _ := newRegistry(t)
+	in := fakeInput()
+	in.ClientID, in.ClientSecret = "", ""
+	c, err := r.Create(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.Registered(ctx, alice, c, "dyn-1", secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OAuth.ClientID != "dyn-1" || got.OAuth.Registration != connectors.RegistrationDynamic || !got.OAuth.SecretStored || got.Rev == c.Rev {
+		t.Fatalf("Registered = %+v", got.OAuth)
+	}
+	if s, err := r.ClientSecret(ctx, c.ID); err != nil || s != secret {
+		t.Fatalf("ClientSecret = %q, %v", s, err)
+	}
+	if _, err := r.Registered(ctx, alice, c, "dyn-2", secret); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("Registered on a stale rev = %v, want ErrConflict", err)
+	}
+}
+
+func TestSetToolsReplacesTheSnapshot(t *testing.T) {
+	t.Parallel()
+	r, _ := newRegistry(t)
+	c, err := r.Create(ctx, alice, fakeInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := []connectors.Tool{{Name: "echo", Description: "Echo", ReadOnlyHint: true}, {Name: "post"}}
+	got, err := r.SetTools(ctx, alice, c.ID, tools)
+	if err != nil || !slices.Equal(got.Tools, tools) || got.Rev == c.Rev {
+		t.Fatalf("SetTools = %+v, %v", got, err)
+	}
+}

@@ -32,6 +32,15 @@ type Config struct {
 	// InternalHosts are the hosts a connector may be reached at over plain
 	// http (connectors.internalHosts in the platform config).
 	InternalHosts []string
+	// Connections disconnects everyone from a connector (the token vault);
+	// nil when nobody can connect.
+	Connections Connections
+}
+
+// Connections disconnects everyone from a connector: it revokes and deletes
+// their tokens.
+type Connections interface {
+	DeleteForConnector(ctx context.Context, actor model.Actor, c connectors.Connector) error
 }
 
 // Registry is the connectors an admin added.
@@ -192,8 +201,9 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 	}
 	if moved || newClient {
 		// A stored token must never be sent to a host other than the one it
-		// was issued for, nor used under another client.
-		if err := r.forgetConnections(ctx, actor, id); err != nil {
+		// was issued for, nor used under another client. They are revoked
+		// where they were issued, with the client they were issued to.
+		if err := r.forgetConnections(ctx, actor, viewOf(prev)); err != nil {
 			return connectors.Connector{}, err
 		}
 	}
@@ -207,21 +217,55 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 // Delete removes the connector with id, after what people connected to it
 // (store.ErrNotFound when there is none).
 func (r *Registry) Delete(ctx context.Context, actor model.Actor, id string) error {
-	if _, err := r.c.DB.Connectors().Get(ctx, id); err != nil {
+	prev, err := r.c.DB.Connectors().Get(ctx, id)
+	if err != nil {
 		return err
 	}
-	if err := r.forgetConnections(ctx, actor, id); err != nil {
+	if err := r.forgetConnections(ctx, actor, viewOf(prev)); err != nil {
 		return err
 	}
 	return r.c.DB.Connectors().Delete(ctx, actor, id)
 }
 
-// forgetConnections revokes and deletes every account connected to the
-// connector with id: on delete, and when its address, OAuth endpoints or
-// client change (people then connect again). Connections are not stored
-// yet, so there is nothing to do; the token vault does it here once they
-// are.
-func (r *Registry) forgetConnections(context.Context, model.Actor, string) error { return nil }
+// forgetConnections revokes and deletes every account connected to c (as
+// it is before the change): on delete, and when its address, OAuth
+// endpoints or client change (people then connect again).
+func (r *Registry) forgetConnections(ctx context.Context, actor model.Actor, c connectors.Connector) error {
+	if r.c.Connections == nil {
+		return nil
+	}
+	return r.c.Connections.DeleteForConnector(ctx, actor, c)
+}
+
+// Registered stores the OAuth client Tapas registered itself (RFC 7591) on
+// c, which had none, when c.Rev is still its revision (store.ErrConflict
+// otherwise). secret is "" for a client without one.
+func (r *Registry) Registered(ctx context.Context, actor model.Actor, c connectors.Connector, clientID, secret string) (connectors.Connector, error) {
+	prev, err := r.c.DB.Connectors().Get(ctx, c.ID)
+	if err != nil {
+		return connectors.Connector{}, err
+	}
+	if prev.Rev != c.Rev || prev.OAuthClientID != "" {
+		return connectors.Connector{}, store.ErrConflict
+	}
+	row := prev
+	row.OAuthClientID, row.OAuthRegistration, row.OAuthClientSecretSealed = clientID, connectors.RegistrationDynamic, nil
+	if secret != "" {
+		if row.OAuthClientSecretSealed, err = r.c.Seal.Encrypt([]byte(secret), secretAD(c.ID)); err != nil {
+			return connectors.Connector{}, fmt.Errorf("seal the client secret: %w", err)
+		}
+	}
+	return view(r.c.DB.Connectors().Update(ctx, actor, row, changedFields(prev, row, secret != "")))
+}
+
+// SetTools replaces the snapshot of the connector's upstream tool list.
+func (r *Registry) SetTools(ctx context.Context, actor model.Actor, id string, tools []connectors.Tool) (connectors.Connector, error) {
+	rows := make([]store.ConnectorTool, 0, len(tools))
+	for _, t := range tools {
+		rows = append(rows, store.ConnectorTool{Name: t.Name, Description: t.Description, ReadOnlyHint: t.ReadOnlyHint})
+	}
+	return view(r.c.DB.Connectors().SetTools(ctx, actor, id, rows))
+}
 
 // ClientSecret opens the stored OAuth client secret of the connector with
 // id: "" when none is stored. It is for the OAuth client alone; never log
