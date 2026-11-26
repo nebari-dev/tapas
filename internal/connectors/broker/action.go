@@ -69,7 +69,7 @@ func (a *action) Plan(ctx context.Context, p actions.Proposal) (actions.Planned,
 			Params: map[string]string{argumentsParam: args.String()},
 		},
 		TargetName: c.conn.Name, Summary: c.conn.Name + ": " + c.tool, Changes: changes,
-		Destructive: c.listed.Annotations != nil && c.listed.Annotations.DestructiveHint != nil && *c.listed.Annotations.DestructiveHint,
+		Destructive: destructive(c.listed),
 	}, nil
 }
 
@@ -104,6 +104,20 @@ func (a *action) newCall(ctx context.Context, ph phase, p actions.Proposal) *cal
 	return &call{
 		phase: ph, caller: a.callerOf(ctx), name: p.Target, args: json.RawMessage(p.Params[argumentsParam]), started: a.b.c.Now(),
 	}
+}
+
+// destructive reads t's hints as the MCP spec defines them: a tool that only
+// reads is not destructive, any other one is unless it says it is not. The
+// hints come from the connector, so a missing one errs towards asking again.
+func destructive(t *sdk.Tool) bool {
+	a := t.Annotations
+	if a == nil {
+		return true
+	}
+	if a.ReadOnlyHint {
+		return false
+	}
+	return a.DestructiveHint == nil || *a.DestructiveHint
 }
 
 // changesOf is one change per top-level field of the object args, its value
