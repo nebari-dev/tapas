@@ -354,3 +354,52 @@ func TestATimeoutIsAToolError(t *testing.T) {
 		t.Fatalf("hang %+v", res)
 	}
 }
+
+// rotating is a token source whose token a connector may have stopped
+// taking; Invalidate puts the good one back.
+type rotating struct {
+	current     string
+	invalidated []string
+}
+
+func (r *rotating) Token(context.Context, connectors.Connector, string) (string, error) {
+	return r.current, nil
+}
+
+func (r *rotating) Invalidate(_ context.Context, _ connectors.Connector, _, refused string) error {
+	r.invalidated = append(r.invalidated, refused)
+	r.current = bearer
+	return nil
+}
+
+// A connector that refuses the token gets one fresh token and one retry.
+func TestA401RefreshesTheTokenAndRetriesOnce(t *testing.T) {
+	t.Parallel()
+	src := &rotating{current: bearer}
+	f := newFixture(t, options{tokens: src})
+	if tools := f.b.Tools(ctx, alice()); len(tools) == 0 {
+		t.Fatal("no tools")
+	}
+	src.current = "tok-revoked"
+	res := call(t, f, alice(), "fake__echo", `{"n":1}`)
+	if res.IsError || text(t, res) != `{"n":1}` {
+		t.Fatalf("echo %+v", res)
+	}
+	if len(src.invalidated) != 1 || src.invalidated[0] != "tok-revoked" {
+		t.Fatalf("invalidated %v", src.invalidated)
+	}
+	if calls := f.fake.Calls(); len(calls) != 1 || calls[0].Bearer != bearer {
+		t.Fatalf("calls %+v", calls)
+	}
+
+	// Still refused after the retry: not connected, after one more
+	// invalidation and no more.
+	f.fake.Unauthorized(true)
+	res = call(t, f, alice(), "fake__echo", `{}`)
+	if want := reasons.Msg(reasons.MsgConnectorNotConnected, "Fake", "https://tapas.example.org/settings/connections"); !res.IsError || text(t, res) != want {
+		t.Fatalf("got %+v", res)
+	}
+	if len(src.invalidated) != 2 {
+		t.Fatalf("invalidated %v", src.invalidated)
+	}
+}
