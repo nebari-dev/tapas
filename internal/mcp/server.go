@@ -63,6 +63,8 @@ type Config struct {
 	PublicURL string
 	// Version is reported to clients.
 	Version string
+	// Broker offers connectors' tools; nil offers none.
+	Broker Broker
 }
 
 // MaxSessionsPerPerson is how many MCP sessions one person may hold open at
@@ -87,6 +89,9 @@ func NewHandler(cfg Config) http.Handler {
 	for _, a := range cfg.Actions {
 		t := proposeTool(cfg, a)
 		server.AddTool(t.tool, t.handle)
+	}
+	if cfg.Broker != nil {
+		server.AddReceivingMiddleware(brokerMiddleware(cfg.Broker))
 	}
 	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{SessionTimeout: SessionIdle})
 	authed := auth.RequireBearerToken(cfg.Verify, &auth.RequireBearerTokenOptions{
@@ -309,7 +314,7 @@ func proposeTool(cfg Config, a actions.Info) tool {
 				prop.Params[p.Name] = v
 			}
 		}
-		body, _ := json.Marshal(map[string]any{"source": "mcp:" + clientName(req), "proposal": prop})
+		body, _ := json.Marshal(map[string]any{"source": "mcp:" + clientName(req.Session), "proposal": prop})
 		res, err := cfg.call(ctx, req, http.MethodPost, "/api/plans", body)
 		if err != nil || res.IsError {
 			return res, err
@@ -332,10 +337,10 @@ func ptr[T any](v T) *T { return &v }
 
 // clientName is the agent's own name from its initialize request, kept to
 // letters, digits and a few marks.
-func clientName(req *sdk.CallToolRequest) string {
+func clientName(ss *sdk.ServerSession) string {
 	name := "agent"
-	if req.Session != nil {
-		if p := req.Session.InitializeParams(); p != nil && p.ClientInfo != nil && p.ClientInfo.Name != "" {
+	if ss != nil {
+		if p := ss.InitializeParams(); p != nil && p.ClientInfo != nil && p.ClientInfo.Name != "" {
 			name = p.ClientInfo.Name
 		}
 	}
