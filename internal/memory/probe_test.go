@@ -67,3 +67,28 @@ func TestProbeLogsWhetherMem0Answers(t *testing.T) {
 		})
 	}
 }
+
+// A 404 at the start check means the address does not reach the mem0 pack
+// (the pack answers 404 for routes it does not serve). It must be a failure
+// that names the request and status, not an empty list and not "not found".
+func TestProbeTreatsA404AsAWrongAddress(t *testing.T) {
+	logs := captureLogs(t)
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+	svc := memory.NewService(memory.NewMem0(srv.URL, "k", srv.Client()), nil)
+
+	err := memory.Probe(context.Background(), svc, srv.URL)
+
+	if err == nil || errors.Is(err, memory.ErrNotFound) {
+		t.Fatalf("Probe error = %v, want an error that is not ErrNotFound", err)
+	}
+	out := logs.String()
+	for _, w := range []string{"memory.unreachable", "level=WARN", "GET /memories", "404"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("log %q lacks %q", out, w)
+		}
+	}
+	if strings.Contains(out, "memory.ready") {
+		t.Errorf("log %q says ready", out)
+	}
+}
