@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"slices"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -33,9 +34,55 @@ func (b *Broker) resolve(ctx context.Context, c *call) *sdk.CallToolResult {
 		args = []byte("{}")
 	}
 	var obj map[string]json.RawMessage
-	if len(args) > MaxArguments || args[0] != '{' || json.Unmarshal(args, &obj) != nil {
-		return errorResult(c, outcomeToolError, "Give the arguments as a JSON object of at most 64 KiB.")
+	if len(args) > MaxArguments || args[0] != '{' || json.Unmarshal(args, &obj) != nil || !namesOnce(args) {
+		return errorResult(c, outcomeToolError, "Give the arguments as a JSON object of at most 64 KiB, each name once.")
 	}
 	c.args = args
 	return nil
+}
+
+// namesOnce reports whether data is one JSON value in which no object names
+// a field twice. Parsers disagree on which of two values wins, so the policy
+// and the connector could each act on a different one; such arguments are
+// refused.
+func namesOnce(data []byte) bool {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if !valueNamesOnce(dec) {
+		return false
+	}
+	_, err := dec.Token()
+	return err == io.EOF
+}
+
+// valueNamesOnce reads the next value from dec, checking every object in it.
+func valueNamesOnce(dec *json.Decoder) bool {
+	t, err := dec.Token()
+	if err != nil {
+		return false
+	}
+	switch t {
+	case json.Delim('{'):
+		seen := map[string]bool{}
+		for dec.More() {
+			k, err := dec.Token()
+			name, ok := k.(string)
+			if err != nil || !ok || seen[name] {
+				return false
+			}
+			seen[name] = true
+			if !valueNamesOnce(dec) {
+				return false
+			}
+		}
+	case json.Delim('['):
+		for dec.More() {
+			if !valueNamesOnce(dec) {
+				return false
+			}
+		}
+	default:
+		return true
+	}
+	_, err = dec.Token() // the closing bracket
+	return err == nil
 }

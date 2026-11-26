@@ -348,7 +348,9 @@ func TestArgumentsMustBeASmallJSONObject(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, options{})
 	big := `{"text":"` + strings.Repeat("x", broker.MaxArguments) + `"}`
-	for _, args := range []string{`[1]`, `"x"`, `null`, `{`, big} {
+	// A name given twice, at any depth, is refused: the policy and the
+	// connector could each read a different one of the two values.
+	for _, args := range []string{`[1]`, `"x"`, `null`, `{`, big, `{"text":"a","text":"b"}`, `{"q":{"a":1,"a":2}}`, `{"l":[{"a":1,"a":2}]}`} {
 		if res := call(t, f, alice(), "fake__echo", args); !res.IsError {
 			t.Errorf("%.20s: %+v", args, res)
 		}
