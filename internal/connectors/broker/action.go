@@ -78,7 +78,7 @@ func (a *action) Plan(ctx context.Context, p actions.Proposal) (actions.Planned,
 			Params: map[string]string{argumentsParam: args.String(), connectorParam: c.conn.ID, urlParam: c.conn.URL},
 		},
 		TargetName: c.conn.Name, Summary: c.conn.Name + ": " + c.tool, Changes: changes,
-		Destructive: destructive(c.listed),
+		Destructive: destructive(c.mode, c.listed),
 	}, nil
 }
 
@@ -116,15 +116,17 @@ func (a *action) newCall(ctx context.Context, ph phase, p actions.Proposal) *cal
 	}
 }
 
-// destructive reads t's hints as the MCP spec defines them: a tool that only
-// reads is not destructive, any other one is unless it says it is not. The
-// hints come from the connector, so a missing one errs towards asking again.
-func destructive(t *sdk.Tool) bool {
+// destructive reads t's hints as the MCP spec defines them, with the
+// admin's mode first: a tool set to write is never taken as read-only on
+// the connector's word, so only an explicit destructiveHint false clears it.
+// The hints come from the connector, so a missing one errs towards asking
+// again.
+func destructive(mode connectors.ToolMode, t *sdk.Tool) bool {
 	a := t.Annotations
 	if a == nil {
 		return true
 	}
-	if a.ReadOnlyHint {
+	if mode == connectors.ToolRead && a.ReadOnlyHint {
 		return false
 	}
 	return a.DestructiveHint == nil || *a.DestructiveHint
