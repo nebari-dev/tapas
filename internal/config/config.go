@@ -955,7 +955,12 @@ func (p Platform) Validate() error {
 	}
 	if m := p.Memory; m.Enabled {
 		if u, err := url.Parse(m.URL); m.URL == "" || err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-			bad("memory.url", "%q: enabled needs mem0's http or https address", m.URL)
+			bad("memory.url", "enabled needs mem0's http or https address with a host (the value is not shown: it may hold a credential)")
+		} else if u.User != nil {
+			// Not echoed: the value may hold a password, and Go would send it to mem0 as Basic auth.
+			bad("memory.url", "must not carry a user name or password: mem0's key comes from apiKeySecret")
+		} else if strings.ContainsAny(m.URL, "?#") {
+			bad("memory.url", "must be mem0's address only, without a query or fragment (the value is not shown: it may hold a token)")
 		}
 		positive("memory.timeout", m.Timeout)
 		positive("memory.addTimeout", m.AddTimeout)
