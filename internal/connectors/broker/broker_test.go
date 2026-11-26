@@ -11,6 +11,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nebari-dev/javo/internal/actions"
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/authz"
 	"github.com/nebari-dev/javo/internal/connectors"
@@ -181,14 +182,57 @@ func TestAReadIsForwardedWithTheConnectionsToken(t *testing.T) {
 	}
 }
 
-// Writes become plans in a later change; until then they are refused and
-// never reach the connector.
-func TestAWriteIsNotForwarded(t *testing.T) {
+// A write becomes a plan, checked by the connector-call action as the
+// caller, and never reaches the connector.
+func TestAWriteBecomesAPlan(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, options{})
-	res := call(t, f, alice(), "fake__post", `{"text":"hello"}`)
-	if !res.IsError || len(f.fake.Calls()) != 0 {
-		t.Fatalf("post %+v, calls %v", res, f.fake.Calls())
+	var planned actions.Planned
+	c := writer()
+	c.Propose = func(ctx context.Context, p actions.Proposal) (connectors.Proposed, error) {
+		pl, err := as(f, c).Plan(ctx, p)
+		if err != nil {
+			return connectors.Proposed{}, &connectors.ProposalRefused{Text: err.Error()}
+		}
+		planned = pl
+		return connectors.Proposed{ID: "h-1", ApproveURL: "https://tapas.example.org/approvals/h-1"}, nil
+	}
+	res := call(t, f, c, "fake__post", `{"text": "hello"}`)
+	if res.IsError || text(t, res) != `{"approveUrl":"https://tapas.example.org/approvals/h-1","planId":"h-1","state":"awaiting_approval"}` {
+		t.Fatalf("post %+v", res)
+	}
+	if planned.Target != "fake__post" || planned.Params["arguments"] != `{"text":"hello"}` || len(f.fake.Calls()) != 0 {
+		t.Fatalf("planned %+v, calls %v", planned, f.fake.Calls())
+	}
+}
+
+// A read the policy wants approved becomes a plan too.
+func TestAReadThePolicyWantsApprovedBecomesAPlan(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, options{policy: &phased{ask: policy.PhaseRead}})
+	c := proposing(writer())
+	c.Propose = planWith(f)
+	if res := call(t, f, c, "fake__echo", `{}`); res.IsError || !strings.Contains(text(t, res), "awaiting_approval") || len(f.fake.Calls()) != 0 {
+		t.Fatalf("echo %+v, calls %v", res, f.fake.Calls())
+	}
+}
+
+// proposing is c with a way to propose; planWith replaces it in a test.
+func proposing(c connectors.Caller) connectors.Caller {
+	c.Propose = func(context.Context, actions.Proposal) (connectors.Proposed, error) {
+		return connectors.Proposed{}, errors.New("unset")
+	}
+	return c
+}
+
+// planWith proposes by planning with f's action as the proposal's caller
+// would, answering the plan handle h-1.
+func planWith(f *fixture) func(context.Context, actions.Proposal) (connectors.Proposed, error) {
+	return func(ctx context.Context, p actions.Proposal) (connectors.Proposed, error) {
+		if _, err := as(f, writer()).Plan(ctx, p); err != nil {
+			return connectors.Proposed{}, &connectors.ProposalRefused{Text: err.Error()}
+		}
+		return connectors.Proposed{ID: "h-1", ApproveURL: "https://tapas.example.org/approvals/h-1"}, nil
 	}
 }
 

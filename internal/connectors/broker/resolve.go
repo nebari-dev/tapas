@@ -23,9 +23,11 @@ func (b *Broker) resolve(ctx context.Context, c *call) *sdk.CallToolResult {
 	if err != nil {
 		return errorResult(c, outcomeOf(err), upstreamText(err))
 	}
-	if !slices.ContainsFunc(tools, func(t *sdk.Tool) bool { return t.Name == c.tool }) {
+	i := slices.IndexFunc(tools, func(t *sdk.Tool) bool { return t.Name == c.tool })
+	if i < 0 {
 		return noSuchTool(c, outcomeDeniedAuthz)
 	}
+	c.listed = tools[i]
 	args := bytes.TrimSpace(c.args)
 	if len(args) == 0 {
 		args = []byte("{}")

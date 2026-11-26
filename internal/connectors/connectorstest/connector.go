@@ -30,8 +30,8 @@ type Call struct {
 
 // Connector is a fake MCP server behind bearer auth. It has a read tool
 // echo, which answers its arguments as text, and a write tool post, which
-// answers "posted". Knobs make it answer 401, hang, or return oversized
-// results.
+// answers "posted" and says it is destructive. Knobs make it answer 401,
+// hang, return oversized results or answer tool errors.
 type Connector struct {
 	// URL is its MCP endpoint (plain http on a loopback address).
 	URL string
@@ -46,6 +46,7 @@ type Connector struct {
 	unauthorized bool
 	hang         bool
 	oversize     int
+	toolError    bool
 	release      chan struct{}
 }
 
@@ -82,7 +83,7 @@ func (c *Connector) start(t *testing.T, as *AuthServer) {
 	}, c.handle("echo"))
 	server.AddTool(&sdk.Tool{
 		Name: "post", Description: "Posts a message",
-		InputSchema: map[string]any{"type": "object"},
+		InputSchema: map[string]any{"type": "object"}, Annotations: &sdk.ToolAnnotations{DestructiveHint: &destructive},
 	}, c.handle("post"))
 	server.AddReceivingMiddleware(func(next sdk.MethodHandler) sdk.MethodHandler {
 		return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
@@ -155,7 +156,7 @@ func (c *Connector) handle(name string) sdk.ToolHandler {
 		}
 		c.mu.Lock()
 		c.calls = append(c.calls, Call{Tool: name, Bearer: bearer, Arguments: slices.Clone(req.Params.Arguments)})
-		hang, oversize := c.hang, c.oversize
+		hang, oversize, toolError := c.hang, c.oversize, c.toolError
 		c.mu.Unlock()
 		if hang {
 			select {
@@ -163,6 +164,9 @@ func (c *Connector) handle(name string) sdk.ToolHandler {
 			case <-c.release:
 			}
 			return nil, ctx.Err()
+		}
+		if toolError {
+			return &sdk.CallToolResult{IsError: true, Content: []sdk.Content{&sdk.TextContent{Text: "channel not found"}}}, nil
 		}
 		text := "posted"
 		switch {
@@ -224,6 +228,17 @@ func (c *Connector) Oversize(n int) {
 	defer c.mu.Unlock()
 	c.oversize = n
 }
+
+// ToolError makes its tools answer a tool error (isError) while on.
+func (c *Connector) ToolError(on bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.toolError = on
+}
+
+// destructive is post's destructiveHint: a message once posted cannot be
+// taken back.
+var destructive = true
 
 // StaticToken is a token source that gives every connector and person the
 // same bearer; empty means nobody connected.

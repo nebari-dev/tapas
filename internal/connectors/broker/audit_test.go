@@ -17,6 +17,7 @@ import (
 	"github.com/nebari-dev/javo/internal/connectors/client"
 	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
 	"github.com/nebari-dev/javo/internal/connectors/policy"
+	"github.com/nebari-dev/javo/internal/plans"
 	"github.com/nebari-dev/javo/internal/reasons"
 	"github.com/nebari-dev/javo/internal/store"
 )
@@ -90,8 +91,12 @@ func TestEachOutcomeWritesOneRow(t *testing.T) {
 			detail: map[string]any{"tool": "echo", "mode": "read", "outcome": "ok", "policy": "allow", "agent": "helper-1"}},
 		{name: "tool_error", caller: alice(), tool: "fake__echo", args: `[1]`, allowed: true,
 			detail: map[string]any{"tool": "echo", "mode": "read", "outcome": "tool_error"}},
-		{name: "write_unavailable", caller: alice(), tool: "fake__post", args: `{}`, allowed: true,
-			detail: map[string]any{"tool": "post", "mode": "write", "outcome": "write_unavailable"}},
+		{name: "proposed", caller: proposing(writer()), tool: "fake__post", args: `{}`, allowed: true,
+			detail: map[string]any{"tool": "post", "mode": "write", "outcome": "proposed", "policy": "allow", "plan": plans.StoredID("h-1")}},
+		{name: "read token proposing", caller: proposing(alice()), tool: "fake__post", args: `{}`, allowed: false,
+			detail: map[string]any{"tool": "post", "mode": "write", "outcome": "denied_token"}},
+		{name: "policy denies proposing", o: options{policy: &phased{deny: policy.PhasePropose}}, caller: proposing(writer()), tool: "fake__post", args: `{}`, allowed: false,
+			detail: map[string]any{"tool": "post", "mode": "write", "outcome": "denied_policy", "policy": "deny"}},
 		{name: "denied_token", caller: app, tool: "fake__echo", args: `{}`, allowed: false, noID: true,
 			detail: map[string]any{"tool": "echo", "outcome": "denied_token", "agent": "helper-1", "credential": ""}},
 		{name: "denied_authz", caller: bob, tool: "fake__echo", args: `{}`, allowed: false,
@@ -109,7 +114,11 @@ func TestEachOutcomeWritesOneRow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.o.now = stepClock()
 			f := newFixture(t, tc.o)
-			call(t, f, tc.caller, tc.tool, tc.args)
+			c := tc.caller
+			if c.Propose != nil {
+				c.Propose = planWith(f)
+			}
+			call(t, f, c, tc.tool, tc.args)
 			rows := callRows(t, f.db)
 			if len(rows) != 1 {
 				t.Fatalf("%d rows: %+v", len(rows), rows)

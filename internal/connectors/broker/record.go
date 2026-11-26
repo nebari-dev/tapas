@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -23,9 +24,8 @@ const (
 	outcomeNotConnected  = "not_connected"
 	outcomeUpstreamError = "upstream_error"
 	outcomeTimeout       = "timeout"
-	// outcomeWriteUnavailable is a write refused while writes cannot be
-	// proposed yet; proposing replaces it with "proposed".
-	outcomeWriteUnavailable = "write_unavailable"
+	// outcomeProposed is a write that became a plan; nothing was forwarded.
+	outcomeProposed = "proposed"
 )
 
 // actionCall is the audit action of a connector tool call.
@@ -58,25 +58,35 @@ type callDetail struct {
 // the answer to give. When the row cannot be written, res is withheld and
 // the call answers an error (D19).
 func (b *Broker) record(ctx context.Context, c *call, res *sdk.CallToolResult) *sdk.CallToolResult {
+	if b.appendRow(ctx, c) != nil {
+		return errorResult(c, c.outcome, serverError)
+	}
+	return res
+}
+
+// appendRow writes c's audit row; a failure is logged and returned.
+func (b *Broker) appendRow(ctx context.Context, c *call) error {
 	if b.c.Audit == nil {
 		slog.Error("connector calls cannot be audited: no audit log is configured")
-		return errorResult(c, c.outcome, serverError)
+		return errNoAudit
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), auditTimeout)
 	defer cancel()
 	if err := b.c.Audit.Append(ctx, auditRow(c, b.c.Now())); err != nil {
 		slog.Error("audit a connector call", "connector", c.conn.Slug, "outcome", c.outcome, "err", err)
-		return errorResult(c, c.outcome, serverError)
+		return err
 	}
-	return res
+	return nil
 }
+
+var errNoAudit = errors.New("broker: no audit log")
 
 // auditRow is c's audit row, at now.
 func auditRow(c *call, now time.Time) store.AuditEvent {
 	who, via := store.ActorStrings(model.Actor{Person: c.caller.Principal.ID, Token: c.caller.Token.ID})
 	d := callDetail{
 		Tool: c.tool, Mode: string(c.mode), Outcome: c.outcome, Client: c.caller.Client,
-		Credential: string(c.conn.AuthMode), Policy: string(c.policy), Ms: now.Sub(c.started).Milliseconds(),
+		Credential: string(c.conn.AuthMode), Plan: c.plan, Policy: string(c.policy), Ms: now.Sub(c.started).Milliseconds(),
 	}
 	if app := c.caller.Token.App; app != nil {
 		d.Agent = app.Name

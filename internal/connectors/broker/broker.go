@@ -85,7 +85,23 @@ type call struct {
 	outcome string
 	policy  policy.Effect
 	started time.Time
+	// phase is what the steps run for: an agent's call, planning a write,
+	// or applying an approved one.
+	phase phase
+	// listed is the connector's own entry for the tool, once resolved.
+	listed *sdk.Tool
+	// plan is the stored id of the plan the call became or applies.
+	plan string
 }
+
+// phase is what a call's steps run for.
+type phase int
+
+const (
+	phaseCall  phase = iota // an agent calls a tool through /mcp
+	phasePlan               // a write is checked to become a plan
+	phaseApply              // an approved plan is made
+)
 
 // Call runs a connector's tool for caller. It answers false, and nothing
 // else, when name is not a connector's tool (it holds no separator); any
@@ -98,15 +114,24 @@ func (b *Broker) Call(ctx context.Context, caller connectors.Caller, name string
 	return b.record(ctx, c, b.run(ctx, c)), true
 }
 
-// run passes c through the steps; the first that answers ends it.
+// run passes c through the steps of its phase; the first that answers ends
+// it. Planning ends after the checks, with nil when they all passed.
 func (b *Broker) run(ctx context.Context, c *call) *sdk.CallToolResult {
-	steps := []func(context.Context, *call) *sdk.CallToolResult{
-		b.identify, b.authorize, b.token, b.resolve, b.checkPolicy, b.propose, b.forward,
+	steps := []func(context.Context, *call) *sdk.CallToolResult{b.identify, b.authorize, b.token, b.resolve, b.checkPolicy}
+	switch c.phase {
+	case phasePlan:
+	case phaseApply:
+		steps = append(steps, b.forward)
+	default:
+		steps = append(steps, b.propose, b.forward)
 	}
 	for _, step := range steps {
 		if res := step(ctx, c); res != nil {
 			return res
 		}
+	}
+	if c.phase == phasePlan {
+		return nil
 	}
 	return errorResult(c, outcomeUpstreamError, "The connector gave no answer.")
 }

@@ -106,6 +106,21 @@ func (s *Service) now() time.Time {
 	return time.Now()
 }
 
+// StoredID is the id the plan with handle id is stored, and audited, under.
+// The handle itself is a secret: it approves the plan.
+func StoredID(id string) string { return key(id) }
+
+// applyingKey holds, in the context Approve gives apply, the stored id of
+// the plan being applied.
+type applyingKey struct{}
+
+// ApplyingID is the stored id of the plan whose change ctx is making; "" when
+// ctx is not the apply of an approval.
+func ApplyingID(ctx context.Context) string {
+	id, _ := ctx.Value(applyingKey{}).(string)
+	return id
+}
+
 func key(id string) string {
 	sum := sha256.Sum256([]byte(id))
 	return hex.EncodeToString(sum[:])
@@ -226,7 +241,7 @@ func (s *Service) Approve(ctx context.Context, actor model.Actor, owner, id stri
 		return Plan{}, err
 	}
 	a.Detail = withSummary(a.Detail, p.Planned.Summary)
-	if applyErr := apply(ctx, p.Planned.Proposal); applyErr != nil {
+	if applyErr := apply(context.WithValue(ctx, applyingKey{}, p.row), p.Planned.Proposal); applyErr != nil {
 		if _, err := s.DB.Plans().Transition(ctx, actor, p.row, Applying, Failed, applyErr.Error(), a); err != nil {
 			slog.Error("record failed plan", "err", err)
 		}
