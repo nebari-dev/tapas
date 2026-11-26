@@ -16,6 +16,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/model"
 )
@@ -122,7 +123,7 @@ func or(d, def time.Duration) time.Duration {
 // session opens a session with bearer, runs do within timeout, and closes
 // it. An error is reduced to its class.
 func (c *Client) session(ctx context.Context, t Target, bearer string, timeout time.Duration, do func(context.Context, *sdk.ClientSession) error) error {
-	tr := &callTransport{bearer: bearer, next: http.DefaultTransport}
+	tr := &callTransport{bearer: connectors.Secret(bearer), next: http.DefaultTransport}
 	if c.HTTP != nil && c.HTTP.Transport != nil {
 		tr.next = c.HTTP.Transport
 	}
@@ -150,7 +151,7 @@ func (c *Client) session(ctx context.Context, t Target, bearer string, timeout t
 // callTransport adds the bearer to every request, caps every answer's body
 // and remembers what went wrong at the HTTP layer.
 type callTransport struct {
-	bearer       string
+	bearer       connectors.Secret
 	next         http.RoundTripper
 	unauthorized atomic.Bool
 	tooLarge     atomic.Bool
@@ -158,7 +159,7 @@ type callTransport struct {
 
 func (t *callTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
-	r.Header.Set("Authorization", "Bearer "+t.bearer)
+	r.Header.Set("Authorization", "Bearer "+t.bearer.Reveal())
 	resp, err := t.next.RoundTrip(r)
 	if err != nil {
 		return nil, err
