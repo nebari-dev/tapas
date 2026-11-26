@@ -40,6 +40,31 @@ var metadataAddrs = []netip.Addr{
 var privateRanges = []netip.Prefix{
 	netip.MustParsePrefix("100.64.0.0/10"), // carrier-grade NAT
 	netip.MustParsePrefix("0.0.0.0/8"),     // this network
+	netip.MustParsePrefix("fec0::/10"),     // IPv6 site-local (deprecated, still routed by some networks)
+}
+
+// embedding are IPv6 ranges whose addresses carry an IPv4 address that a
+// translator or tunnel delivers to, and where in the 16 bytes it sits.
+var embedding = []struct {
+	p  netip.Prefix
+	at int
+}{
+	{netip.MustParsePrefix("64:ff9b::/96"), 12},   // NAT64, well-known prefix
+	{netip.MustParsePrefix("64:ff9b:1::/48"), 12}, // NAT64, local-use prefix
+	{netip.MustParsePrefix("2002::/16"), 2},       // 6to4
+	{netip.MustParsePrefix("::/96"), 12},          // IPv4-compatible
+}
+
+// embedded is the IPv4 address ip carries, when it is in one of the
+// embedding ranges.
+func embedded(ip netip.Addr) (netip.Addr, bool) {
+	for _, e := range embedding {
+		if e.p.Contains(ip) {
+			b := ip.As16()
+			return netip.AddrFrom4([4]byte(b[e.at : e.at+4])), true
+		}
+	}
+	return netip.Addr{}, false
 }
 
 // MetadataHost reports whether host names a cloud metadata service,
@@ -48,17 +73,24 @@ func MetadataHost(host string) bool {
 	return slices.Contains(metadataHosts, strings.TrimSuffix(strings.ToLower(host), "."))
 }
 
-// Blocked is a link-local, unspecified or metadata address: no guard ever
+// Blocked is a link-local, unspecified or metadata address, or an IPv6
+// address that carries one (NAT64, 6to4, IPv4-compatible): no guard ever
 // connects to one.
 func Blocked(ip netip.Addr) bool {
 	ip = ip.Unmap()
+	if v4, ok := embedded(ip); ok && Blocked(v4) {
+		return true
+	}
 	return ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || slices.Contains(metadataAddrs, ip)
 }
 
 // private is a loopback, multicast or private address (RFC 1918, ULA,
-// carrier-grade NAT).
+// site-local, carrier-grade NAT), or an IPv6 address that carries one.
 func private(ip netip.Addr) bool {
 	ip = ip.Unmap()
+	if v4, ok := embedded(ip); ok && private(v4) {
+		return true
+	}
 	return ip.IsLoopback() || ip.IsMulticast() || ip.IsPrivate() ||
 		slices.ContainsFunc(privateRanges, func(p netip.Prefix) bool { return p.Contains(ip) })
 }
