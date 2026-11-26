@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/reasons"
 )
@@ -137,5 +138,25 @@ func TestValidateNamesTheFirstBadField(t *testing.T) {
 	var fe *connectors.FieldError
 	if err := c.Validate(nil); !errors.As(err, &fe) || fe.Field != "oauth.authorizeUrl" {
 		t.Errorf("token URL without authorize URL: %v", err)
+	}
+}
+
+// Only a personal token or a coding agent's app token may reach
+// connectors: a plain app's or a job's token is refused (D15).
+func TestOnlyPersonalAndAgentTokensMayUseConnectors(t *testing.T) {
+	app := &token.App{Namespace: "ns", Name: "helper-1", Short: "helper"}
+	for name, c := range map[string]struct {
+		caller connectors.Caller
+		want   bool
+	}{
+		"personal":        {connectors.Caller{Token: token.Token{ID: "t-1", Owner: "alice"}}, true},
+		"agent app":       {connectors.Caller{Token: token.Token{ID: "t-1", Owner: "alice", App: app}, AgentApp: true}, true},
+		"plain app":       {connectors.Caller{Token: token.Token{ID: "t-1", Owner: "alice", App: app}}, false},
+		"job":             {connectors.Caller{Token: token.Token{ID: "t-1", Owner: "alice", Job: "j-1"}, AgentApp: true}, false},
+		"no token at all": {connectors.Caller{}, false},
+	} {
+		if got := c.caller.MayUseConnectors(); got != c.want {
+			t.Errorf("%s: %v", name, got)
+		}
 	}
 }
