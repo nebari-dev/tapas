@@ -1,0 +1,77 @@
+name: Connectors preview image
+
+# Builds the image of this branch (linux/amd64 only) and pushes it to
+# ghcr.io/nebari-dev/tapas:connectors-<commit>, for trying the connector
+# work on a cluster before it is released. Not signed; not a release.
+on:
+  push:
+    branches: [connectors-image]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connectors-image
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/nebari-dev/tapas
+  GO_VERSION: go1.26.11
+  GO_SHA256: 9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec
+  BUILDKIT_IMAGE: moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c
+
+jobs:
+  image:
+    name: Image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Fetch the commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" |
+            tar -xz --strip-components=1
+
+      - name: Install Go
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/go.tgz" "https://dl.google.com/go/$GO_VERSION.linux-amd64.tar.gz"
+          echo "$GO_SHA256  $RUNNER_TEMP/go.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/go.tgz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+          echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+
+      - name: Compile javo
+        env:
+          JAVO_VERSION: connectors-preview
+          JAVO_COMMIT: ${{ github.sha }}
+        run: scripts/build/cross-build-javo.sh "$RUNNER_TEMP/javo-bin"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push the image
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          build-contexts: javo-bin=${{ runner.temp }}/javo-bin
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:connectors-${{ github.sha }}
+
+      - name: Digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: echo "image ${IMAGE}@${DIGEST}" | tee -a "$GITHUB_STEP_SUMMARY"
