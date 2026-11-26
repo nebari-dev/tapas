@@ -53,8 +53,8 @@ config:
 |---|---|---|
 | `enabled` | `false` | Turns memory on. |
 | `url` | none | The mem0 pack's Service address, `http` or `https` with a host, and no user name, password, query or fragment. Required when memory is on. |
-| `timeout` | `10s` | How long a search, list, get or delete call may take. Must be positive. |
-| `addTimeout` | `120s` | How long an add call may take. It is longer because mem0 runs model extraction inline. Must be positive. |
+| `timeout` | `10s` | How long a search, list, get or delete call may take. Must not be negative; 0 or unset uses the default. |
+| `addTimeout` | `120s` | How long an add call may take. It is longer because mem0 runs model extraction inline. Must not be negative; 0 or unset uses the default. |
 | `apiKeySecret.namespace` | none | The namespace of mem0's admin key Secret, which is the namespace the mem0 pack is installed in. Required when memory is on. |
 | `apiKeySecret.name` | `mem0-admin-key` | The Secret's name, a valid Kubernetes Secret name. This is the pack's default; change it if you set `adminKey.secretName` or `adminKey.existingSecret` in the pack. |
 | `apiKeySecret.key` | `api-key` | The key inside the Secret that holds the admin key, a valid Secret data key. The key inside the Secret the mem0 pack makes is always `api-key` (the pack's chart fixes it), so change this only for a Secret you manage yourself. |
@@ -67,7 +67,7 @@ The gateway refuses to start with memory on when `url` is missing, is not an `ht
 
 - Memory off: nothing about memory is logged.
 - `memory.ready` with `url`: the gateway asked mem0 for the memories of a reserved name (`tapas-start-check`, which belongs to no person) and mem0 answered.
-- `memory.unreachable` with `url` and `err`: mem0 did not answer correctly. The `err` text says why. `mem0 refused the key` means mem0 answered 401, so the key in the Secret is not the one mem0 uses (the Secret was replaced, or `apiKeySecret` names the wrong one). A message such as `GET /memories answered 503`, or a connection error, means mem0 is down, still starting or not reachable from the gateway, for example because the `callers` entry does not match the gateway pod. The gateway keeps running and does not retry; fix the cause and restart the gateway to check again.
+- `memory.unreachable` with `url` and `err`: mem0 did not answer correctly. The `err` text says why. `mem0 refused the key` means mem0 answered 401, so the key in the Secret is not the one mem0 uses (the Secret was replaced, or `apiKeySecret` names the wrong one). `GET /memories answered 404` means `url` does not point at the mem0 pack's Service: the pack answers 404 for routes it does not serve, so check the address and port. A message such as `GET /memories answered 503`, or a connection error, means mem0 is down, still starting or not reachable from the gateway, for example because the `callers` entry does not match the gateway pod. The gateway keeps running and does not retry; fix the cause and restart the gateway to check again.
 - The start fails with `read the mem0 key Secret <namespace>/<name>` when the Secret is missing or the gateway may not read it (the `callers` entry is wrong). It fails with `Secret <namespace>/<name> has no "<key>"` when the Secret has no such key or its value is empty. It fails when the value has leading or trailing whitespace, for example a trailing newline from `echo` or a file: mem0 compares the key exactly, so a padded value could never work, and Tapas refuses it rather than trim it. Store the key with no whitespace around it (`printf %s`, or `kubectl create secret ... --from-literal`). The error never contains the key.
 
 ## Limits
