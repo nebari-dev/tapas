@@ -2,6 +2,10 @@ import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/re
 import { useEffect, useMemo, useRef } from 'react'
 import {
   authOptions,
+  completeConnectorSignIn,
+  connectConnector,
+  disconnectConnector,
+  listConnectors,
   createSecret,
   createToken,
   deleteSecret,
@@ -56,6 +60,7 @@ import {
   type FolderGrant,
   type FoldersView,
   type StepLogRecord,
+  type CompleteInput,
   type CreateInputBody,
   type SecretCreateInputBody,
   type SecretUpdateInputBody,
@@ -110,6 +115,7 @@ const keys = {
   previewApps: (name: string) => ['workspaces', name, 'previews', 'apps'] as const,
   tokens: ['tokens'] as const,
   secrets: ['secrets'] as const,
+  myConnectors: ['connectors'] as const,
   info: ['info'] as const,
   environments: ['environments'] as const,
 }
@@ -737,5 +743,40 @@ export function useEnvironments() {
     queryKey: keys.environments,
     queryFn: async () => (await listEnvironments({ throwOnError: true })).data,
     retry: false,
+  })
+}
+
+/** The connectors the signed-in person may use, and whether each is connected. */
+export function useMyConnectors() {
+  return useQuery({
+    queryKey: keys.myConnectors,
+    queryFn: async () => (await listConnectors({ throwOnError: true })).data.items ?? [],
+  })
+}
+
+/** Start connecting an account: answers the vendor's sign-in address to send the browser to. */
+export function useConnectAccount() {
+  return useMutation({
+    mutationFn: async (id: string) => (await connectConnector({ path: { id }, throwOnError: true })).data.authorizeUrl,
+  })
+}
+
+/** Disconnect the person's own account from a connector. */
+export function useDisconnectAccount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await disconnectConnector({ path: { id }, throwOnError: true })
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: keys.myConnectors }),
+  })
+}
+
+/** Finish a sign-in with what the vendor sent the browser back with. */
+export function useCompleteSignIn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: CompleteInput) => (await completeConnectorSignIn({ body, throwOnError: true })).data.connector,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.myConnectors }),
   })
 }
