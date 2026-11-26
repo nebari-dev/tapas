@@ -1,14 +1,15 @@
-import { ExternalLink, Pencil, Plus } from 'lucide-react'
+import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import type { AdminConnector, CatalogEntry, ConnectorInput } from '../../../api'
 import { Banner } from '../../../components/Banner'
 import { Button } from '../../../components/Button'
 import { Card } from '../../../components/Card'
+import { Confirm } from '../../../components/Confirm'
 import { CopyButton } from '../../../components/CopyButton'
 import { Segmented } from '../../../components/Segmented'
 import { Switch } from '../../../components/Switch'
-import { fieldErrors, problemText } from '../../../lib/http'
-import { useConnectorCatalog, useConnectors, useCreateConnector, useIsAdmin, useUpdateConnector } from './queries'
+import { ApiError, fieldErrors, problemText } from '../../../lib/http'
+import { useConnectorCatalog, useConnectors, useCreateConnector, useDeleteConnector, useIsAdmin, useUpdateConnector } from './queries'
 
 type AuthMode = AdminConnector['authMode']
 
@@ -22,6 +23,19 @@ const AUTH_HINTS: Record<AuthMode, string> = {
   shared:
     'One account connected by an admin is used for everyone allowed. Everything done through it shows at the vendor as that account, so use a service account.',
 }
+
+const TOOL_MODES = [
+  { value: 'read', label: 'Read' },
+  { value: 'write', label: 'Write' },
+  { value: 'off', label: 'Off' },
+] as const
+
+type ToolMode = (typeof TOOL_MODES)[number]['value']
+
+/** A tool the connector has not set is a write (the server's rule). */
+const DEFAULT_MODE: ToolMode = 'write'
+
+const isConflict = (err: unknown) => err instanceof ApiError && err.status === 409
 
 const authLabel = (m: AuthMode) => AUTH_MODES.find((o) => o.value === m)?.label ?? m
 
@@ -81,6 +95,17 @@ function draftFrom(e: CatalogEntry | null): Draft {
 }
 
 /**
+ * d with a mode for every tool the server listed: what the admin set, else
+ * read for a tool the server says only reads, else write. The server's word
+ * only prefills; what is saved is what the admin sees here.
+ */
+function withTools(d: Draft, tools: AdminConnector['tools']): Draft {
+  const modes = { ...d.modes }
+  for (const t of tools ?? []) modes[t.name] ??= t.readOnlyHint ? 'read' : DEFAULT_MODE
+  return { ...d, modes }
+}
+
+/**
  * The request body for d. A PUT replaces the whole connector, so the OAuth
  * endpoints go back as read; the client secret goes only when one was typed.
  */
@@ -110,9 +135,96 @@ function RedirectAddress({ uri }: { uri?: string }) {
   if (uri === undefined) return <span className="hint">Shown here once the connector is saved. You can add it turned off first.</span>
   if (!uri) return <span className="hint">The platform config sets no public address, so there is no redirect address yet.</span>
   return (
-    <div className="row">
+    <div className="row con-redirect">
       <code className="mono">{uri}</code>
       <CopyButton text={() => uri} label="Copy the redirect address" />
+    </div>
+  )
+}
+
+/** A read, write or off control per tool, and a way to add a tool the server has not listed yet. */
+function ToolModes({ tools, modes, onChange }: { tools?: AdminConnector['tools']; modes: Record<string, string>; onChange: (m: Record<string, string>) => void }) {
+  const ids = { head: useId(), add: useId() }
+  const [name, setName] = useState('')
+  const about = new Map((tools ?? []).map((t) => [t.name, t]))
+  const names = [...new Set([...about.keys(), ...Object.keys(modes)])]
+  const add = () => {
+    const n = name.trim()
+    if (!n) return
+    if (!(n in modes)) onChange({ ...modes, [n]: DEFAULT_MODE })
+    setName('')
+  }
+  return (
+    <div className="field" role="group" aria-labelledby={ids.head}>
+      <span id={ids.head} className="field-label">
+        Tools
+      </span>
+      <span className="hint">
+        Read tools run at once. Write tools become plans the agent's owner approves first. Off tools are hidden from agents.
+      </span>
+      {names.length === 0 ? (
+        <p className="tight muted small">
+          No tools are known yet: Tapas has not read the list from the server. Add a tool by name to set its mode now. A tool not set here
+          counts as a write.
+        </p>
+      ) : (
+        <div className="card atable-wrap">
+          <table className="atable con-tools">
+            <caption className="sr-only">Tools</caption>
+            <thead>
+              <tr>
+                <th scope="col">Tool</th>
+                <th scope="col">Mode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {names.map((n) => {
+                const t = about.get(n)
+                return (
+                  <tr key={n}>
+                    <th scope="row">
+                      <div className="atable-name">
+                        <span className="mono">{n}</span>
+                        {t?.description && <span className="faint small">{t.description}</span>}
+                        {t?.readOnlyHint && <span className="faint small">The server says it only reads.</span>}
+                      </div>
+                    </th>
+                    <td>
+                      <Segmented
+                        label={n}
+                        value={(modes[n] as ToolMode | undefined) ?? DEFAULT_MODE}
+                        options={[...TOOL_MODES]}
+                        onChange={(v) => onChange({ ...modes, [n]: v })}
+                      />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="row con-add-tool">
+        <input
+          id={ids.add}
+          className="input mono"
+          aria-label="Add a tool by name"
+          placeholder="tool_name"
+          value={name}
+          maxLength={128}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            add()
+          }}
+        />
+        <Button icon={Plus} disabled={!name.trim()} onClick={add}>
+          Add tool
+        </Button>
+      </div>
     </div>
   )
 }
@@ -125,27 +237,36 @@ function ConnectorForm({
   entry,
   redirectUri,
   onDone,
+  onConflict,
 }: {
   start: Draft
   existing?: AdminConnector
   entry?: CatalogEntry | null
   redirectUri?: string
   onDone: () => void
+  /** A save found the connector changed: the page says so, and the form is made again from the fresh copy. */
+  onConflict: (msg: string) => void
 }) {
   const create = useCreateConnector()
   const update = useUpdateConnector()
+  const remove = useDeleteConnector()
+  const [asking, setAsking] = useState(false)
   const save = existing ? update : create
   const ids = { name: useId(), slug: useId(), url: useId(), auth: useId(), id: useId(), secret: useId(), scopes: useId(), groups: useId() }
   const [d, setD] = useState(start)
   const [secret, setSecret] = useState('')
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }))
-  const errs = save.isError ? fieldErrors(save.error) : { fields: {} as Record<string, string>, other: [] as string[] }
+  const errs = save.isError && !(existing && isConflict(save.error)) ? fieldErrors(save.error) : { fields: {} as Record<string, string>, other: [] as string[] }
   const other = [...errs.other, ...Object.entries(errs.fields).filter(([f]) => !FORM_FIELDS.has(f)).map(([, m]) => m)]
   const title = existing ? existing.name : entry ? `Add ${entry.name}` : 'Add a custom connector'
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (existing) update.mutate({ id: existing.id, body: inputOf(d, secret, existing.rev) }, { onSuccess: onDone })
+    if (existing)
+      update.mutate(
+        { id: existing.id, body: inputOf(d, secret, existing.rev) },
+        { onSuccess: onDone, onError: (err) => isConflict(err) && onConflict(problemText(err)) },
+      )
     else create.mutate(inputOf(d, secret), { onSuccess: onDone })
   }
 
@@ -263,11 +384,17 @@ function ConnectorForm({
           </span>
           {err('allowedGroups')}
         </div>
+        <ToolModes tools={existing?.tools} modes={d.modes} onChange={(m) => set('modes', m)} />
         <div className="field fit">
           <Switch label={d.enabled ? 'On' : 'Off'} name="Turned on" checked={d.enabled} onChange={(on) => set('enabled', on)} />
           <span className="hint">Off, no agent sees its tools and nobody can connect to it.</span>
         </div>
-        <div className="row tok-form-act">
+        <div className="row tok-form-act con-act">
+          {existing && (
+            <Button variant="ghost" icon={Trash2} className="con-remove" onClick={() => setAsking(true)}>
+              Remove connector
+            </Button>
+          )}
           <Button variant="ghost" onClick={onDone}>
             Cancel
           </Button>
@@ -276,6 +403,19 @@ function ConnectorForm({
           </Button>
         </div>
       </form>
+      {existing && asking && (
+        <Confirm
+          title={`Remove ${existing.name}?`}
+          body="Everyone's connection to it is removed and agents lose its tools at once. This cannot be undone."
+          confirm="Remove"
+          icon={Trash2}
+          danger
+          busy={remove.isPending}
+          error={remove.isError ? remove.error : undefined}
+          onConfirm={() => remove.mutate(existing.id, { onSuccess: onDone })}
+          onCancel={() => setAsking(false)}
+        />
+      )}
     </Card>
   )
 }
@@ -291,7 +431,7 @@ function Picker({ onPick, onCancel }: { onPick: (e: CatalogEntry | null) => void
       ) : !q.data ? (
         <div className="muted">Loading</div>
       ) : (
-        <div className="row wrap">
+        <div className="row con-pick">
           {q.data.map((e) => (
             <Button key={e.id} onClick={() => onPick(e)}>
               {e.name}
@@ -311,7 +451,10 @@ function Picker({ onPick, onCancel }: { onPick: (e: CatalogEntry | null) => void
   )
 }
 
-function ConnectorRow({ c, onEdit }: { c: AdminConnector; onEdit: () => void }) {
+function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () => void; onError: (msg: string) => void }) {
+  const update = useUpdateConnector()
+  const turn = (enabled: boolean) =>
+    update.mutate({ id: c.id, body: inputOf({ ...draftOf(c), enabled }, '', c.rev) }, { onError: (err) => onError(problemText(err)) })
   return (
     <tr>
       <th scope="row">
@@ -322,7 +465,7 @@ function ConnectorRow({ c, onEdit }: { c: AdminConnector; onEdit: () => void }) 
       </th>
       <td>{authLabel(c.authMode)}</td>
       <td>
-        <Switch label={c.enabled ? 'On' : 'Off'} name={`Turn on ${c.name}`} checked={c.enabled} onChange={() => {}} />
+        <Switch label={c.enabled ? 'On' : 'Off'} name={`Turn on ${c.name}`} checked={c.enabled} disabled={update.isPending} onChange={turn} />
       </td>
       <td className="col-act">
         <Button size="sm" variant="ghost" icon={Pencil} aria-label={`Edit ${c.name}`} onClick={onEdit}>
@@ -342,7 +485,13 @@ type Open = { kind: 'pick' } | { kind: 'new'; entry: CatalogEntry | null } | { k
 export function AdminConnectors() {
   const admin = useIsAdmin()
   const q = useConnectors(admin)
-  const [open, setOpen] = useState<Open>(null)
+  const [open, setOpenState] = useState<Open>(null)
+  // A save that failed outside the form: a change someone else made first, or a switch in the list.
+  const [notice, setNotice] = useState('')
+  const setOpen = (o: Open) => {
+    setOpenState(o)
+    setNotice('')
+  }
   if (!admin) return null
   if (q.isError) return <Banner tone="err" title={problemText(q.error)} />
   if (!q.data) return <div className="muted">Loading</div>
@@ -363,6 +512,11 @@ export function AdminConnectors() {
           </Button>
         </div>
       </div>
+      {notice && (
+        <div className="section-sm">
+          <Banner tone="err" title={notice} />
+        </div>
+      )}
       {open?.kind === 'pick' && (
         <div className="section-sm">
           <Picker onPick={(entry) => setOpen({ kind: 'new', entry })} onCancel={close} />
@@ -370,12 +524,19 @@ export function AdminConnectors() {
       )}
       {open?.kind === 'new' && (
         <div className="section-sm">
-          <ConnectorForm start={draftFrom(open.entry)} entry={open.entry} redirectUri={redirectUri} onDone={close} />
+          <ConnectorForm start={draftFrom(open.entry)} entry={open.entry} redirectUri={redirectUri} onDone={close} onConflict={setNotice} />
         </div>
       )}
       {editing && (
         <div className="section-sm">
-          <ConnectorForm key={editing.rev} start={draftOf(editing)} existing={editing} redirectUri={editing.redirectUri} onDone={close} />
+          <ConnectorForm
+            key={editing.rev}
+            start={withTools(draftOf(editing), editing.tools)}
+            existing={editing}
+            redirectUri={editing.redirectUri}
+            onDone={close}
+            onConflict={setNotice}
+          />
         </div>
       )}
       <div className="section-sm card atable-wrap">
@@ -393,7 +554,7 @@ export function AdminConnectors() {
           </thead>
           <tbody>
             {list.map((c) => (
-              <ConnectorRow key={c.id} c={c} onEdit={() => setOpen({ kind: 'edit', id: c.id })} />
+              <ConnectorRow key={c.id} c={c} onEdit={() => setOpen({ kind: 'edit', id: c.id })} onError={setNotice} />
             ))}
           </tbody>
         </table>

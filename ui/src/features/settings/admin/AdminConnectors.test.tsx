@@ -203,4 +203,84 @@ describe('Connectors (admin)', () => {
     await vi.waitFor(() => expect(m.count('PUT', '/api/admin/connectors/c-1')).toBe(2))
     expect(body(m, 'PUT').oauth).toEqual({ clientId: 'client-1', clientSecret: 'new-secret' })
   })
+
+  it('saves the mode picked for each tool, and a tool added by name', async () => {
+    const m = api({ 'PUT /api/admin/connectors/c-1': (c: Call) => ({ body: { ...chat, ...(c.body as object), rev: 'r-2' } }) })
+    renderApp('/settings/connectors')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Team chat' }))
+    const form = await screen.findByRole('form', { name: 'Team chat' })
+    const tools = within(form).getByRole('table', { name: 'Tools' })
+    expect(within(tools).getByRole('radiogroup', { name: 'list_channels' }).querySelector('[aria-checked="true"]')?.textContent).toBe('Read')
+    // Not set yet: counts as a write.
+    expect(within(tools).getByRole('radiogroup', { name: 'post_message' }).querySelector('[aria-checked="true"]')?.textContent).toBe('Write')
+    await userEvent.click(within(within(tools).getByRole('radiogroup', { name: 'post_message' })).getByRole('radio', { name: 'Off' }))
+    await userEvent.type(within(form).getByLabelText('Add a tool by name'), 'delete_channel')
+    await userEvent.click(within(form).getByRole('button', { name: 'Add tool' }))
+    await userEvent.click(within(within(tools).getByRole('radiogroup', { name: 'delete_channel' })).getByRole('radio', { name: 'Off' }))
+    await userEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    await vi.waitFor(() => expect(m.count('PUT', '/api/admin/connectors/c-1')).toBe(1))
+    expect(body(m, 'PUT').toolModes).toEqual({ list_channels: 'read', post_message: 'off', delete_channel: 'off' })
+  })
+
+  it('says the tool list is empty until Tapas reads it from the server', async () => {
+    api()
+    renderApp('/settings/connectors')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Wiki' }))
+    const form = await screen.findByRole('form', { name: 'Wiki' })
+    expect(within(form).getByText(/No tools are known yet/)).toBeTruthy()
+    expect(within(form).queryByRole('table', { name: 'Tools' })).toBeNull()
+  })
+
+  it('turns a connector on from the list', async () => {
+    const m = api({ 'PUT /api/admin/connectors/c-2': (c: Call) => ({ body: { ...wiki, ...(c.body as object), rev: 'r-8' } }) })
+    renderApp('/settings/connectors')
+    await userEvent.click(await screen.findByRole('switch', { name: 'Turn on Wiki' }))
+    await vi.waitFor(() => expect(m.count('PUT', '/api/admin/connectors/c-2')).toBe(1))
+    expect(body(m, 'PUT')).toEqual({
+      slug: 'wiki',
+      name: 'Wiki',
+      url: 'https://wiki.example.org/mcp',
+      authMode: 'shared',
+      enabled: true,
+      oauth: { clientId: '' },
+      scopes: [],
+      allowedGroups: [],
+      toolModes: {},
+      rev: 'r-7',
+    })
+  })
+
+  it('removes a connector after asking', async () => {
+    const m = api({ 'DELETE /api/admin/connectors/c-2': { status: 204 } })
+    renderApp('/settings/connectors')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Wiki' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove connector' }))
+    const ask = await screen.findByRole('alertdialog', { name: 'Remove Wiki?' })
+    expect(m.count('DELETE', '/api/admin/connectors/c-2')).toBe(0)
+    await userEvent.click(within(ask).getByRole('button', { name: 'Remove' }))
+    await vi.waitFor(() => expect(m.count('DELETE', '/api/admin/connectors/c-2')).toBe(1))
+    await vi.waitFor(() => expect(screen.queryByRole('form', { name: 'Wiki' })).toBeNull())
+  })
+
+  it('says someone else saved first, and reloads the connector', async () => {
+    const changed = { ...chat, rev: 'r-2', name: 'Chat by bob' }
+    const m = api({
+      'GET /api/admin/connectors': [{ body: { items: [chat, wiki] } }, { body: { items: [changed, wiki] } }],
+      'PUT /api/admin/connectors/c-1': {
+        status: 409,
+        body: { status: 409, title: 'Someone else saved this connector in the meantime. Reload it and make your change again.' },
+      },
+    })
+    renderApp('/settings/connectors')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Team chat' }))
+    const form = await screen.findByRole('form', { name: 'Team chat' })
+    await userEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(/Someone else saved this connector/)).toBeTruthy()
+    const fresh = await screen.findByRole('form', { name: 'Chat by bob' })
+    expect((within(fresh).getByLabelText('Name') as HTMLInputElement).value).toBe('Chat by bob')
+    expect(screen.getByText(/Someone else saved this connector/)).toBeTruthy()
+    await userEvent.click(within(fresh).getByRole('button', { name: 'Save' }))
+    await vi.waitFor(() => expect(m.count('PUT', '/api/admin/connectors/c-1')).toBe(2))
+    expect(body(m, 'PUT').rev).toBe('r-2')
+  })
 })
