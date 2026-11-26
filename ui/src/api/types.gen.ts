@@ -99,6 +99,47 @@ export type AdminAppsOutputBody = {
     items: Array<AdminApp> | null;
 };
 
+export type AdminConnector = {
+    allowedGroups: Array<string> | null;
+    authMode: 'user' | 'shared';
+    catalogId: string;
+    enabled: boolean;
+    id: string;
+    name: string;
+    oauth: AdminOAuth;
+    /**
+     * Paste this at the vendor as the OAuth redirect address
+     */
+    redirectUri?: string;
+    rev: string;
+    scopes: Array<string> | null;
+    slug: string;
+    toolModes: {
+        [key: string]: string;
+    };
+    /**
+     * The last snapshot of the server's tool list
+     */
+    tools: Array<ToolView> | null;
+    updatedAt: string;
+    url: string;
+};
+
+export type AdminOAuth = {
+    authorizeUrl?: string;
+    clientId: string;
+    /**
+     * static: pasted; dynamic: registered by Tapas (RFC 7591); empty: no client yet
+     */
+    registration: 'static' | 'dynamic' | '';
+    revokeUrl?: string;
+    /**
+     * A client secret is stored
+     */
+    secretStored: boolean;
+    tokenUrl?: string;
+};
+
 export type AdminStorageOutputBody = {
     rows: Array<Row> | null;
     /**
@@ -366,6 +407,35 @@ export type Bundle = {
     withheld: number;
 };
 
+export type CatalogEntry = {
+    authMode: 'user' | 'shared';
+    /**
+     * The vendor's documentation of its MCP server
+     */
+    docs: string;
+    id: string;
+    name: string;
+    oauth: Endpoints;
+    oauthEndpoints: 'discovered' | 'static';
+    scopes: Array<string> | null;
+    /**
+     * What to do at the vendor
+     */
+    setup: string;
+    slug: string;
+    toolModes: {
+        [key: string]: string;
+    };
+    /**
+     * The vendor's hosted MCP server; empty: the admin fills it in
+     */
+    url: string;
+};
+
+export type CatalogOutputBody = {
+    items: Array<CatalogEntry> | null;
+};
+
 export type Change = {
     field: string;
     from: string;
@@ -396,6 +466,46 @@ export type CommandView = {
     plans: Array<Plan> | null;
     reply: string;
     retryAfter?: number;
+};
+
+export type ConnectorInput = {
+    /**
+     * Groups whose members may use it; * is everyone; empty is nobody
+     */
+    allowedGroups?: Array<string> | null;
+    /**
+     * user: each person connects their own account; shared: one account an admin connects, used for everyone allowed
+     */
+    authMode?: 'user' | 'shared';
+    /**
+     * The catalogue entry this starts from; what is left out is taken from it. Fixed once created
+     */
+    catalogId?: string;
+    enabled?: boolean;
+    name?: string;
+    oauth?: OAuthInput;
+    /**
+     * Required on PUT: the rev the change was made on
+     */
+    rev?: string;
+    /**
+     * OAuth scopes asked for
+     */
+    scopes?: Array<string> | null;
+    /**
+     * Short name, the prefix of its tools (slug__tool): 2 to 31 lowercase letters and digits. Fixed once created
+     */
+    slug?: string;
+    /**
+     * Tool name to read, write or off; a tool not listed is a write
+     */
+    toolModes?: {
+        [key: string]: string;
+    };
+    /**
+     * The MCP server's https address
+     */
+    url?: string;
 };
 
 export type CreateInputBody = {
@@ -656,6 +766,12 @@ export type DraftView = {
 export type Dropped = {
     actions: number;
     refs: number;
+};
+
+export type Endpoints = {
+    authorizeUrl?: string;
+    revokeUrl?: string;
+    tokenUrl?: string;
 };
 
 export type Engine = {
@@ -1118,6 +1234,10 @@ export type LaunchBody = {
     port?: number;
 };
 
+export type ListOutputBody = {
+    items: Array<AdminConnector> | null;
+};
+
 export type LockPlace = {
     means?: string;
     mode?: 'read' | 'write';
@@ -1194,6 +1314,29 @@ export type Notice = {
     text: string;
     title: string;
     tone: string;
+};
+
+export type OAuthInput = {
+    /**
+     * Static authorize endpoint; empty: discovered from the MCP server
+     */
+    authorizeUrl?: string;
+    /**
+     * The OAuth client id from the vendor; empty: Tapas registers a client itself when the vendor allows it
+     */
+    clientId?: string;
+    /**
+     * Write-only: replaces the stored secret; leave out to keep it, which only works while the address origin, the endpoints and the client id stay the same
+     */
+    clientSecret?: string;
+    /**
+     * Static revocation endpoint (RFC 7009), optional
+     */
+    revokeUrl?: string;
+    /**
+     * Static token endpoint, set together with authorizeUrl
+     */
+    tokenUrl?: string;
 };
 
 export type Owner = {
@@ -2008,6 +2151,15 @@ export type TokenView = {
      */
     prefix: string;
     scope: 'read' | 'propose' | 'read-write' | 'admin';
+};
+
+export type ToolView = {
+    description?: string;
+    name: string;
+    /**
+     * What the server claimed; only a suggestion for its mode
+     */
+    readOnlyHint: boolean;
 };
 
 export type TotalsStruct = {
@@ -3101,6 +3253,262 @@ export type AdminRestoreResponses = {
 };
 
 export type AdminRestoreResponse = AdminRestoreResponses[keyof AdminRestoreResponses];
+
+export type AdminListConnectorsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/connectors';
+};
+
+export type AdminListConnectorsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type AdminListConnectorsError = AdminListConnectorsErrors[keyof AdminListConnectorsErrors];
+
+export type AdminListConnectorsResponses = {
+    /**
+     * OK
+     */
+    200: ListOutputBody;
+};
+
+export type AdminListConnectorsResponse = AdminListConnectorsResponses[keyof AdminListConnectorsResponses];
+
+export type AdminCreateConnectorData = {
+    body: ConnectorInput;
+    path?: never;
+    query?: never;
+    url: '/api/admin/connectors';
+};
+
+export type AdminCreateConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type AdminCreateConnectorError = AdminCreateConnectorErrors[keyof AdminCreateConnectorErrors];
+
+export type AdminCreateConnectorResponses = {
+    /**
+     * Created
+     */
+    201: AdminConnector;
+};
+
+export type AdminCreateConnectorResponse = AdminCreateConnectorResponses[keyof AdminCreateConnectorResponses];
+
+export type AdminConnectorCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/connectors/catalog';
+};
+
+export type AdminConnectorCatalogErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type AdminConnectorCatalogError = AdminConnectorCatalogErrors[keyof AdminConnectorCatalogErrors];
+
+export type AdminConnectorCatalogResponses = {
+    /**
+     * OK
+     */
+    200: CatalogOutputBody;
+};
+
+export type AdminConnectorCatalogResponse = AdminConnectorCatalogResponses[keyof AdminConnectorCatalogResponses];
+
+export type AdminDeleteConnectorData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/connectors/{id}';
+};
+
+export type AdminDeleteConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type AdminDeleteConnectorError = AdminDeleteConnectorErrors[keyof AdminDeleteConnectorErrors];
+
+export type AdminDeleteConnectorResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type AdminDeleteConnectorResponse = AdminDeleteConnectorResponses[keyof AdminDeleteConnectorResponses];
+
+export type AdminGetConnectorData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/connectors/{id}';
+};
+
+export type AdminGetConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type AdminGetConnectorError = AdminGetConnectorErrors[keyof AdminGetConnectorErrors];
+
+export type AdminGetConnectorResponses = {
+    /**
+     * OK
+     */
+    200: AdminConnector;
+};
+
+export type AdminGetConnectorResponse = AdminGetConnectorResponses[keyof AdminGetConnectorResponses];
+
+export type AdminUpdateConnectorData = {
+    body: ConnectorInput;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/connectors/{id}';
+};
+
+export type AdminUpdateConnectorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+};
+
+export type AdminUpdateConnectorError = AdminUpdateConnectorErrors[keyof AdminUpdateConnectorErrors];
+
+export type AdminUpdateConnectorResponses = {
+    /**
+     * OK
+     */
+    200: AdminConnector;
+};
+
+export type AdminUpdateConnectorResponse = AdminUpdateConnectorResponses[keyof AdminUpdateConnectorResponses];
 
 export type GetAdminReportData = {
     body?: never;
