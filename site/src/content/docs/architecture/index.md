@@ -31,6 +31,7 @@ Solid arrows are always there; dotted ones only when that feature is on.
 - **Identity provider**: Keycloak or any OpenID Connect provider. Local accounts work without one.
 - **Nebi** (optional): where people keep shared pixi environments.
 - **S3 bucket** (optional): where backups go, as restic repositories.
+- **mem0** (optional): the mem0 pack, which keeps memory for people's agents. The gateway reads its key and talks to it over the cluster network.
 - **AI model** (optional): an OpenAI-compatible server or Anthropic, for Ask AI.
 - **Git hosts**: apps can run from a repository; GitHub pull requests can get preview apps.
 

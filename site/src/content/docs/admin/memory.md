@@ -15,7 +15,7 @@ Off (the default), the gateway never talks to mem0 and never reads its key.
 
 ## Install the mem0 pack with Tapas as its caller
 
-The mem0 pack has no published chart yet (nebari-dev/mem0-pack#12), so install it from a checkout of the repository. Its [README](https://github.com/nebari-dev/mem0-pack#readme) lists the prerequisites (a CNI that enforces NetworkPolicy, CloudNativePG, llm-serving-pack and a Keycloak client for mem0) and the full install steps. Only what Tapas needs is repeated here.
+The mem0 pack is published as the chart `nebari-mem0`. A prerelease is installed only when you name its version, so install `--version 0.1.0-alpha.1` from the Nebari Helm repository (`helm repo add nebari https://raw.githubusercontent.com/nebari-dev/helm-repository/gh-pages/`, then `helm install mem0 nebari/nebari-mem0 --version 0.1.0-alpha.1 -n mem0 -f my-values.yaml`) or from `oci://quay.io/nebari/charts/nebari-mem0`. Its [README](https://github.com/nebari-dev/mem0-pack#readme) lists the prerequisites (a CNI that enforces NetworkPolicy, CloudNativePG, llm-serving-pack and a Keycloak client for mem0) and the full install steps. Only what Tapas needs is repeated here.
 
 The pack admits only the pods you list under `callers`, and lets only the ServiceAccounts you list read its admin key Secret. List the Tapas gateway:
 
@@ -53,22 +53,22 @@ config:
 |---|---|---|
 | `enabled` | `false` | Turns memory on. |
 | `url` | none | The mem0 pack's Service address, `http` or `https` with a host, and no user name, password, query or fragment. Required when memory is on. |
-| `timeout` | `10s` | How long a search, list, get or delete call may take. |
-| `addTimeout` | `120s` | How long an add call may take. It is longer because mem0 runs model extraction inline. |
+| `timeout` | `10s` | How long a search, list, get or delete call may take. Must be positive. |
+| `addTimeout` | `120s` | How long an add call may take. It is longer because mem0 runs model extraction inline. Must be positive. |
 | `apiKeySecret.namespace` | none | The namespace of mem0's admin key Secret, which is the namespace the mem0 pack is installed in. Required when memory is on. |
-| `apiKeySecret.name` | `mem0-admin-key` | The Secret's name. This is the pack's default; change it if you set `adminKey.secretName` or `adminKey.existingSecret` in the pack. |
-| `apiKeySecret.key` | `api-key` | The key inside the Secret that holds the admin key. |
+| `apiKeySecret.name` | `mem0-admin-key` | The Secret's name, a valid Kubernetes Secret name. This is the pack's default; change it if you set `adminKey.secretName` or `adminKey.existingSecret` in the pack. |
+| `apiKeySecret.key` | `api-key` | The key inside the Secret that holds the admin key, a valid Secret data key. The key inside the Secret the mem0 pack makes is always `api-key` (the pack's chart fixes it), so change this only for a Secret you manage yourself. |
 
 The chart passes this section into the config file as written and creates no Role in mem0's namespace. The gateway reads the key through the Role the mem0 pack creates for the accounts in `callers`.
 
-The gateway refuses to start with memory on when `url` is missing, is not an `http` or `https` address, or carries a user name, password, query or fragment, when `apiKeySecret.namespace` is missing or is not a valid namespace name, or when `executor` is not `kubernetes`.
+The gateway refuses to start with memory on when `url` is missing, is not an `http` or `https` address, or carries a user name, password, query or fragment, when `timeout` or `addTimeout` is negative, when `apiKeySecret.namespace` is missing or is not a valid namespace name, when `apiKeySecret.name` or `apiKeySecret.key` is not valid, or when `executor` is not `kubernetes`.
 
 ## What the gateway logs at start
 
 - Memory off: nothing about memory is logged.
 - `memory.ready` with `url`: the gateway asked mem0 for the memories of a reserved name (`tapas-start-check`, which belongs to no person) and mem0 answered.
 - `memory.unreachable` with `url` and `err`: mem0 did not answer correctly. The `err` text says why. `mem0 refused the key` means mem0 answered 401, so the key in the Secret is not the one mem0 uses (the Secret was replaced, or `apiKeySecret` names the wrong one). A message such as `GET /memories answered 503`, or a connection error, means mem0 is down, still starting or not reachable from the gateway, for example because the `callers` entry does not match the gateway pod. The gateway keeps running and does not retry; fix the cause and restart the gateway to check again.
-- The start fails with `read the mem0 key Secret <namespace>/<name>` when the Secret is missing or the gateway may not read it (the `callers` entry is wrong). It fails with `Secret <namespace>/<name> has no "<key>"` when the Secret has no such key or its value is empty. The error never contains the key.
+- The start fails with `read the mem0 key Secret <namespace>/<name>` when the Secret is missing or the gateway may not read it (the `callers` entry is wrong). It fails with `Secret <namespace>/<name> has no "<key>"` when the Secret has no such key or its value is empty. It fails when the value has leading or trailing whitespace, for example a trailing newline from `echo` or a file: mem0 compares the key exactly, so a padded value could never work, and Tapas refuses it rather than trim it. Store the key with no whitespace around it (`printf %s`, or `kubectl create secret ... --from-literal`). The error never contains the key.
 
 ## Limits
 

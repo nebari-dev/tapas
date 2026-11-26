@@ -128,7 +128,7 @@ type Client interface {
 
 ### Docs
 
-`site/src/content/docs/admin/memory.md`: what memory is today (setup only), installing the mem0 pack from a checkout (no chart is published until nebari-dev/mem0-pack#12) with Tapas as its caller (ServiceAccount by engine, the gateway pod's labels by engine as rendered by this chart, namespace), the `memory` config section, what the gateway logs at start, and the limitations. `deploy/helm/javo/values.yaml` gains a commented `memory:` example under `config:`.
+`site/src/content/docs/admin/memory.md`: what memory is today (setup only), installing the published mem0 pack chart (`nebari-mem0`, `--version 0.1.0-alpha.1`, from the Nebari Helm repository or `oci://quay.io/nebari/charts`) with Tapas as its caller (ServiceAccount by engine, the gateway pod's labels by engine as rendered by this chart, namespace), the `memory` config section, what the gateway logs at start, and the limitations. `deploy/helm/javo/values.yaml` gains a commented `memory:` example under `config:`.
 
 ## Program Design
 **Scale:** full
