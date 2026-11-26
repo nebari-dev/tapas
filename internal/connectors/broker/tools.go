@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
@@ -92,10 +93,13 @@ func (b *Broker) upstream(ctx context.Context, caller connectors.Caller, conn co
 	return tools, nil
 }
 
-// Bounds of the upstream list cache (D11).
+// Bounds of the upstream list cache (D11): an age, a count, and a total
+// size, since a connector may send lists of up to client.MaxToolList bytes
+// for every person who uses it.
 const (
 	cacheTTL     = 5 * time.Minute
 	cacheEntries = 1024
+	cacheBytes   = 32 << 20
 )
 
 type cacheKey struct{ id, rev, subject string }
@@ -103,18 +107,22 @@ type cacheKey struct{ id, rev, subject string }
 type cacheEntry struct {
 	tools []*sdk.Tool
 	at    time.Time
+	size  int // the list's size as JSON
 }
 
 // cache keeps upstream tool lists per connector revision and subject for
-// cacheTTL, at most cacheEntries of them (the oldest dropped first).
+// cacheTTL, at most cacheEntries of them and maxBytes in all (the oldest
+// dropped first).
 type cache struct {
-	now     func() time.Time
-	mu      sync.Mutex
-	entries map[cacheKey]cacheEntry
+	now      func() time.Time
+	mu       sync.Mutex
+	entries  map[cacheKey]cacheEntry
+	bytes    int // the sizes of entries, summed
+	maxBytes int
 }
 
 func newCache(now func() time.Time) *cache {
-	return &cache{now: now, entries: map[cacheKey]cacheEntry{}}
+	return &cache{now: now, entries: map[cacheKey]cacheEntry{}, maxBytes: cacheBytes}
 }
 
 func (c *cache) get(k cacheKey) ([]*sdk.Tool, bool) {
@@ -128,15 +136,20 @@ func (c *cache) get(k cacheKey) ([]*sdk.Tool, bool) {
 }
 
 func (c *cache) put(k cacheKey, tools []*sdk.Tool) {
+	raw, err := json.Marshal(tools)
+	if err != nil || len(raw) > c.maxBytes {
+		return // not kept: the next call lists again
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := c.now()
+	c.drop(k)
 	for key, e := range c.entries {
 		if now.Sub(e.at) >= cacheTTL {
-			delete(c.entries, key)
+			c.drop(key)
 		}
 	}
-	for len(c.entries) >= cacheEntries {
+	for len(c.entries) >= cacheEntries || c.bytes+len(raw) > c.maxBytes {
 		var oldest cacheKey
 		first := true
 		for key, e := range c.entries {
@@ -144,7 +157,16 @@ func (c *cache) put(k cacheKey, tools []*sdk.Tool) {
 				oldest, first = key, false
 			}
 		}
-		delete(c.entries, oldest)
+		c.drop(oldest)
 	}
-	c.entries[k] = cacheEntry{tools: tools, at: now}
+	c.entries[k] = cacheEntry{tools: tools, at: now, size: len(raw)}
+	c.bytes += len(raw)
+}
+
+// drop removes k's entry, if there is one. c.mu is held.
+func (c *cache) drop(k cacheKey) {
+	if e, ok := c.entries[k]; ok {
+		c.bytes -= e.size
+		delete(c.entries, k)
+	}
 }
