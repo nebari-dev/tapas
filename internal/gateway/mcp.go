@@ -67,7 +67,7 @@ func mountMCP(mux *http.ServeMux, doc *huma.OpenAPI, acts []actions.Info, a *aut
 			hc = httpx.Guard{PublicOnly: true}.Client()
 		}
 		b = broker.New(broker.Config{
-			Connectors: cfg.Connectors, Forwarder: &client.Client{HTTP: hc}, Tokens: cfg.ConnectorTokens,
+			Connectors: cfg.Connectors, Forwarder: &client.Client{HTTP: hc}, Tokens: cfg.ConnectorTokens, Audit: cfg.Store.Audit(),
 			PublicURL: cfg.MCP.PublicURL, Now: cfg.Now,
 		})
 	}

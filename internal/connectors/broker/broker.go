@@ -17,6 +17,7 @@ import (
 	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/connectors/client"
 	"github.com/nebari-dev/javo/internal/connectors/policy"
+	"github.com/nebari-dev/javo/internal/store"
 )
 
 // Connectors is where the broker reads connectors (the registry).
@@ -25,7 +26,12 @@ type Connectors interface {
 	BySlug(ctx context.Context, slug string) (connectors.Connector, error)
 }
 
-// Config wires a Broker. Connectors and Forwarder are required.
+// Auditor appends audit rows: the store's audit log in production.
+type Auditor interface {
+	Append(ctx context.Context, e store.AuditEvent) error
+}
+
+// Config wires a Broker. Connectors, Forwarder and Audit are required.
 type Config struct {
 	Connectors Connectors
 	// Forwarder reaches the connectors: the client over the guarded HTTP
@@ -33,6 +39,9 @@ type Config struct {
 	Forwarder client.Forwarder
 	// Tokens gives each call its bearer; nil means nobody is connected.
 	Tokens connectors.TokenSource
+	// Audit records one row per tool call (D19); a call whose row cannot be
+	// written answers an error. Required: without it every call fails.
+	Audit Auditor
 	// Policy is asked before a call goes ahead; nil allows all.
 	Policy policy.Checker
 	// PublicURL is where people reach Tapas, for the page they connect
@@ -71,8 +80,10 @@ type call struct {
 	conn   connectors.Connector
 	mode   connectors.ToolMode
 	bearer string
-	// outcome is how the call ended, for the audit row.
+	// outcome is how the call ended, and policy the policy's effect (empty
+	// when it was not asked), for the audit row.
 	outcome string
+	policy  policy.Effect
 	started time.Time
 }
 

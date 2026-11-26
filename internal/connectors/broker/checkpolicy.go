@@ -22,6 +22,7 @@ func (b *Broker) checkPolicy(ctx context.Context, c *call) *sdk.CallToolResult {
 		Phase: policy.PhaseRead, Person: c.caller.Principal.ID, Groups: c.caller.Principal.Groups, Agent: c.caller.Agent,
 		TokenID: c.caller.Token.ID, Connector: c.conn.Slug, Tool: c.tool, Arguments: c.args,
 	})
+	c.policy = d.Effect
 	switch d.Effect {
 	case policy.Allow:
 		return nil

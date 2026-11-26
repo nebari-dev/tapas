@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/reasons"
 	"github.com/nebari-dev/javo/internal/secrets"
+	"github.com/nebari-dev/javo/internal/store"
 	"github.com/nebari-dev/javo/internal/store/storetest"
 )
 
@@ -32,6 +34,7 @@ var (
 const bearer = "tok-shared"
 
 type fixture struct {
+	db   *store.Store
 	reg  *registry.Registry
 	fake *connectorstest.Connector
 	b    *broker.Broker
@@ -39,8 +42,11 @@ type fixture struct {
 }
 
 type options struct {
-	tokens connectors.TokenSource
-	policy policy.Checker
+	tokens    connectors.TokenSource
+	policy    policy.Checker
+	forwarder client.Forwarder
+	audit     broker.Auditor
+	now       func() time.Time
 }
 
 func newFixture(t *testing.T, o options) *fixture {
@@ -49,7 +55,8 @@ func newFixture(t *testing.T, o options) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reg := registry.New(registry.Config{DB: storetest.New(t), Seal: key, InternalHosts: []string{"127.0.0.1"}})
+	db := storetest.New(t)
+	reg := registry.New(registry.Config{DB: db, Seal: key, InternalHosts: []string{"127.0.0.1"}})
 	fake := connectorstest.NewConnector(t, bearer)
 	conn, err := reg.Create(ctx, admin, registry.Input{
 		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
@@ -61,11 +68,17 @@ func newFixture(t *testing.T, o options) *fixture {
 	if o.tokens == nil {
 		o.tokens = connectorstest.StaticToken(bearer)
 	}
+	if o.forwarder == nil {
+		o.forwarder = &client.Client{HTTP: &http.Client{}}
+	}
+	if o.audit == nil {
+		o.audit = db.Audit()
+	}
 	b := broker.New(broker.Config{
-		Connectors: reg, Forwarder: &client.Client{HTTP: &http.Client{}}, Tokens: o.tokens, Policy: o.policy,
-		PublicURL: "https://tapas.example.org",
+		Connectors: reg, Forwarder: o.forwarder, Tokens: o.tokens, Policy: o.policy, Audit: o.audit,
+		PublicURL: "https://tapas.example.org", Now: o.now,
 	})
-	return &fixture{reg: reg, fake: fake, b: b, conn: conn}
+	return &fixture{db: db, reg: reg, fake: fake, b: b, conn: conn}
 }
 
 func alice() connectors.Caller {
@@ -322,7 +335,8 @@ func TestAFailingConnectorIsLeftOutOfTheList(t *testing.T) {
 func TestATimeoutIsAToolError(t *testing.T) {
 	t.Parallel()
 	key, _ := secrets.NewKey()
-	reg := registry.New(registry.Config{DB: storetest.New(t), Seal: key, InternalHosts: []string{"127.0.0.1"}})
+	db := storetest.New(t)
+	reg := registry.New(registry.Config{DB: db, Seal: key, InternalHosts: []string{"127.0.0.1"}})
 	fake := connectorstest.NewConnector(t, bearer)
 	if _, err := reg.Create(ctx, admin, registry.Input{
 		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthUser, Enabled: true, AllowedGroups: []string{"sales"},
@@ -332,6 +346,7 @@ func TestATimeoutIsAToolError(t *testing.T) {
 	}
 	b := broker.New(broker.Config{
 		Connectors: reg, Forwarder: &client.Client{HTTP: &http.Client{}, CallTimeout: 100e6}, Tokens: connectorstest.StaticToken(bearer),
+		Audit: db.Audit(),
 	})
 	fake.Hang(true)
 	res, _ := b.Call(ctx, alice(), "fake__echo", json.RawMessage(`{}`))
