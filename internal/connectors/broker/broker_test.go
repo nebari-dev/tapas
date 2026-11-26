@@ -301,6 +301,18 @@ func TestOnlyPersonalAndAgentTokens(t *testing.T) {
 	}
 }
 
+// A caller with no token is a browser session: connector tools are made
+// by agents, and the refusal says so rather than blaming an app's token.
+func TestABrowserSessionIsToldConnectorToolsAreForAgents(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, options{})
+	session := alice()
+	session.Token = token.Token{}
+	if res := call(t, f, session, "fake__echo", `{}`); text(t, res) != reasons.Msg(reasons.MsgConnectorForAgents) || len(f.fake.Calls()) != 0 {
+		t.Fatalf("session: %+v", res)
+	}
+}
+
 func TestNotConnectedShowsNoToolsAndSaysWhereToConnect(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, options{tokens: connectorstest.StaticToken("")})

@@ -20,7 +20,11 @@ func (b *Broker) identify(_ context.Context, c *call) *sdk.CallToolResult {
 		c.conn.Slug, c.tool = slug, tool
 	}
 	if c.phase != phaseApply && !c.caller.MayUseConnectors() {
-		return errorResult(c, outcomeDeniedToken, reasons.Msg(reasons.MsgConnectorNotForAppTokens))
+		msg := reasons.MsgConnectorNotForAppTokens
+		if c.caller.Token.ID == "" {
+			msg = reasons.MsgConnectorForAgents // a browser session
+		}
+		return errorResult(c, outcomeDeniedToken, reasons.Msg(msg))
 	}
 	if c.tool == "" {
 		return noSuchTool(c, outcomeDeniedAuthz)
