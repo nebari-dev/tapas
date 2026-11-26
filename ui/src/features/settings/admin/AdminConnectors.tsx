@@ -9,6 +9,7 @@ import { CopyButton } from '../../../components/CopyButton'
 import { Segmented } from '../../../components/Segmented'
 import { Switch } from '../../../components/Switch'
 import { ApiError, fieldErrors, problemText } from '../../../lib/http'
+import { ConnectorLogo } from '../../../components/KindLogo'
 import { useConnectorCatalog, useConnectors, useCreateConnector, useDeleteConnector, useIsAdmin, useUpdateConnector } from './queries'
 
 type AuthMode = AdminConnector['authMode']
@@ -421,36 +422,6 @@ function ConnectorForm({
 }
 
 /** The catalogue to start from, or an empty form for any MCP server. */
-function Picker({ onPick, onCancel }: { onPick: (e: CatalogEntry | null) => void; onCancel: () => void }) {
-  const q = useConnectorCatalog(true)
-  return (
-    <Card className="pad">
-      <h3 className="card-h">Add a connector</h3>
-      {q.isError ? (
-        <Banner tone="err" title={problemText(q.error)} />
-      ) : !q.data ? (
-        <div className="muted">Loading</div>
-      ) : (
-        <div className="row con-pick">
-          {q.data.map((e) => (
-            <Button key={e.id} onClick={() => onPick(e)}>
-              {e.name}
-            </Button>
-          ))}
-          <Button icon={Plus} onClick={() => onPick(null)}>
-            Custom MCP URL
-          </Button>
-        </div>
-      )}
-      <div className="row tok-form-act">
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </Card>
-  )
-}
-
 function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () => void; onError: (msg: string) => void }) {
   const update = useUpdateConnector()
   const turn = (enabled: boolean) =>
@@ -458,10 +429,13 @@ function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () =>
   return (
     <tr>
       <th scope="row">
-        <div className="atable-name">
-          <b>{c.name}</b>
-          <span className="mono faint small">{c.slug}</span>
-          <span className="faint small con-auth-sub">{authLabel(c.authMode)}</span>
+        <div className="atable-app">
+          <ConnectorLogo catalogId={c.catalogId} />
+          <div className="atable-name">
+            <b>{c.name}</b>
+            <span className="mono faint small">{c.slug}</span>
+            <span className="faint small con-auth-sub">{authLabel(c.authMode)}</span>
+          </div>
         </div>
       </th>
       <td className="con-auth">{authLabel(c.authMode)}</td>
@@ -477,7 +451,31 @@ function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () =>
   )
 }
 
-type Open = { kind: 'pick' } | { kind: 'new'; entry: CatalogEntry | null } | { kind: 'edit'; id: string } | null
+// A catalogue entry no connector was made from yet: one click opens its form.
+function SetupRow({ e, disabled, onSetUp }: { e: CatalogEntry; disabled: boolean; onSetUp: () => void }) {
+  return (
+    <tr>
+      <th scope="row">
+        <div className="atable-app">
+          <ConnectorLogo catalogId={e.id} />
+          <div className="atable-name">
+            <b>{e.name}</b>
+            <span className="faint small con-auth-sub">{authLabel(e.authMode)}</span>
+          </div>
+        </div>
+      </th>
+      <td className="con-auth">{authLabel(e.authMode)}</td>
+      <td className="faint">Not set up</td>
+      <td className="col-act">
+        <Button size="sm" icon={Plus} aria-label={`Set up ${e.name}`} disabled={disabled} onClick={onSetUp}>
+          <span className="atable-act-label">Set up</span>
+        </Button>
+      </td>
+    </tr>
+  )
+}
+
+type Open = { kind: 'new'; entry: CatalogEntry | null } | { kind: 'edit'; id: string } | null
 
 /**
  * Settings, Connectors (platform admins): the MCP servers agents may reach
@@ -486,6 +484,7 @@ type Open = { kind: 'pick' } | { kind: 'new'; entry: CatalogEntry | null } | { k
 export function AdminConnectors() {
   const admin = useIsAdmin()
   const q = useConnectors(admin)
+  const cat = useConnectorCatalog(admin)
   const [open, setOpenState] = useState<Open>(null)
   // A save that failed outside the form: a change someone else made first, or a switch in the list.
   const [notice, setNotice] = useState('')
@@ -500,6 +499,7 @@ export function AdminConnectors() {
   const redirectUri = list[0]?.redirectUri
   const editing = open?.kind === 'edit' ? list.find((c) => c.id === open.id) : undefined
   const close = () => setOpen(null)
+  const rows = listRows(list, cat.data ?? [])
   return (
     <section className="section" aria-label="Connectors">
       <div className="section-head tok-head">
@@ -507,20 +507,15 @@ export function AdminConnectors() {
           Connectors let agents use other services, such as Slack or GitHub, through Tapas. Agents never see a password or token. Tools that write
           become plans their owner approves.
         </p>
-        <div className="right row">
-          <Button icon={Plus} disabled={open !== null} onClick={() => setOpen({ kind: 'pick' })}>
-            Add connector
-          </Button>
-        </div>
       </div>
       {notice && (
         <div className="section-sm">
           <Banner tone="err" title={notice} />
         </div>
       )}
-      {open?.kind === 'pick' && (
+      {cat.isError && (
         <div className="section-sm">
-          <Picker onPick={(entry) => setOpen({ kind: 'new', entry })} onCancel={close} />
+          <Banner tone="err" title={problemText(cat.error)} />
         </div>
       )}
       {open?.kind === 'new' && (
@@ -556,12 +551,37 @@ export function AdminConnectors() {
             </tr>
           </thead>
           <tbody>
-            {list.map((c) => (
-              <ConnectorRow key={c.id} c={c} onEdit={() => setOpen({ kind: 'edit', id: c.id })} onError={setNotice} />
-            ))}
+            {rows.map((r) =>
+              r.kind === 'connector' ? (
+                <ConnectorRow key={r.c.id} c={r.c} onEdit={() => setOpen({ kind: 'edit', id: r.c.id })} onError={setNotice} />
+              ) : (
+                <SetupRow key={`catalog-${r.e.id}`} e={r.e} disabled={open !== null} onSetUp={() => setOpen({ kind: 'new', entry: r.e })} />
+              ),
+            )}
           </tbody>
         </table>
       </div>
+      <div className="section-sm row">
+        <Button icon={Plus} disabled={open !== null} onClick={() => setOpen({ kind: 'new', entry: null })}>
+          Add a custom MCP server
+        </Button>
+      </div>
     </section>
   )
+}
+
+type ListRow = { kind: 'connector'; c: AdminConnector } | { kind: 'catalog'; e: CatalogEntry }
+
+// Every catalogue entry in catalogue order, as the connectors made from it or,
+// when there are none, as an entry to set up; then the custom connectors.
+function listRows(list: AdminConnector[], catalog: CatalogEntry[]): ListRow[] {
+  const ids = new Set(catalog.map((e) => e.id))
+  const rows: ListRow[] = []
+  for (const e of catalog) {
+    const made = list.filter((c) => c.catalogId === e.id)
+    if (made.length === 0) rows.push({ kind: 'catalog', e })
+    for (const c of made) rows.push({ kind: 'connector', c })
+  }
+  for (const c of list) if (!ids.has(c.catalogId)) rows.push({ kind: 'connector', c })
+  return rows
 }

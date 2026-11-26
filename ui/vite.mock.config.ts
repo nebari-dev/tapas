@@ -5,5 +5,6 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   root: 'mock',
   plugins: [react()],
-  server: { port: 5174, strictPort: true },
+  // The mock reads the connector catalogue the gateway ships.
+  server: { port: 5174, strictPort: true, fs: { allow: ['..', '../../internal/connectors/catalog'] } },
 })

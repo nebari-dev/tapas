@@ -617,7 +617,6 @@ h2.part-title>.part-icon{width:20px;height:20px}
 .fv-media img{max-width:100%;max-height:calc(100vh - 260px);object-fit:contain}
 .fv-pdf{width:100%;height:calc(100vh - 260px);min-height:420px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
 @media (max-width:760px){.fv-bar{flex-wrap:wrap}.fv-actions{margin-left:0}}
-.con-pick{flex-wrap:wrap;gap:8px;margin-top:4px}
 .con-act{flex-wrap:wrap}
 .con-remove{margin-right:auto}
 .con-add-tool{gap:8px;margin-top:8px}
@@ -631,6 +630,7 @@ h2.part-title>.part-icon{width:20px;height:20px}
   .con-tools tbody td{padding-top:0}
 }
 .con-auth-sub{display:none}
-@media (max-width:600px){.atable .con-auth{display:none}.con-auth-sub{display:block}}
+/* By the table's own width: it sits next to the sidebar, so the window width says too little. */
+@container (max-width:600px){.atable .con-auth{display:none}.con-auth-sub{display:block}}
 p.sub.con-setup{margin:0 0 16px}
 .con-add-tool .btn{flex:none}
