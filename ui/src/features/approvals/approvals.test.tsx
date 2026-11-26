@@ -238,6 +238,22 @@ describe('Approvals inbox', () => {
     expect(await within(card).findByText('Done. Chat took the call.')).toBeTruthy()
   })
 
+  it('shows invisible and direction characters in a value as escapes, so the person approving sees them', async () => {
+    const hidden = {
+      ...post,
+      planned: {
+        ...post.planned,
+        destructive: false,
+        changes: [{ field: 'text', from: '', to: '"pay\u200b to\u202eeve  now"' }],
+      },
+    }
+    mockApi({ 'GET /api/me': { body: me }, 'GET /api/plans': { body: [hidden] } })
+    renderApp('/approvals')
+    const card = await screen.findByRole('article', { name: 'Let Claude Code run post_message in Chat?' })
+    const value = within(within(card).getByRole('group', { name: 'Values sent' })).getByText('text').nextElementSibling!
+    expect(value.textContent).toBe('"pay\\u200b to\\u202eeve  now"')
+  })
+
   it('counts waiting requests on the sidebar item', async () => {
     mockApi({ 'GET /api/me': { body: me }, 'GET /api/plans': { body: [attach(), del] }, 'GET /api/workspaces': { body: { items: [] } } })
     renderApp('/approvals')

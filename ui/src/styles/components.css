@@ -596,7 +596,7 @@ button.tree-twist:hover{background:var(--hover);color:var(--text)}
 .rq .values>div{display:contents}
 .rq .values dt{color:var(--text-2)}
 .rq .values dd{margin:0;overflow-wrap:anywhere}
-.rq .values code{white-space:normal;overflow-wrap:anywhere}
+.rq .values code{white-space:pre-wrap;overflow-wrap:anywhere}
 .rq-done{margin:0;display:flex;align-items:center;gap:10px;font-size:var(--fs-sm);color:var(--text-2)}
 .rq-done svg{flex:none;color:var(--ok)}
 .rq-done.bad svg{color:var(--err)}

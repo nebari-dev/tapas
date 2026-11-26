@@ -260,7 +260,7 @@ export function describe(plan: Plan): Request {
           toast: `Done. ${service} took the call.`,
           verb: `run ${tool} in ${service}`,
           past: 'You approved it.',
-          values: (p.changes ?? []).map((c) => ({ label: c.field, value: <code>{c.to}</code> })),
+          values: (p.changes ?? []).map((c) => ({ label: visibleText(c.field), value: <code>{visibleText(c.to)}</code> })),
           details: [{ label: 'Connector', value: service }, { label: 'Tool', value: <code>{tool}</code> }],
         }
       }
@@ -339,4 +339,11 @@ export function outcomeText(plan: Plan, r: Request, earlier = false): string {
 /** "Couldn't give access: {reason}. Nothing changed." */
 export function failed(r: Request, reason: string): string {
   return `Couldn't ${r.verb}: ${reason.replace(/\.$/, '')}. Nothing changed.`
+}
+
+// visibleText writes each control, invisible or text-direction character in s
+// as a \u escape, so a value on a card cannot hide text or reorder what the
+// person approving reads.
+function visibleText(s: string): string {
+  return s.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, (ch) => '\\u' + ch.codePointAt(0)!.toString(16).padStart(4, '0'))
 }
