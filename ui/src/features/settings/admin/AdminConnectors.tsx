@@ -1,0 +1,403 @@
+import { ExternalLink, Pencil, Plus } from 'lucide-react'
+import { useId, useState, type FormEvent } from 'react'
+import type { AdminConnector, CatalogEntry, ConnectorInput } from '../../../api'
+import { Banner } from '../../../components/Banner'
+import { Button } from '../../../components/Button'
+import { Card } from '../../../components/Card'
+import { CopyButton } from '../../../components/CopyButton'
+import { Segmented } from '../../../components/Segmented'
+import { Switch } from '../../../components/Switch'
+import { fieldErrors, problemText } from '../../../lib/http'
+import { useConnectorCatalog, useConnectors, useCreateConnector, useIsAdmin, useUpdateConnector } from './queries'
+
+type AuthMode = AdminConnector['authMode']
+
+const AUTH_MODES: { value: AuthMode; label: string }[] = [
+  { value: 'user', label: 'Each person signs in' },
+  { value: 'shared', label: 'One shared account' },
+]
+
+const AUTH_HINTS: Record<AuthMode, string> = {
+  user: 'Each person connects their own account and their agents act as them at the vendor.',
+  shared:
+    'One account connected by an admin is used for everyone allowed. Everything done through it shows at the vendor as that account, so use a service account.',
+}
+
+const authLabel = (m: AuthMode) => AUTH_MODES.find((o) => o.value === m)?.label ?? m
+
+/** The form's fields; lists are kept as the text typed. */
+interface Draft {
+  catalogId: string
+  slug: string
+  name: string
+  url: string
+  authMode: AuthMode
+  enabled: boolean
+  clientId: string
+  authorizeUrl: string
+  tokenUrl: string
+  revokeUrl: string
+  scopes: string
+  groups: string
+  modes: Record<string, string>
+}
+
+const words = (s: string) => s.split(/[\s,]+/).filter(Boolean)
+
+function draftOf(c: AdminConnector): Draft {
+  return {
+    catalogId: c.catalogId,
+    slug: c.slug,
+    name: c.name,
+    url: c.url,
+    authMode: c.authMode,
+    enabled: c.enabled,
+    clientId: c.oauth.clientId,
+    authorizeUrl: c.oauth.authorizeUrl ?? '',
+    tokenUrl: c.oauth.tokenUrl ?? '',
+    revokeUrl: c.oauth.revokeUrl ?? '',
+    scopes: (c.scopes ?? []).join(' '),
+    groups: (c.allowedGroups ?? []).join(', '),
+    modes: { ...c.toolModes },
+  }
+}
+
+function draftFrom(e: CatalogEntry | null): Draft {
+  return {
+    catalogId: e?.id ?? '',
+    slug: e?.slug ?? '',
+    name: e?.name ?? '',
+    url: e?.url ?? '',
+    authMode: e?.authMode ?? 'user',
+    enabled: true,
+    clientId: '',
+    authorizeUrl: e?.oauth.authorizeUrl ?? '',
+    tokenUrl: e?.oauth.tokenUrl ?? '',
+    revokeUrl: e?.oauth.revokeUrl ?? '',
+    scopes: (e?.scopes ?? []).join(' '),
+    groups: '',
+    modes: { ...e?.toolModes },
+  }
+}
+
+/**
+ * The request body for d. A PUT replaces the whole connector, so the OAuth
+ * endpoints go back as read; the client secret goes only when one was typed.
+ */
+function inputOf(d: Draft, secret: string, rev?: string): ConnectorInput {
+  const oauth: ConnectorInput['oauth'] = { clientId: d.clientId.trim() }
+  if (secret) oauth.clientSecret = secret
+  if (d.authorizeUrl) oauth.authorizeUrl = d.authorizeUrl
+  if (d.tokenUrl) oauth.tokenUrl = d.tokenUrl
+  if (d.revokeUrl) oauth.revokeUrl = d.revokeUrl
+  return {
+    ...(d.catalogId ? { catalogId: d.catalogId } : {}),
+    slug: d.slug.trim(),
+    name: d.name.trim(),
+    url: d.url.trim(),
+    authMode: d.authMode,
+    enabled: d.enabled,
+    oauth,
+    scopes: words(d.scopes),
+    allowedGroups: words(d.groups),
+    toolModes: d.modes,
+    ...(rev ? { rev } : {}),
+  }
+}
+
+/** The redirect address with a copy button, or why there is none yet. */
+function RedirectAddress({ uri }: { uri?: string }) {
+  if (uri === undefined) return <span className="hint">Shown here once the connector is saved. You can add it turned off first.</span>
+  if (!uri) return <span className="hint">The platform config sets no public address, so there is no redirect address yet.</span>
+  return (
+    <div className="row">
+      <code className="mono">{uri}</code>
+      <CopyButton text={() => uri} label="Copy the redirect address" />
+    </div>
+  )
+}
+
+const FORM_FIELDS = new Set(['name', 'slug', 'url', 'oauth.clientId', 'oauth.clientSecret', 'scopes', 'allowedGroups'])
+
+function ConnectorForm({
+  start,
+  existing,
+  entry,
+  redirectUri,
+  onDone,
+}: {
+  start: Draft
+  existing?: AdminConnector
+  entry?: CatalogEntry | null
+  redirectUri?: string
+  onDone: () => void
+}) {
+  const create = useCreateConnector()
+  const update = useUpdateConnector()
+  const save = existing ? update : create
+  const ids = { name: useId(), slug: useId(), url: useId(), auth: useId(), id: useId(), secret: useId(), scopes: useId(), groups: useId() }
+  const [d, setD] = useState(start)
+  const [secret, setSecret] = useState('')
+  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }))
+  const errs = save.isError ? fieldErrors(save.error) : { fields: {} as Record<string, string>, other: [] as string[] }
+  const other = [...errs.other, ...Object.entries(errs.fields).filter(([f]) => !FORM_FIELDS.has(f)).map(([, m]) => m)]
+  const title = existing ? existing.name : entry ? `Add ${entry.name}` : 'Add a custom connector'
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (existing) update.mutate({ id: existing.id, body: inputOf(d, secret, existing.rev) }, { onSuccess: onDone })
+    else create.mutate(inputOf(d, secret), { onSuccess: onDone })
+  }
+
+  const err = (f: string) => errs.fields[f] && <span className="hint err">{errs.fields[f]}</span>
+
+  return (
+    <Card className="pad tok-form">
+      <form onSubmit={submit} noValidate aria-label={title}>
+        <h3 className="card-h">{title}</h3>
+        {entry?.setup && (
+          <p className="sub">
+            {entry.setup}
+            {entry.docs && (
+              <>
+                {' '}
+                <a href={entry.docs} target="_blank" rel="noopener noreferrer">
+                  The vendor's guide <ExternalLink size={13} aria-hidden="true" />
+                </a>
+              </>
+            )}
+          </p>
+        )}
+        {other.length > 0 && (
+          <div className="field">
+            <Banner tone="err" title={other.join(' ')} />
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor={ids.name}>Name</label>
+          <input id={ids.name} className="input" value={d.name} maxLength={100} autoComplete="off" onChange={(e) => set('name', e.target.value)} />
+          <span className="hint">What people see, such as Slack.</span>
+          {err('name')}
+        </div>
+        <div className="field">
+          <label htmlFor={ids.slug}>Short name</label>
+          <input
+            id={ids.slug}
+            className="input mono"
+            value={d.slug}
+            maxLength={31}
+            autoComplete="off"
+            spellCheck={false}
+            readOnly={!!existing}
+            onChange={(e) => set('slug', e.target.value)}
+          />
+          <span className="hint">
+            {existing
+              ? 'Fixed once added. Agents see its tools as this name, then two underscores, then the tool.'
+              : '2 to 31 lowercase letters and digits, such as slack. Agents see its tools as slack__post_message. It cannot change later.'}
+          </span>
+          {err('slug')}
+        </div>
+        <div className="field">
+          <label htmlFor={ids.url}>Address of the MCP server</label>
+          <input
+            id={ids.url}
+            className="input mono"
+            value={d.url}
+            placeholder="https://mcp.example.org/mcp"
+            maxLength={2048}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => set('url', e.target.value)}
+          />
+          {existing && <span className="hint">Moving it to another server disconnects everyone who connected.</span>}
+          {err('url')}
+        </div>
+        <div className="field" role="group" aria-labelledby={ids.auth}>
+          <span id={ids.auth} className="field-label">
+            Who signs in
+          </span>
+          <Segmented label="Who signs in" value={d.authMode} options={AUTH_MODES} onChange={(v) => set('authMode', v)} />
+          <span className="hint">{AUTH_HINTS[d.authMode]}</span>
+        </div>
+        <div className="field">
+          <span className="field-label">Redirect address</span>
+          <RedirectAddress uri={redirectUri} />
+          <span className="hint">Paste this at the vendor as the OAuth redirect (callback) address.</span>
+        </div>
+        <div className="field">
+          <label htmlFor={ids.id}>OAuth client id</label>
+          <input id={ids.id} className="input mono" value={d.clientId} maxLength={512} autoComplete="off" spellCheck={false} onChange={(e) => set('clientId', e.target.value)} />
+          <span className="hint">From the OAuth app you made at the vendor. Leave empty when the vendor lets Tapas register itself.</span>
+          {err('oauth.clientId')}
+        </div>
+        <div className="field">
+          <label htmlFor={ids.secret}>OAuth client secret</label>
+          <input
+            id={ids.secret}
+            className="input mono"
+            type="password"
+            value={secret}
+            maxLength={4096}
+            autoComplete="off"
+            onChange={(e) => setSecret(e.target.value)}
+          />
+          <span className="hint">
+            {existing?.oauth.secretStored
+              ? 'A secret is stored, encrypted. Leave this empty to keep it, or paste a new one to replace it.'
+              : 'Stored encrypted and never shown again.'}
+          </span>
+          {err('oauth.clientSecret')}
+        </div>
+        <div className="field">
+          <label htmlFor={ids.scopes}>Scopes</label>
+          <input id={ids.scopes} className="input mono" value={d.scopes} autoComplete="off" spellCheck={false} onChange={(e) => set('scopes', e.target.value)} />
+          <span className="hint">What Tapas asks the vendor for, separated by spaces.</span>
+          {err('scopes')}
+        </div>
+        <div className="field">
+          <label htmlFor={ids.groups}>Allowed groups</label>
+          <input id={ids.groups} className="input mono" value={d.groups} autoComplete="off" spellCheck={false} onChange={(e) => set('groups', e.target.value)} />
+          <span className="hint">
+            Members of these groups may use it, separated by commas. * means every member. Empty means nobody, admins included.
+          </span>
+          {err('allowedGroups')}
+        </div>
+        <div className="field fit">
+          <Switch label={d.enabled ? 'On' : 'Off'} name="Turned on" checked={d.enabled} onChange={(on) => set('enabled', on)} />
+          <span className="hint">Off, no agent sees its tools and nobody can connect to it.</span>
+        </div>
+        <div className="row tok-form-act">
+          <Button variant="ghost" onClick={onDone}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={save.isPending}>
+            {existing ? 'Save' : 'Add connector'}
+          </Button>
+        </div>
+      </form>
+    </Card>
+  )
+}
+
+/** The catalogue to start from, or an empty form for any MCP server. */
+function Picker({ onPick, onCancel }: { onPick: (e: CatalogEntry | null) => void; onCancel: () => void }) {
+  const q = useConnectorCatalog(true)
+  return (
+    <Card className="pad">
+      <h3 className="card-h">Add a connector</h3>
+      {q.isError ? (
+        <Banner tone="err" title={problemText(q.error)} />
+      ) : !q.data ? (
+        <div className="muted">Loading</div>
+      ) : (
+        <div className="row wrap">
+          {q.data.map((e) => (
+            <Button key={e.id} onClick={() => onPick(e)}>
+              {e.name}
+            </Button>
+          ))}
+          <Button icon={Plus} onClick={() => onPick(null)}>
+            Custom MCP URL
+          </Button>
+        </div>
+      )}
+      <div className="row tok-form-act">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
+function ConnectorRow({ c, onEdit }: { c: AdminConnector; onEdit: () => void }) {
+  return (
+    <tr>
+      <th scope="row">
+        <div className="atable-name">
+          <b>{c.name}</b>
+          <span className="mono faint small">{c.slug}</span>
+        </div>
+      </th>
+      <td>{authLabel(c.authMode)}</td>
+      <td>
+        <Switch label={c.enabled ? 'On' : 'Off'} name={`Turn on ${c.name}`} checked={c.enabled} onChange={() => {}} />
+      </td>
+      <td className="col-act">
+        <Button size="sm" variant="ghost" icon={Pencil} aria-label={`Edit ${c.name}`} onClick={onEdit}>
+          <span className="atable-act-label">Edit</span>
+        </Button>
+      </td>
+    </tr>
+  )
+}
+
+type Open = { kind: 'pick' } | { kind: 'new'; entry: CatalogEntry | null } | { kind: 'edit'; id: string } | null
+
+/**
+ * Settings, Connectors (platform admins): the MCP servers agents may reach
+ * through Tapas, who signs in to each, and which of their tools only read.
+ */
+export function AdminConnectors() {
+  const admin = useIsAdmin()
+  const q = useConnectors(admin)
+  const [open, setOpen] = useState<Open>(null)
+  if (!admin) return null
+  if (q.isError) return <Banner tone="err" title={problemText(q.error)} />
+  if (!q.data) return <div className="muted">Loading</div>
+  const list = q.data
+  const redirectUri = list[0]?.redirectUri
+  const editing = open?.kind === 'edit' ? list.find((c) => c.id === open.id) : undefined
+  const close = () => setOpen(null)
+  return (
+    <section className="section" aria-label="Connectors">
+      <div className="section-head tok-head">
+        <p className="sub tok-intro">
+          Connectors let agents use other services, such as Slack or GitHub, through Tapas. Agents never see a password or token. Tools that write
+          become plans their owner approves.
+        </p>
+        <div className="right row">
+          <Button icon={Plus} disabled={open !== null} onClick={() => setOpen({ kind: 'pick' })}>
+            Add connector
+          </Button>
+        </div>
+      </div>
+      {open?.kind === 'pick' && (
+        <div className="section-sm">
+          <Picker onPick={(entry) => setOpen({ kind: 'new', entry })} onCancel={close} />
+        </div>
+      )}
+      {open?.kind === 'new' && (
+        <div className="section-sm">
+          <ConnectorForm start={draftFrom(open.entry)} entry={open.entry} redirectUri={redirectUri} onDone={close} />
+        </div>
+      )}
+      {editing && (
+        <div className="section-sm">
+          <ConnectorForm key={editing.rev} start={draftOf(editing)} existing={editing} redirectUri={editing.redirectUri} onDone={close} />
+        </div>
+      )}
+      <div className="section-sm card atable-wrap">
+        <table className="atable">
+          <caption className="sr-only">Connectors</caption>
+          <thead>
+            <tr>
+              <th scope="col">Connector</th>
+              <th scope="col">Who signs in</th>
+              <th scope="col">Status</th>
+              <th scope="col" className="col-act">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((c) => (
+              <ConnectorRow key={c.id} c={c} onEdit={() => setOpen({ kind: 'edit', id: c.id })} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}

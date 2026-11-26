@@ -13,6 +13,7 @@ import { ApiTokens, Settings } from '../features/settings/Settings'
 import { AdminAI } from '../features/settings/admin/AdminAI'
 import { AdminAgents } from '../features/settings/admin/AdminAgents'
 import { AdminApps } from '../features/settings/admin/AdminApps'
+import { AdminConnectors } from '../features/settings/admin/AdminConnectors'
 import { Backups } from '../features/settings/admin/Backups'
 import { Storage } from '../features/settings/admin/Storage'
 import { Usage } from '../features/settings/admin/Usage'
@@ -46,6 +47,7 @@ export function AppRoutes() {
             { path: 'storage', element: <Storage /> },
             { path: 'ai', element: <AdminAI /> },
             { path: 'agents', element: <AdminAgents /> },
+            { path: 'connectors', element: <AdminConnectors /> },
           ],
         },
         { path: 'plans/:id', element: <PlanPage /> },
