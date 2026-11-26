@@ -85,23 +85,6 @@ func TestCheckURL(t *testing.T) {
 	}
 }
 
-func TestSameOrigin(t *testing.T) {
-	for _, c := range []struct {
-		a, b string
-		want bool
-	}{
-		{"https://mcp.example.org/a", "https://mcp.example.org/b?x=1", true},
-		{"https://mcp.example.org/a", "https://MCP.example.org:443/a", true},
-		{"https://mcp.example.org/a", "https://mcp.example.org:8443/a", false},
-		{"https://mcp.example.org/a", "http://mcp.example.org/a", false},
-		{"https://mcp.example.org/a", "https://other.example.org/a", false},
-	} {
-		if got := connectors.SameOrigin(c.a, c.b); got != c.want {
-			t.Errorf("SameOrigin(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
-		}
-	}
-}
-
 func TestValidateNamesTheFirstBadField(t *testing.T) {
 	good := connectors.Connector{
 		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", AuthMode: connectors.AuthUser,

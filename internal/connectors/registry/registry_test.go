@@ -128,6 +128,9 @@ func TestChangingTheAddressOrClientNeedsTheSecretAgain(t *testing.T) {
 	for name, change := range map[string]func(*registry.Input){
 		"another host": func(in *registry.Input) { in.URL = "https://mcp.example.com/mcp" },
 		"another port": func(in *registry.Input) { in.URL = "https://mcp.example.org:8443/mcp" },
+		// Another path may name another authorization server in its
+		// metadata, so it is a new address too.
+		"another path": func(in *registry.Input) { in.URL = "https://mcp.example.org/v2/mcp" },
 		"static token endpoint": func(in *registry.Input) {
 			in.AuthorizeURL, in.TokenURL = "https://idp.example.org/a", "https://idp.example.org/t"
 		},
@@ -150,11 +153,6 @@ func TestChangingTheAddressOrClientNeedsTheSecretAgain(t *testing.T) {
 		t.Fatalf("a refused change touched the secret: %q, %v", s, err)
 	}
 
-	// Another path on the same origin keeps the secret.
-	c, err = update(func(in *registry.Input) { in.URL = "https://mcp.example.org/v2/mcp" })
-	if err != nil || !c.OAuth.SecretStored {
-		t.Fatalf("same origin: %+v, %v", c, err)
-	}
 	// A new address with the secret pasted again is saved.
 	c, err = update(func(in *registry.Input) { in.URL, in.ClientSecret = "https://mcp.example.com/mcp", "new-secret" })
 	if err != nil || c.URL != "https://mcp.example.com/mcp" {
@@ -299,10 +297,14 @@ func TestAddressChangeAndDeleteForgetConnections(t *testing.T) {
 	if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
 		t.Fatal(err)
 	}
+	in.Rev, in.URL, in.ClientSecret = c.Rev, "https://other.example.org/v2/mcp", "again"
+	if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.Delete(ctx, alice, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	want := "fake@https://mcp.example.org/mcp fake@https://other.example.org/mcp"
+	want := "fake@https://mcp.example.org/mcp fake@https://other.example.org/mcp fake@https://other.example.org/v2/mcp"
 	if strings.Join(f.forgot, " ") != want {
 		t.Fatalf("forgot %v, want %s", f.forgot, want)
 	}

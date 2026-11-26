@@ -169,30 +169,6 @@ func Internal(host string, internalHosts []string) bool {
 	return slices.ContainsFunc(internalHosts, func(h string) bool { return strings.EqualFold(h, host) })
 }
 
-// SameOrigin reports whether a and b have the same scheme, host and port
-// (a default port counts as given).
-func SameOrigin(a, b string) bool {
-	ua, errA := url.Parse(a)
-	ub, errB := url.Parse(b)
-	if errA != nil || errB != nil {
-		return false
-	}
-	return strings.EqualFold(ua.Scheme, ub.Scheme) && strings.EqualFold(ua.Hostname(), ub.Hostname()) && port(ua) == port(ub)
-}
-
-func port(u *url.URL) string {
-	if p := u.Port(); p != "" {
-		return p
-	}
-	switch strings.ToLower(u.Scheme) {
-	case "https":
-		return "443"
-	case "http":
-		return "80"
-	}
-	return ""
-}
-
 // Validate refuses a connector an admin may not save, naming the first bad
 // field as a *FieldError. internalHosts are the hosts plain http may name.
 func (c Connector) Validate(internalHosts []string) error {

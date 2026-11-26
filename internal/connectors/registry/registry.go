@@ -178,7 +178,10 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 		return connectors.Connector{}, err
 	}
 	row := rowOf(next, prev)
-	moved := !connectors.SameOrigin(prev.URL, in.URL) || prev.OAuthAuthorizeURL != in.AuthorizeURL ||
+	// Any change of the address is a move, even of its path or case: the
+	// vault sends a token only to the exact address it was issued for, and
+	// another path may name another authorization server.
+	moved := prev.URL != in.URL || prev.OAuthAuthorizeURL != in.AuthorizeURL ||
 		prev.OAuthTokenURL != in.TokenURL || prev.OAuthRevokeURL != in.RevokeURL
 	newClient := prev.OAuthClientID != in.ClientID
 	secretChanged := false
