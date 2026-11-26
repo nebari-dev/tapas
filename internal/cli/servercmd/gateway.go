@@ -211,6 +211,10 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		outageGrace = oidc.OutageGrace.Duration
 	}
 	fp := on.fingerprinter
+	conns, err := wiring.Connectors(platform.Connectors, db, sessionsKey, on.sessionsKeyLasting)
+	if err != nil {
+		return err
+	}
 	aiLive := wiring.AISettings(platform.AI, db, sessionsKey)
 	aiSvc, err := wiring.AIService(ctx, platform.AI, aiLive, db, fp)
 	if err != nil {
@@ -280,6 +284,7 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		AIFeatures:      platform.AI.Features,
 		AIIncludeOwners: platform.AI.Admin.IncludeOwners,
 		MCP:             platform.MCP,
+		Connectors:      conns,
 		TrustedAgents:   platform.Agents.TrustedAllowed(),
 		DeviceLoginOff:  !platform.Auth.DeviceLogin.IsEnabled(),
 		Environments:    wiring.EnvironmentSource(platform),

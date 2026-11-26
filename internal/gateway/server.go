@@ -24,6 +24,7 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/capacity"
 	"github.com/nebari-dev/javo/internal/config"
+	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
 	ctrljobs "github.com/nebari-dev/javo/internal/controller/jobs"
 	"github.com/nebari-dev/javo/internal/controller/workspace"
 	"github.com/nebari-dev/javo/internal/core/registry"
@@ -198,6 +199,9 @@ type Config struct {
 	AIIncludeOwners bool
 	// MCP serves agents at /mcp when enabled.
 	MCP config.MCPCfg
+	// Connectors is the connectors platform admins add; nil while
+	// connectors are off (connectors.enabled), when their routes answer 409.
+	Connectors *connreg.Registry
 	// TrustedAgents is agents.allowTrusted: owners may let their coding
 	// agents act without asking, unless a platform admin switched it off.
 	TrustedAgents bool
@@ -322,6 +326,7 @@ func NewServer(cfg Config) *Server {
 	(&secrets.API{DB: cfg.Store, Roles: cfg.Roles}).Register(api)
 	(&admin.API{Workspaces: ws, DB: cfg.Store, People: cfg.People, Roles: cfg.Roles, Now: now, Backups: cfg.Backups, Cluster: cfg.Cluster, Logs: cfg.Executor, AI: cfg.AISettings, Trust: trust}).Register(api)
 	(&templates.API{DB: cfg.Store, Roles: cfg.Roles, Run: run, Idle: cfg.IdleStop}).Register(api)
+	mountConnectors(api, cfg)
 	st := &storage.API{
 		DB: cfg.Store, Spec: cfg.Storage, Cluster: cfg.Cluster, Sizes: cfg.Sizes, Namespaces: nss, Roles: cfg.Roles,
 		Usage: cfg.Usage, Groups: cfg.Groups, Now: now, Upload: files.UploadLimits{Bytes: limits.UploadBytes, Entries: limits.UploadFiles}, UploadReadTimeout: limits.UploadReadTimeout.Duration,

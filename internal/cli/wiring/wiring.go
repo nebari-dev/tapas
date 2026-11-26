@@ -26,6 +26,7 @@ import (
 	"github.com/nebari-dev/javo/internal/backup/restic"
 	"github.com/nebari-dev/javo/internal/buildinfo"
 	"github.com/nebari-dev/javo/internal/config"
+	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
 	"github.com/nebari-dev/javo/internal/controller/jobs"
 	"github.com/nebari-dev/javo/internal/core/registry"
 	"github.com/nebari-dev/javo/internal/diagnose"
@@ -192,6 +193,21 @@ func DiagnoseEngine() *diagnose.Engine { return diagnose.NewEngine(diagnose.Defa
 // and key seals its identity provider tokens.
 func Sessions(p config.Platform, db *store.Store, key tink.AEAD) *session.DBStore {
 	return &session.DBStore{Sessions: db.Sessions(), Key: key, TTL: p.Sessions.TTL.Duration}
+}
+
+// Connectors is the connectors admins add, sealed with the gateway's
+// sessions key; nil while connectors.enabled is false. lasting says whether
+// that key survives a restart (read from a Secret or a file): one made at
+// start would lose every stored client secret and token on the next one, so
+// connectors are refused with it.
+func Connectors(c config.ConnectorsCfg, db *store.Store, seal tink.AEAD, lasting bool) (*connreg.Registry, error) {
+	if !c.Enabled {
+		return nil, nil
+	}
+	if !lasting {
+		return nil, errors.New("connectors.enabled needs a sessions key that survives restarts (--sessions-key-secret): connectors' client secrets and tokens are sealed with it")
+	}
+	return connreg.New(connreg.Config{DB: db, Seal: seal, InternalHosts: c.InternalHosts}), nil
 }
 
 // AISettings is the AI settings in force (the config's, with what a

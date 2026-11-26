@@ -256,3 +256,16 @@ func words(list []string, n, size int) bool {
 func SealContext(table, rowID, column string) []byte {
 	return []byte("javo connector v1\x00" + table + "\x00" + rowID + "\x00" + column)
 }
+
+// RedirectPath is the page of the UI a vendor sends a person back to after
+// they sign in there.
+const RedirectPath = "/settings/connections/callback"
+
+// RedirectURI is the one OAuth redirect address of a deployment, built from
+// its configured public URL (never from a request's Host); "" without one.
+func RedirectURI(publicURL string) string {
+	if publicURL == "" {
+		return ""
+	}
+	return strings.TrimRight(publicURL, "/") + RedirectPath
+}

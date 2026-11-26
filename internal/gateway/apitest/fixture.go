@@ -38,6 +38,7 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/authz"
 	"github.com/nebari-dev/javo/internal/config"
+	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
 	"github.com/nebari-dev/javo/internal/core/registry"
 	"github.com/nebari-dev/javo/internal/diagnose"
 	"github.com/nebari-dev/javo/internal/executor"
@@ -79,6 +80,8 @@ type Fixture struct {
 	Srv    *gateway.Server
 	// AI is the AI settings in force, with Options.AIConfig.
 	AI *aisettings.Live
+	// Connectors is the connectors, with Options.Connectors; nil while off.
+	Connectors *connreg.Registry
 	// Revalidator is the gateway's, for a proxy mounted on it.
 	Revalidator *authn.Revalidator
 	secure      bool
@@ -163,6 +166,8 @@ type Options struct {
 	Mcp bool
 	// PublicURL is mcp.publicURL, the address agents reach the gateway at.
 	PublicURL string
+	// Connectors turns connectors on (Fixture.Connectors).
+	Connectors bool
 	// AgentModel serves the coding agents' model endpoint.
 	AgentModel *agentproxy.Proxy
 	// Agent is the admin's agent model and template.
@@ -289,6 +294,14 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 			o.Agent.Model = live.AgentModel
 		}
 	}
+	var conns *connreg.Registry
+	if o.Connectors {
+		key, err := secrets.NewKey()
+		if err != nil {
+			t.Fatal(err)
+		}
+		conns = connreg.New(connreg.Config{DB: db, Seal: key})
+	}
 	rv := authn.NewRevalidator(providers, sessions, people, 0, o.Now)
 	var exp exposure.Backend = exposurepath.New(o.Urls)
 	if o.Urls.Mode == "subdomain" {
@@ -318,9 +331,9 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 		AI:       o.Ai, AgentModel: o.AgentModel, AISettings: live, Agent: o.Agent, MCP: config.MCPCfg{Enabled: o.Mcp, PublicURL: o.PublicURL}, AIFeatures: config.AIFeatures{Explain: true, Draft: true, Palette: true, Admin: true},
 		NetworkPolicy: policy, Engines: o.Engines, ContainerImages: o.Images, Ready: o.Ready, PreviewsEnabled: o.Previews, Thumbnails: o.Thumbnails, PreviewsMaxPerApp: o.PreviewsMax, CodeHosts: o.CodeHosts, Backups: o.Backups,
 		Environments: o.Environments, PublicHost: o.PublicHost, PixiImage: o.PixiImage, LockAgents: o.LockAgents,
-		TrustedAgents: !o.NoTrustedAgents, DeviceLoginOff: o.NoDeviceLogin,
+		TrustedAgents: !o.NoTrustedAgents, DeviceLoginOff: o.NoDeviceLogin, Connectors: conns,
 	})
-	return &Fixture{AI: live, T: t, Client: c, Db: db, People: people, Store: sessions, Tokens: tokens, Srv: srv, Revalidator: rv, secure: o.Urls.SecureCookies(o.Secure)}
+	return &Fixture{AI: live, Connectors: conns, T: t, Client: c, Db: db, People: people, Store: sessions, Tokens: tokens, Srv: srv, Revalidator: rv, secure: o.Urls.SecureCookies(o.Secure)}
 }
 
 // aliceHash is alice's password as an argon2id hash with the smallest cost

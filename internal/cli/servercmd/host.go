@@ -138,10 +138,13 @@ type gatewayParts struct {
 	// homes and usage read people's files.
 	homes gwstorage.Homes
 	usage gwstorage.HomeUsages
-	// sessionsKey and fingerprinter are Tapas's own keys.
-	sessionsKey   tink.AEAD
-	fingerprinter *secrets.Fingerprinter
-	people        authn.People
+	// sessionsKey and fingerprinter are Tapas's own keys. sessionsKeyLasting
+	// says the sessions key survives a restart (read from a Secret or a
+	// file), not made at start.
+	sessionsKey        tink.AEAD
+	sessionsKeyLasting bool
+	fingerprinter      *secrets.Fingerprinter
+	people             authn.People
 	// internalHost is the host apps call the API at.
 	internalHost string
 }
@@ -159,7 +162,7 @@ func (o *gatewayOptions) parts(ctx context.Context, common *commonFlags, platfor
 	host.Serve(ctx)
 	on := gatewayParts{
 		machines: host.Machines(), apps: host.Apps, runs: host.Runs, policy: host.NetworkPolicy(),
-		sessionsKey: host.SessionsKey, fingerprinter: host.Fingerprinter, people: host.People(people),
+		sessionsKey: host.SessionsKey, sessionsKeyLasting: true, fingerprinter: host.Fingerprinter, people: host.People(people),
 		internalHost: o.internalHost,
 	}
 	on.homes, on.usage = host.Files, host.Files

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -253,5 +254,26 @@ func TestStaleGroupsMountNoGroupFolder(t *testing.T) {
 	now = time.Now().Add(time.Minute)
 	if n := mounted(); n != 1 {
 		t.Fatalf("after signing in again: %d group folders", n)
+	}
+}
+
+// Connectors are off unless the config turns them on, and refused with a
+// sessions key made at start: every secret sealed with it would be lost on
+// the next restart.
+func TestConnectorsNeedASessionsKeyThatSurvivesRestarts(t *testing.T) {
+	db := storetest.New(t)
+	key, err := secrets.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := Connectors(config.ConnectorsCfg{}, db, key, false); r != nil || err != nil {
+		t.Fatalf("off: %v, %v", r, err)
+	}
+	on := config.ConnectorsCfg{Enabled: true}
+	if r, err := Connectors(on, db, key, false); r != nil || err == nil || !strings.Contains(err.Error(), "--sessions-key-secret") {
+		t.Fatalf("with a key made at start: %v, %v", r, err)
+	}
+	if r, err := Connectors(on, db, key, true); r == nil || err != nil {
+		t.Fatalf("with a lasting key: %v, %v", r, err)
 	}
 }
