@@ -1,0 +1,142 @@
+{
+  "entries": [
+    {
+      "id": "slack",
+      "slug": "slack",
+      "name": "Slack",
+      "url": "https://mcp.slack.com/mcp",
+      "authMode": "user",
+      "scopes": ["search:read.public", "channels:read", "channels:history", "users:read", "chat:write"],
+      "toolModes": {},
+      "oauthEndpoints": "discovered",
+      "setup": "Slack's MCP server does not register clients itself. Create a Slack app, add the redirect address shown here as a redirect URL, add the user token scopes listed here, then paste the app's client id and client secret. Private channels and direct messages need more scopes (search:read.private, groups:history and so on).",
+      "docs": "https://docs.slack.dev/ai/mcp-server/"
+    },
+    {
+      "id": "github",
+      "slug": "github",
+      "name": "GitHub",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "authMode": "user",
+      "scopes": ["repo", "read:org"],
+      "toolModes": {
+        "get_file_contents": "read",
+        "issue_read": "read",
+        "list_issues": "read",
+        "search_issues": "read",
+        "pull_request_read": "read"
+      },
+      "oauthEndpoints": "discovered",
+      "setup": "GitHub's MCP server does not register clients itself. Create a GitHub OAuth app (or GitHub App) with the redirect address shown here as its callback URL, then paste its client id and client secret. GitHub has no read-only OAuth scope for repositories: repo allows writes, which Tapas still turns into plans for approval.",
+      "docs": "https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md"
+    },
+    {
+      "id": "notion",
+      "slug": "notion",
+      "name": "Notion",
+      "url": "https://mcp.notion.com/mcp",
+      "authMode": "user",
+      "scopes": [],
+      "toolModes": {
+        "notion-search": "read",
+        "notion-fetch": "read",
+        "notion-get-self": "read",
+        "notion-query-data-sources": "read"
+      },
+      "oauthEndpoints": "discovered",
+      "setup": "Nothing to create at Notion: Tapas registers its own OAuth client with Notion's MCP server. Leave the client id and secret empty. Each person sees what their own Notion account may see.",
+      "docs": "https://developers.notion.com/guides/mcp/build-mcp-client"
+    },
+    {
+      "id": "hubspot",
+      "slug": "hubspot",
+      "name": "HubSpot",
+      "url": "https://mcp.hubspot.com/",
+      "authMode": "user",
+      "scopes": [],
+      "toolModes": {
+        "search_crm_objects": "read",
+        "get_crm_objects": "read",
+        "get_properties": "read",
+        "search_owners": "read"
+      },
+      "oauthEndpoints": "discovered",
+      "setup": "In HubSpot, create an MCP auth app (Development, MCP Connectors) with the redirect address shown here, then paste its client id and client secret. HubSpot picks the scopes from the tools and each person's permissions, so none are listed here.",
+      "docs": "https://developers.hubspot.com/docs/apps/developer-platform/build-apps/integrate-with-the-remote-hubspot-mcp-server"
+    },
+    {
+      "id": "google-gmail",
+      "slug": "gmail",
+      "name": "Gmail",
+      "url": "https://gmailmcp.googleapis.com/mcp/v1",
+      "authMode": "user",
+      "scopes": ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.compose"],
+      "toolModes": {
+        "search_threads": "read",
+        "get_thread": "read",
+        "get_message": "read",
+        "list_drafts": "read",
+        "list_labels": "read"
+      },
+      "oauthEndpoints": "static",
+      "oauth": {
+        "authorizeUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenUrl": "https://oauth2.googleapis.com/token",
+        "revokeUrl": "https://oauth2.googleapis.com/revoke"
+      },
+      "setup": "In a Google Cloud project, enable the Gmail MCP service and create an OAuth client of type web application with the redirect address shown here, then paste its client id and client secret. Google marks its MCP servers as a preview in parts of its documentation.",
+      "docs": "https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server"
+    },
+    {
+      "id": "google-calendar",
+      "slug": "gcalendar",
+      "name": "Google Calendar",
+      "url": "https://calendarmcp.googleapis.com/mcp/v1",
+      "authMode": "user",
+      "scopes": [
+        "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+        "https://www.googleapis.com/auth/calendar.events.freebusy",
+        "https://www.googleapis.com/auth/calendar.events"
+      ],
+      "toolModes": {
+        "list_events": "read",
+        "get_event": "read",
+        "search_events": "read",
+        "list_calendars": "read",
+        "suggest_time": "read"
+      },
+      "oauthEndpoints": "static",
+      "oauth": {
+        "authorizeUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenUrl": "https://oauth2.googleapis.com/token",
+        "revokeUrl": "https://oauth2.googleapis.com/revoke"
+      },
+      "setup": "In a Google Cloud project, enable the Calendar MCP service and create an OAuth client of type web application with the redirect address shown here, then paste its client id and client secret. Google marks its MCP servers as a preview in parts of its documentation.",
+      "docs": "https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server"
+    },
+    {
+      "id": "google-drive",
+      "slug": "gdrive",
+      "name": "Google Drive",
+      "url": "https://drivemcp.googleapis.com/mcp/v1",
+      "authMode": "user",
+      "scopes": ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.file"],
+      "toolModes": {
+        "search_files": "read",
+        "read_file_content": "read",
+        "download_file_content": "read",
+        "get_file_metadata": "read",
+        "get_file_permissions": "read",
+        "list_recent_files": "read"
+      },
+      "oauthEndpoints": "static",
+      "oauth": {
+        "authorizeUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenUrl": "https://oauth2.googleapis.com/token",
+        "revokeUrl": "https://oauth2.googleapis.com/revoke"
+      },
+      "setup": "In a Google Cloud project, enable the Drive MCP service and create an OAuth client of type web application with the redirect address shown here, then paste its client id and client secret. Google marks its MCP servers as a preview in parts of its documentation.",
+      "docs": "https://developers.google.com/workspace/drive/api/guides/configure-mcp-server"
+    }
+  ]
+}
