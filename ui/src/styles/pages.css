@@ -623,3 +623,14 @@ h2.part-title>.part-icon{width:20px;height:20px}
 .con-add-tool{gap:8px;margin-top:8px}
 .con-add-tool .input{flex:1 1 auto;min-width:0;max-width:320px}
 .con-redirect code{min-width:0;overflow-wrap:anywhere}
+@media (max-width:600px){
+  .con-tools thead{display:none}
+  .con-tools tbody tr{display:block;border-bottom:1px solid var(--border)}
+  .con-tools tbody tr:last-child{border-bottom:none}
+  .con-tools tbody th,.con-tools tbody td{display:block;border-bottom:none}
+  .con-tools tbody td{padding-top:0}
+}
+.con-auth-sub{display:none}
+@media (max-width:600px){.atable .con-auth{display:none}.con-auth-sub{display:block}}
+p.sub.con-setup{margin:0 0 16px}
+.con-add-tool .btn{flex:none}

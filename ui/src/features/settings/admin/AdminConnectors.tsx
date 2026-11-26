@@ -277,7 +277,7 @@ function ConnectorForm({
       <form onSubmit={submit} noValidate aria-label={title}>
         <h3 className="card-h">{title}</h3>
         {entry?.setup && (
-          <p className="sub">
+          <p className="sub con-setup">
             {entry.setup}
             {entry.docs && (
               <>
@@ -461,9 +461,10 @@ function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () =>
         <div className="atable-name">
           <b>{c.name}</b>
           <span className="mono faint small">{c.slug}</span>
+          <span className="faint small con-auth-sub">{authLabel(c.authMode)}</span>
         </div>
       </th>
-      <td>{authLabel(c.authMode)}</td>
+      <td className="con-auth">{authLabel(c.authMode)}</td>
       <td>
         <Switch label={c.enabled ? 'On' : 'Off'} name={`Turn on ${c.name}`} checked={c.enabled} disabled={update.isPending} onChange={turn} />
       </td>
@@ -545,7 +546,9 @@ export function AdminConnectors() {
           <thead>
             <tr>
               <th scope="col">Connector</th>
-              <th scope="col">Who signs in</th>
+              <th scope="col" className="con-auth">
+                Who signs in
+              </th>
               <th scope="col">Status</th>
               <th scope="col" className="col-act">
                 <span className="sr-only">Actions</span>
