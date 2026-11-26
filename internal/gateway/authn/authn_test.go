@@ -309,6 +309,25 @@ func TestIsFoldersChangeCleansThePath(t *testing.T) {
 	}
 }
 
+func TestIsConnectorSignInCleansThePath(t *testing.T) {
+	for _, p := range []string{
+		"/api/connectors/c-1/connect", "/api/connectors/c-1/connection", "/api/connectors/oauth/complete", "/api//connectors/oauth/complete/",
+		"/api/admin/connectors/c-1/connect", "/api/admin/connectors/c-1/connection", "/api/connectors/x/../c-1/connect", "/api/connectors/{id}/connect",
+	} {
+		if !authn.IsConnectorSignIn(p) {
+			t.Errorf("%q is not a connector sign-in", p)
+		}
+	}
+	for _, p := range []string{
+		"/api/connectors", "/api/connectors/c-1", "/api/connectors/c-1/connect/x", "/api/admin/connectors/c-1",
+		"/api/admin/connectors/c-1/tools/refresh", "/api/connectors//connect", "/api/workspaces/c-1/connect",
+	} {
+		if authn.IsConnectorSignIn(p) {
+			t.Errorf("%q is a connector sign-in", p)
+		}
+	}
+}
+
 func TestIsTrustChangeCleansThePath(t *testing.T) {
 	for _, p := range []string{"/api/workspaces/pi/trust", "/api/workspaces//pi/trust", "/api/workspaces/x/../pi/trust", "api/workspaces/pi/trust/"} {
 		if !authn.IsTrustChange(p) {

@@ -263,6 +263,11 @@
           "catalogId": {
             "type": "string"
           },
+          "connections": {
+            "description": "How many accounts are connected",
+            "format": "int64",
+            "type": "integer"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -290,6 +295,10 @@
               "array",
               "null"
             ]
+          },
+          "shared": {
+            "$ref": "#/components/schemas/SharedConnection",
+            "description": "The account everyone's calls use; only in shared mode"
           },
           "slug": {
             "type": "string"
@@ -332,6 +341,7 @@
           "allowedGroups",
           "toolModes",
           "tools",
+          "connections",
           "updatedAt"
         ],
         "type": "object"
@@ -675,6 +685,19 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "AuthorizeURL": {
+        "additionalProperties": false,
+        "properties": {
+          "authorizeUrl": {
+            "description": "The vendor's sign-in page; it sends the browser back to the redirect address",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorizeUrl"
         ],
         "type": "object"
       },
@@ -1211,6 +1234,10 @@
               "array",
               "null"
             ]
+          },
+          "redirectUri": {
+            "description": "Paste this at the vendor as the OAuth redirect address",
+            "type": "string"
           }
         },
         "required": [
@@ -1341,6 +1368,43 @@
           "reply",
           "plans",
           "dropped"
+        ],
+        "type": "object"
+      },
+      "CompleteInput": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "iss": {
+            "description": "The issuer the vendor named (RFC 9207), when it sent one",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "code"
+        ],
+        "type": "object"
+      },
+      "CompleteOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "$ref": "#/components/schemas/MyConnector"
+          }
+        },
+        "required": [
+          "connector"
         ],
         "type": "object"
       },
@@ -3465,6 +3529,108 @@
         ],
         "type": "object"
       },
+      "MyConnector": {
+        "additionalProperties": false,
+        "properties": {
+          "authMode": {
+            "description": "user: you connect your own account; shared: an admin connected one account for everyone",
+            "enum": [
+              "user",
+              "shared"
+            ],
+            "type": "string"
+          },
+          "connectUrl": {
+            "description": "The page to connect it at",
+            "type": "string"
+          },
+          "connected": {
+            "description": "A connection exists (yours, or the shared one)",
+            "type": "boolean"
+          },
+          "connectedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "status": {
+            "description": "needs_reauth: the vendor no longer accepts it; connect again",
+            "enum": [
+              "active",
+              "needs_reauth"
+            ],
+            "type": "string"
+          },
+          "tools": {
+            "description": "Its tools, from the last snapshot an admin took",
+            "items": {
+              "$ref": "#/components/schemas/MyTool"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "authMode",
+          "connected",
+          "connectUrl",
+          "tools"
+        ],
+        "type": "object"
+      },
+      "MyListOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyConnector"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "MyTool": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "description": "read runs at once; write is proposed for you to approve",
+            "enum": [
+              "read",
+              "write"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The tool's name on Tapas's MCP endpoint: slug__tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "mode"
+        ],
+        "type": "object"
+      },
       "NewFoldersOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -4763,6 +4929,29 @@
           "url",
           "owner",
           "via"
+        ],
+        "type": "object"
+      },
+      "SharedConnection": {
+        "additionalProperties": false,
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "connectedBy": {
+            "description": "The admin who connected it",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "needs_reauth"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "connected"
         ],
         "type": "object"
       },
@@ -8052,6 +8241,307 @@
         ]
       }
     },
+    "/api/admin/connectors/{id}/connect": {
+      "post": {
+        "description": "Only for connectors in shared mode. Everything done through it appears at the vendor as this account: connect a service account.",
+        "operationId": "adminConnectConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizeURL"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Start connecting the account everyone's calls use (platform admins, browser session only)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/connectors/{id}/connection": {
+      "delete": {
+        "operationId": "adminDisconnectConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Disconnect the account everyone's calls use (platform admins, browser session only)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/connectors/{id}/tools/refresh": {
+      "post": {
+        "description": "Lists the tools at the connector's MCP server with the shared connection, or for a user-mode connector with your own.",
+        "operationId": "adminRefreshConnectorTools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminConnector"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Take a new snapshot of a connector's tools (platform admins)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/report": {
       "get": {
         "operationId": "getAdminReport",
@@ -9579,6 +10069,374 @@
         "summary": "The install's product name, logo, favicon and accent",
         "tags": [
           "branding"
+        ]
+      }
+    },
+    "/api/connectors": {
+      "get": {
+        "description": "Each connector's tools are offered on /mcp as slug__tool once connected. Connect at connectUrl, in the browser.",
+        "operationId": "listConnectors",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyListOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Connectors you may use, and whether you connected them",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/api/connectors/oauth/complete": {
+      "post": {
+        "description": "Called by the page at /settings/connections/callback with what the vendor sent back. A sign-in can be finished once, within 10 minutes, by the person who started it.",
+        "operationId": "completeConnectorSignIn",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Finish connecting an account (browser session only)",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/api/connectors/{id}/connect": {
+      "post": {
+        "description": "Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.",
+        "operationId": "connectConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizeURL"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Start connecting your account to a connector (browser session only)",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/api/connectors/{id}/connection": {
+      "delete": {
+        "description": "Revokes the tokens at the vendor when it allows it, and deletes them whatever it answered.",
+        "operationId": "disconnectConnector",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Disconnect your account from a connector (browser session only)",
+        "tags": [
+          "connectors"
         ]
       }
     },

@@ -26,6 +26,7 @@ import (
 	"github.com/nebari-dev/javo/internal/config"
 	"github.com/nebari-dev/javo/internal/connectors"
 	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
+	"github.com/nebari-dev/javo/internal/connectors/vault"
 	ctrljobs "github.com/nebari-dev/javo/internal/controller/jobs"
 	"github.com/nebari-dev/javo/internal/controller/workspace"
 	"github.com/nebari-dev/javo/internal/core/registry"
@@ -42,6 +43,7 @@ import (
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/branding"
 	"github.com/nebari-dev/javo/internal/gateway/clusterview"
+	gwconnectors "github.com/nebari-dev/javo/internal/gateway/connectors"
 	"github.com/nebari-dev/javo/internal/gateway/environments"
 	"github.com/nebari-dev/javo/internal/gateway/hooks"
 	"github.com/nebari-dev/javo/internal/gateway/jobs"
@@ -206,6 +208,12 @@ type Config struct {
 	// ConnectorTokens gives connector calls their bearer; nil means nobody
 	// is connected, so no connector tool is offered.
 	ConnectorTokens connectors.TokenSource
+	// ConnectorVault is the connected accounts (the same vault as
+	// ConnectorTokens in production); nil while connectors are off.
+	ConnectorVault *vault.Vault
+	// ConnectorSignIn signs people in at connectors' vendors; nil while
+	// connectors are off and in a binary built with the tag local.
+	ConnectorSignIn gwconnectors.SignIn
 	// ConnectorHTTP reaches connectors: the guarded client (httpx.Guard
 	// with connectors.internalHosts). nil is one that allows no internal
 	// host.

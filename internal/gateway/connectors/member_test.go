@@ -1,0 +1,288 @@
+package connectors_test
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
+	"github.com/nebari-dev/javo/internal/gateway/apitest"
+	"github.com/nebari-dev/javo/internal/httpx"
+	"github.com/nebari-dev/javo/internal/reasons"
+)
+
+type myConnector struct {
+	ID, Slug, Name, AuthMode, Status, ConnectURL, ConnectedAt string
+	Connected                                                 bool
+	Tools                                                     []struct{ Name, Mode string }
+}
+
+type adminView struct {
+	adminConnector
+	Connections int
+	Shared      *struct {
+		Connected   bool
+		ConnectedBy string
+		Status      string
+	}
+	Tools []struct{ Name string }
+}
+
+// oauthFixture is a gateway with connectors on, reaching a fake connector
+// and its fake authorization server on loopback.
+type oauthFixture struct {
+	*apitest.Fixture
+	as    *connectorstest.AuthServer
+	mcp   *connectorstest.Connector
+	admin *http.Cookie
+}
+
+func newOAuthFixture(t *testing.T) *oauthFixture {
+	t.Helper()
+	f := apitest.New(t, apitest.Options{
+		Connectors: true, PublicURL: "https://tapas.example.org", ConnectorInternalHosts: []string{"127.0.0.1"},
+		ConnectorHTTP: httpx.Guard{}.Client(),
+	})
+	as := connectorstest.NewAuthServer(t)
+	return &oauthFixture{Fixture: f, as: as, mcp: connectorstest.NewOAuthConnector(t, as), admin: f.Session(apitest.AdminID, "javo-admins")}
+}
+
+// create adds a connector in mode at the fake, for the sales group, and
+// returns its id.
+func (f *oauthFixture) create(t *testing.T, mode string) string {
+	t.Helper()
+	body := fmt.Sprintf(`{"slug":"fake","name":"Fake","url":%q,"authMode":%q,"enabled":true,
+		"oauth":{"clientId":%q,"clientSecret":%q},"allowedGroups":["sales"],"toolModes":{"echo":"read"}}`,
+		f.mcp.URL, mode, connectorstest.ClientID, connectorstest.ClientSecret)
+	w := f.Do("POST", "/api/admin/connectors", body, f.admin)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body)
+	}
+	return apitest.Decode[adminConnector](t, w).ID
+}
+
+// start begins a sign-in at path with c and follows it at the fake vendor,
+// returning the body the callback page posts.
+func (f *oauthFixture) start(t *testing.T, path string, c *http.Cookie) string {
+	t.Helper()
+	w := f.Do("POST", path, "", c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("POST %s: %d %s", path, w.Code, w.Body)
+	}
+	u := apitest.Decode[struct{ AuthorizeURL string }](t, w).AuthorizeURL
+	if q := mustQuery(t, u); q.Get("redirect_uri") != "https://tapas.example.org/settings/connections/callback" {
+		t.Fatalf("redirect_uri %q", q.Get("redirect_uri"))
+	}
+	back, err := f.as.Authorize(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf(`{"state":%q,"code":%q,"iss":%q}`, back.Get("state"), back.Get("code"), back.Get("iss"))
+}
+
+func mustQuery(t *testing.T, raw string) url.Values {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u.Query()
+}
+
+func (f *oauthFixture) mine(t *testing.T, c *http.Cookie) []myConnector {
+	t.Helper()
+	w := f.Do("GET", "/api/connectors", "", c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", w.Code, w.Body)
+	}
+	return apitest.Decode[struct{ Items []myConnector }](t, w).Items
+}
+
+// A person connects their own account; someone else cannot finish their
+// sign-in, which spends it; they disconnect, which revokes at the vendor.
+func TestAPersonConnectsAndDisconnects(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	id := f.create(t, "user")
+	alice, carol := f.Session(apitest.AliceID, "sales"), f.Session(apitest.MemberID, "sales")
+
+	if got := f.mine(t, alice); len(got) != 1 || got[0].Connected || got[0].ConnectURL != "https://tapas.example.org/settings/connections" {
+		t.Fatalf("before connecting: %+v", got)
+	}
+	body := f.start(t, "/api/connectors/"+id+"/connect", alice)
+	expired := reasons.Msg(reasons.MsgConnectorSignInExpired)
+	for _, c := range []*http.Cookie{carol, alice} {
+		if w := f.Do("POST", "/api/connectors/oauth/complete", body, c); w.Code != http.StatusBadRequest ||
+			apitest.Decode[problemJSON](t, w).Title != expired {
+			t.Fatalf("completing a sign-in someone else tried first: %d %s", w.Code, w.Body)
+		}
+	}
+	body = f.start(t, "/api/connectors/"+id+"/connect", alice)
+	w := f.Do("POST", "/api/connectors/oauth/complete", body, alice)
+	if w.Code != http.StatusOK {
+		t.Fatalf("complete: %d %s", w.Code, w.Body)
+	}
+	if c := apitest.Decode[struct{ Connector myConnector }](t, w).Connector; !c.Connected || c.Status != "active" || c.ConnectedAt == "" {
+		t.Fatalf("completed %+v", c)
+	}
+	if got := f.mine(t, alice); !got[0].Connected {
+		t.Fatalf("alice's list after connecting: %+v", got)
+	}
+	if got := f.mine(t, carol); got[0].Connected {
+		t.Fatalf("carol sees alice's connection: %+v", got)
+	}
+	if v := apitest.Decode[adminView](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin)); v.Connections != 1 || v.Shared != nil {
+		t.Fatalf("admin view %+v", v)
+	}
+
+	if w := f.Do("DELETE", "/api/connectors/"+id+"/connection", "", alice); w.Code != http.StatusNoContent {
+		t.Fatalf("disconnect: %d %s", w.Code, w.Body)
+	}
+	if r := f.as.Revocations(); len(r) != 2 || r[0].Hint != "refresh_token" || r[1].Hint != "access_token" {
+		t.Fatalf("revocations %+v", r)
+	}
+	if got := f.mine(t, alice); got[0].Connected {
+		t.Fatalf("after disconnecting: %+v", got)
+	}
+	if w := f.Do("DELETE", "/api/connectors/"+id+"/connection", "", alice); w.Code != http.StatusNotFound {
+		t.Fatalf("second disconnect: %d %s", w.Code, w.Body)
+	}
+}
+
+// Someone outside the connector's groups does not see it and cannot
+// connect it.
+func TestOutsidersCannotConnect(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	id := f.create(t, "user")
+	carol := f.Session(apitest.MemberID, "marketing")
+	if got := f.mine(t, carol); len(got) != 0 {
+		t.Fatalf("an outsider lists %+v", got)
+	}
+	notFound := reasons.Msg(reasons.MsgConnectorNotFound)
+	for _, r := range []struct{ method, path string }{
+		{"POST", "/api/connectors/" + id + "/connect"}, {"DELETE", "/api/connectors/" + id + "/connection"}, {"POST", "/api/connectors/c-missing/connect"},
+	} {
+		if w := f.Do(r.method, r.path, "", carol); w.Code != http.StatusNotFound || apitest.Decode[problemJSON](t, w).Title != notFound {
+			t.Errorf("%s %s: %d %s", r.method, r.path, w.Code, w.Body)
+		}
+	}
+}
+
+// An admin connects the one account a shared connector uses, refreshes
+// its tool snapshot with it, and disconnects it. Members cannot.
+func TestAnAdminConnectsASharedAccount(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	id := f.create(t, "shared")
+	alice := f.Session(apitest.AliceID, "sales")
+	if w := f.Do("POST", "/api/connectors/"+id+"/connect", "", alice); w.Code != http.StatusNotFound {
+		t.Fatalf("a member connects a shared connector: %d %s", w.Code, w.Body)
+	}
+	if w := f.Do("POST", "/api/admin/connectors/"+id+"/connect", "", alice); w.Code != http.StatusForbidden {
+		t.Fatalf("a member on the admin route: %d %s", w.Code, w.Body)
+	}
+	if w := f.Do("POST", "/api/admin/connectors/"+id+"/tools/refresh", "", f.admin); w.Code != http.StatusConflict {
+		t.Fatalf("refresh before connecting: %d %s", w.Code, w.Body)
+	}
+	body := f.start(t, "/api/admin/connectors/"+id+"/connect", f.admin)
+	if w := f.Do("POST", "/api/connectors/oauth/complete", body, f.admin); w.Code != http.StatusOK {
+		t.Fatalf("complete: %d %s", w.Code, w.Body)
+	}
+	v := apitest.Decode[adminView](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin))
+	if v.Connections != 1 || v.Shared == nil || !v.Shared.Connected || v.Shared.ConnectedBy != apitest.AdminID || v.Shared.Status != "active" {
+		t.Fatalf("admin view %+v %+v", v, v.Shared)
+	}
+	if got := f.mine(t, alice); len(got) != 1 || !got[0].Connected {
+		t.Fatalf("alice's list of a connected shared connector: %+v", got)
+	}
+
+	w := f.Do("POST", "/api/admin/connectors/"+id+"/tools/refresh", "", f.admin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("refresh: %d %s", w.Code, w.Body)
+	}
+	if v := apitest.Decode[adminView](t, w); len(v.Tools) != 2 {
+		t.Fatalf("tools %+v", v.Tools)
+	}
+	if got := f.mine(t, alice); len(got[0].Tools) != 2 || got[0].Tools[0].Name != "fake__echo" || got[0].Tools[0].Mode != "read" {
+		t.Fatalf("alice's tools %+v", got[0].Tools)
+	}
+
+	if w := f.Do("DELETE", "/api/admin/connectors/"+id+"/connection", "", f.admin); w.Code != http.StatusNoContent {
+		t.Fatalf("disconnect: %d %s", w.Code, w.Body)
+	}
+	if v := apitest.Decode[adminView](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin)); v.Connections != 0 || v.Shared == nil || v.Shared.Connected {
+		t.Fatalf("after disconnecting %+v", v)
+	}
+}
+
+// Deleting a connector revokes and deletes what people connected.
+func TestDeletingAConnectorRevokesItsConnections(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	id := f.create(t, "user")
+	alice := f.Session(apitest.AliceID, "sales")
+	if w := f.Do("POST", "/api/connectors/oauth/complete", f.start(t, "/api/connectors/"+id+"/connect", alice), alice); w.Code != http.StatusOK {
+		t.Fatalf("complete: %d %s", w.Code, w.Body)
+	}
+	if w := f.Do("DELETE", "/api/admin/connectors/"+id, "", f.admin); w.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", w.Code, w.Body)
+	}
+	if len(f.as.Revocations()) != 2 {
+		t.Fatalf("revocations %+v", f.as.Revocations())
+	}
+	if left, err := f.Vault.ForConnector(context.Background(), id); err != nil || len(left) != 0 {
+		t.Fatalf("connections left: %+v, %v", left, err)
+	}
+}
+
+// No API token connects, disconnects or finishes a sign-in; a token may
+// list connectors.
+func TestSignInRoutesAreForBrowserSessionsOnly(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	id := f.create(t, "user")
+	tok := f.NewToken(f.LoginAlice(), `{"name":"agent","scope":"read-write"}`).Token
+	only := reasons.Msg(reasons.MsgConnectorSessionOnly)
+	for _, r := range []struct{ method, path, body string }{
+		{"POST", "/api/connectors/" + id + "/connect", ""},
+		{"POST", "/api/connectors/oauth/complete", `{"state":"s","code":"c"}`},
+		{"DELETE", "/api/connectors/" + id + "/connection", ""},
+		{"POST", "/api/admin/connectors/" + id + "/connect", ""},
+		{"DELETE", "/api/admin/connectors/" + id + "/connection", ""},
+	} {
+		if w := f.Bearer(r.method, r.path, r.body, tok, nil); w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), only) {
+			t.Errorf("%s %s with a token: %d %s", r.method, r.path, w.Code, w.Body)
+		}
+	}
+	if w := f.Bearer("GET", "/api/connectors", "", tok, nil); w.Code != http.StatusOK {
+		t.Fatalf("list with a token: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestMemberRoutesAnswerConnectorsOffWhenOff(t *testing.T) {
+	t.Parallel()
+	f := fixture(t, false)
+	alice := f.Session(apitest.AliceID, "sales")
+	admin := f.Session(apitest.AdminID, "javo-admins")
+	for _, r := range []struct {
+		method, path, body string
+		c                  *http.Cookie
+	}{
+		{"GET", "/api/connectors", "", alice},
+		{"POST", "/api/connectors/c-1/connect", "", alice},
+		{"POST", "/api/connectors/oauth/complete", `{"state":"s","code":"c"}`, alice},
+		{"DELETE", "/api/connectors/c-1/connection", "", alice},
+		{"POST", "/api/admin/connectors/c-1/connect", "", admin},
+		{"DELETE", "/api/admin/connectors/c-1/connection", "", admin},
+		{"POST", "/api/admin/connectors/c-1/tools/refresh", "", admin},
+	} {
+		w := f.Do(r.method, r.path, r.body, r.c)
+		if w.Code != http.StatusConflict || apitest.Decode[problemJSON](t, w).Title != reasons.Msg(reasons.MsgConnectorsOff) {
+			t.Errorf("%s %s while off: %d %s", r.method, r.path, w.Code, w.Body)
+		}
+	}
+}

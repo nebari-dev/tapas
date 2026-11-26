@@ -1,6 +1,8 @@
 // Package connectors is the HTTP API of connectors: the platform admins'
-// routes that add, change and remove them. The gateway registers it only in
-// a binary built without the tag local.
+// routes that add, change and remove them and connect a shared account,
+// and the routes people connect their own accounts with. The routes are
+// registered in every build; without connectors (always so in a binary
+// built with the tag local) they answer 409.
 package connectors
 
 import (
@@ -15,6 +17,7 @@ import (
 	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/connectors/catalog"
 	"github.com/nebari-dev/javo/internal/connectors/registry"
+	"github.com/nebari-dev/javo/internal/connectors/vault"
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/problem"
 	"github.com/nebari-dev/javo/internal/reasons"
@@ -26,7 +29,13 @@ type API struct {
 	// Registry is the connectors; nil while connectors are off
 	// (connectors.enabled), when every route answers 409.
 	Registry *registry.Registry
-	Roles    config.Roles
+	// Vault is the connected accounts; nil while connectors are off.
+	Vault *vault.Vault
+	// SignIn signs people in at vendors and Tools lists a connector's tools
+	// upstream; nil while connectors are off and in a build without them.
+	SignIn SignIn
+	Tools  ToolLister
+	Roles  config.Roles
 	// PublicURL is mcp.publicURL, the OAuth redirect address's base.
 	PublicURL string
 }
@@ -88,7 +97,16 @@ type AdminConnector struct {
 	ToolModes     map[string]string `json:"toolModes"`
 	Tools         []ToolView        `json:"tools" doc:"The last snapshot of the server's tool list"`
 	RedirectURI   string            `json:"redirectUri,omitempty" doc:"Paste this at the vendor as the OAuth redirect address"`
+	Shared        *SharedConnection `json:"shared,omitempty" doc:"The account everyone's calls use; only in shared mode"`
+	Connections   int               `json:"connections" doc:"How many accounts are connected"`
 	UpdatedAt     time.Time         `json:"updatedAt"`
+}
+
+// SharedConnection is the one connection of a shared connector.
+type SharedConnection struct {
+	Connected   bool   `json:"connected"`
+	ConnectedBy string `json:"connectedBy,omitempty" doc:"The admin who connected it"`
+	Status      string `json:"status,omitempty" enum:"active,needs_reauth"`
 }
 
 // CatalogEntry is one entry of the built-in catalogue.
@@ -108,7 +126,8 @@ type CatalogEntry struct {
 
 type catalogOutput struct {
 	Body struct {
-		Items []CatalogEntry `json:"items"`
+		Items       []CatalogEntry `json:"items"`
+		RedirectURI string         `json:"redirectUri,omitempty" doc:"Paste this at the vendor as the OAuth redirect address"`
 	}
 }
 
@@ -148,7 +167,7 @@ func (a *API) Register(api huma.API) {
 			return nil, off()
 		}
 		out := &catalogOutput{}
-		out.Body.Items = []CatalogEntry{}
+		out.Body.Items, out.Body.RedirectURI = []CatalogEntry{}, connectors.RedirectURI(a.PublicURL)
 		for _, e := range catalog.All() {
 			out.Body.Items = append(out.Body.Items, CatalogEntry{
 				ID: e.ID, Slug: e.Slug, Name: e.Name, URL: e.URL, AuthMode: string(e.AuthMode), Scopes: nonNil(e.Scopes),
@@ -172,7 +191,11 @@ func (a *API) Register(api huma.API) {
 		out := &listOutput{}
 		out.Body.Items = make([]AdminConnector, 0, len(all))
 		for _, c := range all {
-			out.Body.Items = append(out.Body.Items, a.view(c))
+			v, err := a.adminView(ctx, c)
+			if err != nil {
+				return nil, err
+			}
+			out.Body.Items = append(out.Body.Items, v)
 		}
 		return out, nil
 	})
@@ -190,7 +213,11 @@ func (a *API) Register(api huma.API) {
 		if err != nil {
 			return nil, failed("add the connector", err, in.Body.Slug)
 		}
-		return &createOutput{Status: http.StatusCreated, Body: a.view(c)}, nil
+		v, err := a.adminView(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+		return &createOutput{Status: http.StatusCreated, Body: v}, nil
 	})
 
 	authn.RegisterAdmin(api, a.Roles, huma.Operation{
@@ -204,7 +231,11 @@ func (a *API) Register(api huma.API) {
 		if err != nil {
 			return nil, failed("read the connector", err, "")
 		}
-		return &connectorOutput{Body: a.view(c)}, nil
+		v, err := a.adminView(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+		return &connectorOutput{Body: v}, nil
 	})
 
 	authn.RegisterAdmin(api, a.Roles, huma.Operation{
@@ -220,7 +251,11 @@ func (a *API) Register(api huma.API) {
 		if err != nil {
 			return nil, failed("change the connector", err, "")
 		}
-		return &connectorOutput{Body: a.view(c)}, nil
+		v, err := a.adminView(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+		return &connectorOutput{Body: v}, nil
 	})
 
 	authn.RegisterAdmin(api, a.Roles, huma.Operation{
@@ -236,6 +271,9 @@ func (a *API) Register(api huma.API) {
 		}
 		return nil, nil
 	})
+
+	a.registerShared(api, base)
+	a.registerMember(api)
 }
 
 func off() error { return problem.New(http.StatusConflict, reasons.Msg(reasons.MsgConnectorsOff)) }
@@ -271,6 +309,27 @@ func registryInput(b ConnectorInput) registry.Input {
 		}
 	}
 	return in
+}
+
+// adminView is c as an admin sees it, with how many accounts are connected
+// and, for a shared connector, its one connection.
+func (a *API) adminView(ctx context.Context, c connectors.Connector) (AdminConnector, error) {
+	v := a.view(c)
+	if a.Vault == nil {
+		return v, nil
+	}
+	all, err := a.Vault.ForConnector(ctx, c.ID)
+	if err != nil {
+		return v, problem.Internal("list connections", err)
+	}
+	v.Connections = len(all)
+	if c.AuthMode == connectors.AuthShared {
+		v.Shared = &SharedConnection{}
+		if conn, ok := find(all, c.ID); ok && conn.Subject == "" {
+			v.Shared = &SharedConnection{Connected: true, ConnectedBy: conn.ConnectedBy, Status: conn.Status}
+		}
+	}
+	return v, nil
 }
 
 func (a *API) view(c connectors.Connector) AdminConnector {

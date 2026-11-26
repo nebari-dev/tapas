@@ -19,7 +19,6 @@ import (
 	"github.com/nebari-dev/javo/internal/connectors/broker"
 	"github.com/nebari-dev/javo/internal/connectors/client"
 	"github.com/nebari-dev/javo/internal/gateway/authn"
-	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/mcp"
 )
 
@@ -62,12 +61,8 @@ func tokenVerifier(live liveCaller, roles config.Roles) auth.TokenVerifier {
 func mountMCP(mux *http.ServeMux, doc *huma.OpenAPI, acts []actions.Info, a *authn.Authenticator, cfg Config) {
 	var b mcp.Broker
 	if cfg.Connectors != nil {
-		hc := cfg.ConnectorHTTP
-		if hc == nil {
-			hc = httpx.Guard{PublicOnly: true}.Client()
-		}
 		b = broker.New(broker.Config{
-			Connectors: cfg.Connectors, Forwarder: &client.Client{HTTP: hc}, Tokens: cfg.ConnectorTokens, Audit: cfg.Store.Audit(),
+			Connectors: cfg.Connectors, Forwarder: &client.Client{HTTP: connectorHTTP(cfg)}, Tokens: cfg.ConnectorTokens, Audit: cfg.Store.Audit(),
 			PublicURL: cfg.MCP.PublicURL, Now: cfg.Now,
 		})
 	}
