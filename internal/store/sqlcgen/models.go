@@ -178,6 +178,9 @@ type Connector struct {
 	Rev                     string
 	CreatedAt               dbtime.Time
 	UpdatedAt               dbtime.Time
+	OauthIssuer             string
+	OauthServer             string
+	OauthServerMoved        bool
 }
 
 type ConnectorConnection struct {

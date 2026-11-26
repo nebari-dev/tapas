@@ -38,6 +38,7 @@ type Connector struct {
 
 	mu           sync.Mutex
 	as           *AuthServer
+	advertised   string
 	hideHint     bool
 	bearers      []string
 	calls        []Call
@@ -64,7 +65,7 @@ func NewConnector(t *testing.T, bearers ...string) *Connector {
 // authorization server. It stops when the test ends.
 func NewOAuthConnector(t *testing.T, as *AuthServer) *Connector {
 	t.Helper()
-	c := &Connector{as: as}
+	c := &Connector{as: as, advertised: as.URL}
 	c.start(t, as)
 	return c
 }
@@ -101,8 +102,11 @@ func (c *Connector) start(t *testing.T, as *AuthServer) {
 	var base string
 	if as != nil {
 		mux.HandleFunc("GET "+metadataPath, func(w http.ResponseWriter, _ *http.Request) {
+			c.mu.Lock()
+			advertised := c.advertised
+			c.mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"resource": c.URL, "authorization_servers": []string{as.URL}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": c.URL, "authorization_servers": []string{advertised}})
 		})
 	}
 	authed := func(w http.ResponseWriter, r *http.Request) {
@@ -213,6 +217,14 @@ func (c *Connector) HideMetadataHint(on bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.hideHint = on
+}
+
+// Advertise makes its metadata name the authorization server at issuer
+// from now on; the tokens it accepts stay the ones its own server issued.
+func (c *Connector) Advertise(issuer string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.advertised = issuer
 }
 
 // Hang makes its tools never answer while on, until the caller gives up.

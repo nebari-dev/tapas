@@ -397,6 +397,13 @@ function ConnectorForm({
           <span className="field-label">Redirect address</span>
           <RedirectAddress uri={redirectUri} />
           <span className="hint">Paste this at the vendor as the OAuth redirect (callback) address.</span>
+          {cur?.oauth.issuer && <span className="hint">Sign-ins go to {cur.oauth.issuer}, found at the first sign-in.</span>}
+          {cur?.oauth.serverMoved && (
+            <span className="hint con-status warn">
+              The server now names another sign-in server. Saving it trusts the new sign-in server, disconnects everyone and needs the client
+              secret again.
+            </span>
+          )}
         </div>
         <div className="field">
           <label htmlFor={ids.id}>OAuth client id</label>
@@ -490,6 +497,9 @@ function ConnectorForm({
 /** The catalogue to start from, or an empty form for any MCP server. */
 /** Who is connected: the shared account's state, or how many people connected their own. */
 function connectionsOf(c: AdminConnector): { text: string; tone: 'ok' | 'warn' | 'off' } {
+  if (c.oauth.serverMoved) {
+    return { text: 'Its server now sends sign-ins to another server: nobody can connect until you check and save it', tone: 'warn' }
+  }
   if (c.authMode === 'user') {
     const n = c.connections
     return { text: n === 0 ? 'Nobody connected yet' : n === 1 ? '1 person connected' : `${n} people connected`, tone: n > 0 ? 'ok' : 'off' }

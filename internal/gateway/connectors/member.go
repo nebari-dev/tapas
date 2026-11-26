@@ -400,6 +400,8 @@ func signInFailed(err error) error {
 		return problem.New(http.StatusBadRequest, reasons.Msg(reasons.MsgConnectorSignInExpired))
 	case errors.Is(err, connectors.ErrNeedsClient):
 		return problem.New(http.StatusConflict, reasons.Msg(reasons.MsgConnectorNeedsOAuthClient))
+	case errors.Is(err, connectors.ErrServerMoved):
+		return problem.New(http.StatusConflict, reasons.Msg(reasons.MsgConnectorServerMoved))
 	case errors.As(err, &oe):
 		return problem.New(http.StatusBadGateway, reasons.Msg(reasons.MsgConnectorSignInFailed, oe.Code))
 	case errors.Is(err, store.ErrNotFound):

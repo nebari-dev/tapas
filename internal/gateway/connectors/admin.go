@@ -72,6 +72,8 @@ type AdminOAuth struct {
 	AuthorizeURL string `json:"authorizeUrl,omitempty"`
 	TokenURL     string `json:"tokenUrl,omitempty"`
 	RevokeURL    string `json:"revokeUrl,omitempty"`
+	Issuer       string `json:"issuer,omitempty" doc:"The authorization server sign-ins, refreshes and revocations go to, pinned at the first sign-in (discovered endpoints only)"`
+	ServerMoved  bool   `json:"serverMoved,omitempty" doc:"The MCP server now names another authorization server: nobody can connect until an admin saves the connector again (with the client secret), which disconnects everyone"`
 }
 
 // ToolView is one tool the connector's MCP server listed.
@@ -241,7 +243,7 @@ func (a *API) Register(api huma.API) {
 	authn.RegisterAdmin(api, a.Roles, huma.Operation{
 		OperationID: "adminUpdateConnector", Method: http.MethodPut, Path: base + "/{id}",
 		Summary:     "Change a connector (platform admins)",
-		Description: "rev must be the connector's current rev (409 otherwise). A new address origin, new OAuth endpoints or a new client id need the client secret again when one is stored, and disconnect everyone who connected.",
+		Description: "rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again. A new auth mode disconnects everyone too.",
 		Errors:      []int{http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity},
 	}, func(ctx context.Context, in *updateInput) (*connectorOutput, error) {
 		if a.Registry == nil {
@@ -341,6 +343,9 @@ func (a *API) view(c connectors.Connector) AdminConnector {
 		},
 		Scopes: nonNil(c.Scopes), AllowedGroups: nonNil(c.AllowedGroups), ToolModes: modes(c.ToolModes),
 		Tools: make([]ToolView, 0, len(c.Tools)), RedirectURI: connectors.RedirectURI(a.PublicURL), UpdatedAt: c.UpdatedAt,
+	}
+	if p := c.OAuth.Server; p != nil {
+		v.OAuth.Issuer, v.OAuth.ServerMoved = p.Issuer, p.Moved
 	}
 	for _, t := range c.Tools {
 		v.Tools = append(v.Tools, ToolView{Name: t.Name, Description: t.Description, ReadOnlyHint: t.ReadOnlyHint})

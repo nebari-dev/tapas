@@ -366,7 +366,7 @@ export const adminGetConnector = <ThrowOnError extends boolean = false>(options:
 /**
  * Change a connector (platform admins)
  *
- * rev must be the connector's current rev (409 otherwise). A new address origin, new OAuth endpoints or a new client id need the client secret again when one is stored, and disconnect everyone who connected.
+ * rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again. A new auth mode disconnects everyone too.
  */
 export const adminUpdateConnector = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateConnectorData, ThrowOnError>): RequestResult<AdminUpdateConnectorResponses, AdminUpdateConnectorErrors, ThrowOnError> => (options.client ?? client).put<AdminUpdateConnectorResponses, AdminUpdateConnectorErrors, ThrowOnError>({
     security: [{

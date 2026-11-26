@@ -14,6 +14,10 @@ var (
 	// ErrNeedsClient is a connector with no OAuth client, whose
 	// authorization server does not let Tapas register one.
 	ErrNeedsClient = errors.New("connectors: the connector needs an OAuth client")
+	// ErrServerMoved is a connector whose MCP server now names another
+	// authorization server than the one it was pinned to: an admin must save
+	// it again before anyone connects.
+	ErrServerMoved = errors.New("connectors: the MCP server names another authorization server; an admin must save the connector again")
 )
 
 // OAuthError is a refusal from a connector's authorization server, or a

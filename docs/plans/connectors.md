@@ -91,7 +91,7 @@ D18. Writes reuse plans unchanged. One hidden catalog action `connector-call` wh
 
 D19. Audit: one `audit_events` row per brokered call, appended after the outcome is known. If the row cannot be written, the result is withheld and the call answers an error, so no unaudited data leaves. Rows hold names and outcomes only.
 
-D20. Changing a connector's URL origin, OAuth endpoints or client deletes its connections (people reconnect) and requires the client secret again. Reason: a stored token must never be sent to a host other than the one it was issued for.
+D20. Changing a connector's URL (any change, compared exactly), OAuth endpoints or client deletes its connections (people reconnect) and requires the client secret again; so does saving it after its authorization server moved (below). Changing its auth mode deletes its connections too. The authorization server is pinned (issuer and endpoints, on the connector row) at the first discovery; finishing a sign-in, refreshing and revoking use only the pinned values, and when the MCP server's metadata later names another issuer no sign-in starts until an admin saves the connector again. Reason: a stored token, a code or the client secret must never be sent to a host other than the one it was issued for, and a later metadata change must not redirect them.
 
 D21. No new Go or npm dependencies. `golang.org/x/oauth2` (PKCE helpers, code exchange, refresh) and the go-sdk `oauthex` and `auth` discovery helpers are already in `go.mod`. The go-sdk's `auth.AuthorizationCodeHandler` is not used: it blocks in one process waiting for the code, which does not fit a browser redirect served by several replicas.
 

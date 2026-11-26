@@ -355,6 +355,10 @@
           "clientId": {
             "type": "string"
           },
+          "issuer": {
+            "description": "The authorization server sign-ins, refreshes and revocations go to, pinned at the first sign-in (discovered endpoints only)",
+            "type": "string"
+          },
           "registration": {
             "description": "static: pasted; dynamic: registered by Tapas (RFC 7591); empty: no client yet",
             "enum": [
@@ -369,6 +373,10 @@
           },
           "secretStored": {
             "description": "A client secret is stored",
+            "type": "boolean"
+          },
+          "serverMoved": {
+            "description": "The MCP server now names another authorization server: nobody can connect until an admin saves the connector again (with the client secret), which disconnects everyone",
             "type": "boolean"
           },
           "tokenUrl": {
@@ -8145,7 +8153,7 @@
         ]
       },
       "put": {
-        "description": "rev must be the connector's current rev (409 otherwise). A new address origin, new OAuth endpoints or a new client id need the client secret again when one is stored, and disconnect everyone who connected.",
+        "description": "rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again. A new auth mode disconnects everyone too.",
         "operationId": "adminUpdateConnector",
         "parameters": [
           {

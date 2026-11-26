@@ -45,6 +45,12 @@ type Clients interface {
 	// Registered stores a client Tapas registered itself on c, which has
 	// none, when c.Rev is still its revision.
 	Registered(ctx context.Context, actor model.Actor, c connectors.Connector, clientID, secret string) (connectors.Connector, error)
+	// Pin pins the authorization server s on c, which has none, when c.Rev
+	// is still its revision (store.ErrConflict otherwise).
+	Pin(ctx context.Context, actor model.Actor, c connectors.Connector, s connectors.AuthServer) (connectors.Connector, error)
+	// ServerMoved records that c's MCP server names another authorization
+	// server than the one pinned on c.
+	ServerMoved(ctx context.Context, actor model.Actor, c connectors.Connector) error
 }
 
 // Config wires a Service. Every field but InternalHosts and Now is
@@ -71,7 +77,7 @@ type Config struct {
 type Service struct {
 	c     Config
 	mu    sync.Mutex
-	cache map[string]cachedEndpoints
+	cache map[string]cachedServer
 }
 
 var _ vault.OAuth = (*Service)(nil)
@@ -84,7 +90,7 @@ func New(c Config) *Service {
 	if c.Now == nil {
 		c.Now = time.Now
 	}
-	return &Service{c: c, cache: map[string]cachedEndpoints{}}
+	return &Service{c: c, cache: map[string]cachedServer{}}
 }
 
 const stateTable = "connector_oauth_states"
@@ -100,14 +106,16 @@ func hashState(state string) []byte {
 
 // Start begins person's sign-in to c, for subject's connection (person, or
 // "" for the company's), and returns the vendor's address to send them to.
-// Who may do so is the caller's to check. With no client on c, one is
-// registered when the server allows it (actor is on the audit log for
-// that), else it is connectors.ErrNeedsClient.
+// Who may do so is the caller's to check. The first sign-in pins c's
+// authorization server; a later one is connectors.ErrServerMoved when the
+// MCP server names another since. With no client on c, one is registered
+// when the server allows it (actor is on the audit log for both), else it
+// is connectors.ErrNeedsClient.
 func (s *Service) Start(ctx context.Context, actor model.Actor, c connectors.Connector, person, subject string) (string, error) {
 	if s.c.RedirectURI == "" {
 		return "", errors.New("oauth: no redirect address: set the platform's public URL (mcp.publicURL)")
 	}
-	e, err := s.endpoints(ctx, c)
+	c, e, err := s.startEndpoints(ctx, actor, c)
 	if err != nil {
 		return "", err
 	}
@@ -207,7 +215,7 @@ func (s *Service) Complete(ctx context.Context, person, state, code, iss string)
 	if err != nil {
 		return vault.Grant{}, errors.New("oauth: the sign-in's verifier does not open with this gateway's sessions key")
 	}
-	e, err := s.endpoints(ctx, c)
+	e, err := pinnedEndpoints(c)
 	if err != nil {
 		return vault.Grant{}, err
 	}
@@ -236,7 +244,7 @@ func (s *Service) Complete(ctx context.Context, person, state, code, iss string)
 // is a *connectors.OAuthError with the server's code (invalid_grant: for
 // good).
 func (s *Service) Refresh(ctx context.Context, c connectors.Connector, refresh string) (vault.Tokens, error) {
-	e, err := s.endpoints(ctx, c)
+	e, err := pinnedEndpoints(c)
 	if err != nil {
 		return vault.Tokens{}, err
 	}

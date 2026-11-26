@@ -139,3 +139,47 @@ func TestConnectorWritesAreAuditedWithFieldNamesOnly(t *testing.T) {
 		t.Fatalf("audit = %v, want %v", got, want)
 	}
 }
+
+// An authorization server is pinned once, at the revision it was found on;
+// a later discovery of another issuer is recorded as a move, and an admin's
+// save may clear both.
+func TestConnectorAuthServerIsPinnedOnce(t *testing.T) {
+	t.Parallel()
+	s := storetest.New(t)
+	c, err := s.Connectors().Create(ctx, alice, newConnector("fake"), sealedAs("secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := store.ConnectorAuthServer{
+		AuthorizeURL: "https://as.example.org/a", TokenURL: "https://as.example.org/t", IssParameter: true,
+		TokenAuthMethods: []string{"client_secret_basic"},
+	}
+	pinned, err := s.Connectors().PinAuthServer(ctx, alice, c.ID, c.Rev, "https://as.example.org", server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pinned.OAuthIssuer != "https://as.example.org" || pinned.OAuthServer.TokenURL != server.TokenURL ||
+		!pinned.OAuthServer.IssParameter || len(pinned.OAuthServer.TokenAuthMethods) != 1 || pinned.Rev == c.Rev {
+		t.Fatalf("pinned %+v", pinned)
+	}
+	if _, err := s.Connectors().PinAuthServer(ctx, alice, c.ID, pinned.Rev, "https://evil.example.com", server); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("second pin = %v, want ErrConflict", err)
+	}
+	if err := s.Connectors().AuthServerMoved(ctx, alice, c.ID, "https://other.example.org"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Connectors().Get(ctx, c.ID); got.OAuthServerMoved {
+		t.Fatal("a move was recorded against an issuer that is not pinned")
+	}
+	if err := s.Connectors().AuthServerMoved(ctx, alice, c.ID, "https://as.example.org"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Connectors().Get(ctx, c.ID)
+	if err != nil || !got.OAuthServerMoved || got.OAuthIssuer != "https://as.example.org" {
+		t.Fatalf("after the move %+v, %v", got, err)
+	}
+	got.OAuthIssuer, got.OAuthServer, got.OAuthServerMoved = "", store.ConnectorAuthServer{}, false
+	if got, err = s.Connectors().Move(ctx, alice, got, []string{"oauth.issuer"}); err != nil || got.OAuthIssuer != "" || got.OAuthServerMoved || got.OAuthServer.TokenURL != "" {
+		t.Fatalf("cleared %+v, %v", got, err)
+	}
+}

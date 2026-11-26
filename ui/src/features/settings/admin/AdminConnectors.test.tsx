@@ -345,6 +345,17 @@ describe('Connectors (admin)', () => {
     expect(await screen.findByText('Shared account not connected')).toBeTruthy()
   })
 
+  it('says where sign-ins go, and warns when the server now names another sign-in server', async () => {
+    const moved = { ...chat, connections: 2, oauth: { ...chat.oauth, issuer: 'https://login.example.org', serverMoved: true } }
+    api({ 'GET /api/admin/connectors': { body: { items: [moved, wiki] } } })
+    renderApp('/settings/connectors')
+    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
+    expect(rows[0].textContent).toContain('Its server now sends sign-ins to another server')
+    await userEvent.click(within(rows[0]).getByRole('button', { name: 'Edit Team chat' }))
+    expect(await screen.findByText(/Sign-ins go to https:\/\/login\.example\.org/)).toBeTruthy()
+    expect(screen.getByText(/Saving it trusts the new sign-in server/)).toBeTruthy()
+  })
+
   it('offers to reconnect a shared account the vendor no longer accepts', async () => {
     api({ 'GET /api/admin/connectors': { body: { items: [{ ...wiki, shared: { connected: true, connectedBy: 'alice', status: 'needs_reauth' } }] } } })
     renderApp('/settings/connectors')

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tink-crypto/tink-go/v2/tink"
+
 	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
 	"github.com/nebari-dev/javo/internal/connectors/oauth"
@@ -36,6 +38,7 @@ type fixture struct {
 	reg  *registry.Registry
 	db   *store.Store
 	svc  *oauth.Service
+	key  tink.AEAD
 	now  time.Time
 	conn connectors.Connector
 }
@@ -62,11 +65,18 @@ func setup(t *testing.T, o connectorstest.AuthServerOptions, in func(*registry.I
 	if f.conn, err = f.reg.Create(ctx, alice, input); err != nil {
 		t.Fatal(err)
 	}
-	f.svc = oauth.New(oauth.Config{
-		DB: f.db, Seal: key, Clients: f.reg, HTTP: httpx.Guard{}.Client(), InternalHosts: loopback,
+	f.key = key
+	f.svc = f.replica()
+	return f
+}
+
+// replica is a Service over the fixture's database and registry with its
+// own (empty) cache, as another gateway replica has.
+func (f *fixture) replica() *oauth.Service {
+	return oauth.New(oauth.Config{
+		DB: f.db, Seal: f.key, Clients: f.reg, HTTP: httpx.Guard{}.Client(), InternalHosts: loopback,
 		RedirectURI: redirectURI, Now: func() time.Time { return f.now },
 	})
-	return f
 }
 
 // signIn starts a sign-in for person and follows it at the fake vendor.
@@ -324,7 +334,7 @@ func TestRefreshRotatesAndInvalidGrant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := f.svc.Refresh(ctx, f.conn, g.Tokens.Refresh)
+	next, err := f.svc.Refresh(ctx, f.get(t), g.Tokens.Refresh)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,15 +342,33 @@ func TestRefreshRotatesAndInvalidGrant(t *testing.T) {
 		t.Fatal("refresh did not rotate the tokens")
 	}
 	f.as.RefuseRefresh(true)
-	if _, err := f.svc.Refresh(ctx, f.conn, next.Refresh); !connectors.IsInvalidGrant(err) {
+	if _, err := f.svc.Refresh(ctx, f.get(t), next.Refresh); !connectors.IsInvalidGrant(err) {
 		t.Fatalf("Refresh while refused = %v, want invalid_grant", err)
+	}
+}
+
+// Before any sign-in no server is pinned, so nothing is refreshed or
+// revoked anywhere.
+func TestNothingIsSentBeforeAServerIsPinned(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	var oe *connectors.OAuthError
+	if _, err := f.svc.Refresh(ctx, f.conn, "rt-1"); !errors.As(err, &oe) || oe.Code != connectors.CodeDiscovery {
+		t.Fatalf("Refresh = %v", err)
+	}
+	if err := f.svc.Revoke(ctx, f.conn, "at-1", "access_token"); !errors.As(err, &oe) || oe.Code != connectors.CodeDiscovery {
+		t.Fatalf("Revoke = %v", err)
+	}
+	if f.as.Refreshes() != 0 || len(f.as.Revocations()) != 0 {
+		t.Fatal("a token was sent")
 	}
 }
 
 func TestRevokeWithoutAnEndpoint(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{NoRevocation: true}, nil)
-	if err := f.svc.Revoke(ctx, f.conn, "at-1", "access_token"); !errors.Is(err, vault.ErrNoRevocation) {
+	f.signIn(t, "alice")
+	if err := f.svc.Revoke(ctx, f.get(t), "at-1", "access_token"); !errors.Is(err, vault.ErrNoRevocation) {
 		t.Fatalf("Revoke = %v, want ErrNoRevocation", err)
 	}
 }
@@ -351,4 +379,78 @@ func base64Len(s string) (int, error) {
 		return 0, errors.New("not base64url")
 	}
 	return len(s) * 6 / 8, nil
+}
+
+// get is the connector as stored now.
+func (f *fixture) get(t *testing.T) connectors.Connector {
+	t.Helper()
+	c, err := f.reg.Get(ctx, f.conn.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+// The authorization server is pinned at the first sign-in. When the MCP
+// server's metadata later names another one, finishing a sign-in, refreshing
+// and revoking still go to the first, even on a replica that never saw it
+// (no cache), and no new sign-in starts until an admin saves the connector
+// again, with the client secret, which forgets what people connected.
+func TestTheAuthorizationServerIsPinnedAtTheFirstSignIn(t *testing.T) {
+	t.Parallel()
+	f := setup(t, connectorstest.AuthServerOptions{}, nil)
+	_, back := f.signIn(t, "alice")
+	g, err := f.complete("alice", completionOf(back))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, pending := f.signIn(t, "bob")
+	if s := f.get(t).OAuth.Server; s == nil || s.Issuer != f.as.URL || s.TokenURL != f.as.URL+"/token" {
+		t.Fatalf("pinned %+v", s)
+	}
+
+	other := connectorstest.NewAuthServer(t)
+	f.mcp.Advertise(other.URL)
+	replica := f.replica()
+	if _, err := replica.Complete(ctx, "bob", pending.Get("state"), pending.Get("code"), pending.Get("iss")); err != nil {
+		t.Fatalf("Complete on another replica: %v", err)
+	}
+	conn := f.get(t)
+	if _, err := replica.Refresh(ctx, conn, g.Tokens.Refresh); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if err := replica.Revoke(ctx, conn, g.Tokens.Access, "access_token"); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+	if other.Exchanges()+other.Refreshes() != 0 || len(other.Revocations()) != 0 {
+		t.Fatal("a code or token went to the newly named server")
+	}
+	if _, err := replica.Start(ctx, alice, conn, "carol", "carol"); !errors.Is(err, connectors.ErrServerMoved) {
+		t.Fatalf("Start after the server moved = %v, want ErrServerMoved", err)
+	}
+	conn = f.get(t)
+	if conn.OAuth.Server == nil || !conn.OAuth.Server.Moved || conn.OAuth.Server.Issuer != f.as.URL {
+		t.Fatalf("after the move %+v", conn.OAuth.Server)
+	}
+
+	// Saving it again needs the secret, then pins the new server.
+	in := registry.Input{
+		Name: conn.Name, URL: conn.URL, AuthMode: conn.AuthMode, Enabled: true, ClientID: conn.OAuth.ClientID,
+		Scopes: conn.Scopes, AllowedGroups: conn.AllowedGroups, Rev: conn.Rev,
+	}
+	var fe *connectors.FieldError
+	if _, err := f.reg.Update(ctx, alice, conn.ID, in); !errors.As(err, &fe) || fe.Field != "oauth.clientSecret" {
+		t.Fatalf("save without the secret = %v", err)
+	}
+	in.ClientSecret = connectorstest.ClientSecret
+	if conn, err = f.reg.Update(ctx, alice, conn.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	u, err := replica.Start(ctx, alice, conn, "carol", "carol")
+	if err != nil || !strings.HasPrefix(u, other.URL+"/authorize?") {
+		t.Fatalf("Start after the save = %q, %v", u, err)
+	}
+	if s := f.get(t).OAuth.Server; s == nil || s.Issuer != other.URL || s.Moved {
+		t.Fatalf("pinned after the save %+v", s)
+	}
 }

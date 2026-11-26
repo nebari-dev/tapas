@@ -137,6 +137,10 @@ export type AdminOAuth = {
     authorizeUrl?: string;
     clientId: string;
     /**
+     * The authorization server sign-ins, refreshes and revocations go to, pinned at the first sign-in (discovered endpoints only)
+     */
+    issuer?: string;
+    /**
      * static: pasted; dynamic: registered by Tapas (RFC 7591); empty: no client yet
      */
     registration: 'static' | 'dynamic' | '';
@@ -145,6 +149,10 @@ export type AdminOAuth = {
      * A client secret is stored
      */
     secretStored: boolean;
+    /**
+     * The MCP server now names another authorization server: nobody can connect until an admin saves the connector again (with the client secret), which disconnects everyone
+     */
+    serverMoved?: boolean;
     tokenUrl?: string;
 };
 

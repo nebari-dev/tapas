@@ -174,16 +174,27 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 		return connectors.Connector{}, store.ErrConflict
 	}
 	in.Slug, in.CatalogID = prev.Slug, prev.CatalogID
+	// Any change of the address is a move, even of its path or case: the
+	// vault sends a token only to the exact address it was issued for, and
+	// another path may name another authorization server. So is saving a
+	// connector whose MCP server now names another authorization server
+	// than the pinned one: the save is the admin trusting it.
+	moved := prev.URL != in.URL || prev.OAuthAuthorizeURL != in.AuthorizeURL ||
+		prev.OAuthTokenURL != in.TokenURL || prev.OAuthRevokeURL != in.RevokeURL || prev.OAuthServerMoved
+	if moved && prev.OAuthRegistration == connectors.RegistrationDynamic && in.ClientID == prev.OAuthClientID && in.ClientSecret == "" {
+		// A client Tapas registered belongs to the old server: drop it, so
+		// one is registered where sign-ins go now.
+		in.ClientID = ""
+	}
 	next := connectorOf(in)
 	if err := next.Validate(r.c.InternalHosts); err != nil {
 		return connectors.Connector{}, err
 	}
 	row := rowOf(next, prev)
-	// Any change of the address is a move, even of its path or case: the
-	// vault sends a token only to the exact address it was issued for, and
-	// another path may name another authorization server.
-	moved := prev.URL != in.URL || prev.OAuthAuthorizeURL != in.AuthorizeURL ||
-		prev.OAuthTokenURL != in.TokenURL || prev.OAuthRevokeURL != in.RevokeURL
+	if moved {
+		// The next sign-in discovers and pins the server again.
+		row.OAuthIssuer, row.OAuthServer, row.OAuthServerMoved = "", store.ConnectorAuthServer{}, false
+	}
 	newClient := prev.OAuthClientID != in.ClientID
 	secretChanged := false
 	switch {
@@ -271,6 +282,25 @@ func (r *Registry) Registered(ctx context.Context, actor model.Actor, c connecto
 	return view(r.c.DB.Connectors().Update(ctx, actor, row, changedFields(prev, row, secret != "")))
 }
 
+// Pin pins the authorization server s on c, which has none, when c.Rev is
+// still its revision (store.ErrConflict otherwise), and returns c as saved.
+func (r *Registry) Pin(ctx context.Context, actor model.Actor, c connectors.Connector, s connectors.AuthServer) (connectors.Connector, error) {
+	return view(r.c.DB.Connectors().PinAuthServer(ctx, actor, c.ID, c.Rev, s.Issuer, store.ConnectorAuthServer{
+		AuthorizeURL: s.AuthorizeURL, TokenURL: s.TokenURL, RevokeURL: s.RevokeURL, RegistrationURL: s.RegistrationURL,
+		IssParameter: s.IssParameter, TokenAuthMethods: s.TokenAuthMethods,
+	}))
+}
+
+// ServerMoved records that c's MCP server now names another authorization
+// server than the one pinned on c: no sign-in starts until an admin saves c
+// again.
+func (r *Registry) ServerMoved(ctx context.Context, actor model.Actor, c connectors.Connector) error {
+	if c.OAuth.Server == nil {
+		return nil
+	}
+	return r.c.DB.Connectors().AuthServerMoved(ctx, actor, c.ID, c.OAuth.Server.Issuer)
+}
+
 // SetTools replaces the snapshot of the connector's upstream tool list.
 func (r *Registry) SetTools(ctx context.Context, actor model.Actor, id string, tools []connectors.Tool) (connectors.Connector, error) {
 	rows := make([]store.ConnectorTool, 0, len(tools))
@@ -320,6 +350,7 @@ func changedFields(prev, next store.Connector, secretChanged bool) []string {
 	add("oauth.authorizeUrl", prev.OAuthAuthorizeURL != next.OAuthAuthorizeURL)
 	add("oauth.tokenUrl", prev.OAuthTokenURL != next.OAuthTokenURL)
 	add("oauth.revokeUrl", prev.OAuthRevokeURL != next.OAuthRevokeURL)
+	add("oauth.issuer", prev.OAuthIssuer != next.OAuthIssuer)
 	add("scopes", !slices.Equal(prev.Scopes, next.Scopes))
 	add("allowedGroups", !slices.Equal(prev.AllowedGroups, next.AllowedGroups))
 	add("toolModes", !maps.Equal(prev.ToolModes, next.ToolModes))
@@ -360,6 +391,14 @@ func viewOf(row store.Connector) connectors.Connector {
 		},
 		Scopes: row.Scopes, AllowedGroups: row.AllowedGroups, ToolModes: make(map[string]connectors.ToolMode, len(row.ToolModes)),
 		Tools: make([]connectors.Tool, 0, len(row.Tools)), Rev: row.Rev, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+	if row.OAuthIssuer != "" {
+		p := row.OAuthServer
+		c.OAuth.Server = &connectors.AuthServer{
+			Issuer: row.OAuthIssuer, AuthorizeURL: p.AuthorizeURL, TokenURL: p.TokenURL, RevokeURL: p.RevokeURL,
+			RegistrationURL: p.RegistrationURL, IssParameter: p.IssParameter, TokenAuthMethods: p.TokenAuthMethods,
+			Moved: row.OAuthServerMoved,
+		}
 	}
 	for k, v := range row.ToolModes {
 		c.ToolModes[k] = connectors.ToolMode(v)

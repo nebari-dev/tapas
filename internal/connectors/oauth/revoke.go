@@ -15,7 +15,7 @@ import (
 // Revoke revokes token at c's revocation endpoint (RFC 7009); hint is
 // refresh_token or access_token. vault.ErrNoRevocation when there is none.
 func (s *Service) Revoke(ctx context.Context, c connectors.Connector, token, hint string) error {
-	e, err := s.endpoints(ctx, c)
+	e, err := pinnedEndpoints(c)
 	if err != nil {
 		return err
 	}

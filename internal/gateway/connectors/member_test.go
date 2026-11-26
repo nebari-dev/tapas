@@ -11,6 +11,7 @@ import (
 	"github.com/nebari-dev/javo/internal/connectors/connectorstest"
 	"github.com/nebari-dev/javo/internal/gateway/apitest"
 	"github.com/nebari-dev/javo/internal/httpx"
+	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/reasons"
 )
 
@@ -169,6 +170,35 @@ func TestAPersonConnectsAndDisconnects(t *testing.T) {
 	}
 	if w := f.Do("DELETE", "/api/connectors/"+id+"/connection", "", alice); w.Code != http.StatusNotFound {
 		t.Fatalf("second disconnect: %d %s", w.Code, w.Body)
+	}
+}
+
+// Once a connector's MCP server names another authorization server than the
+// one pinned at the first sign-in, nobody can start a sign-in, and the admin
+// sees which server is pinned and that it moved.
+func TestNoSignInStartsAfterTheAuthorizationServerMoved(t *testing.T) {
+	t.Parallel()
+	f := newOAuthFixture(t)
+	id := f.create(t, "user")
+	alice := f.Session(apitest.AliceID, "sales")
+	if w := f.Do("POST", "/api/connectors/oauth/complete", f.start(t, "/api/connectors/"+id+"/connect", alice), alice); w.Code != http.StatusOK {
+		t.Fatalf("complete: %d %s", w.Code, w.Body)
+	}
+	if err := f.Db.Connectors().AuthServerMoved(context.Background(), model.Actor{System: model.SystemGateway}, id, f.as.URL); err != nil {
+		t.Fatal(err)
+	}
+	w := f.Do("POST", "/api/connectors/"+id+"/connect", "", alice)
+	if w.Code != http.StatusConflict || apitest.Decode[problemJSON](t, w).Title != reasons.Msg(reasons.MsgConnectorServerMoved) {
+		t.Fatalf("connect after the move: %d %s", w.Code, w.Body)
+	}
+	v := apitest.Decode[struct {
+		OAuth struct {
+			Issuer      string
+			ServerMoved bool
+		}
+	}](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin))
+	if v.OAuth.Issuer != f.as.URL || !v.OAuth.ServerMoved {
+		t.Fatalf("admin view %+v", v.OAuth)
 	}
 }
 

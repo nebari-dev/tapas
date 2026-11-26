@@ -71,11 +71,27 @@ type Connector struct {
 }
 
 // OAuth is how people sign in to a connector's vendor. Empty endpoints are
-// discovered from the MCP server.
+// discovered from the MCP server, once: Server is what the first discovery
+// found (nil before it), and every sign-in, refresh and revocation uses it.
 type OAuth struct {
 	Registration, ClientID            string
 	SecretStored                      bool
 	AuthorizeURL, TokenURL, RevokeURL string
+	Server                            *AuthServer
+}
+
+// AuthServer is the authorization server a connector was pinned to when its
+// MCP server's metadata was first read: its issuer and endpoints, whether it
+// names itself on the redirect (RFC 9207) and the client authentication
+// methods its token endpoint takes. Moved is set when the metadata later
+// named another issuer: nobody may start a sign-in until an admin saves the
+// connector again, which forgets the pin and what people connected.
+type AuthServer struct {
+	Issuer                                             string
+	AuthorizeURL, TokenURL, RevokeURL, RegistrationURL string
+	IssParameter                                       bool
+	TokenAuthMethods                                   []string
+	Moved                                              bool
 }
 
 // Tool is one tool the connector's MCP server listed. ReadOnlyHint is what
