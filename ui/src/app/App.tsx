@@ -8,6 +8,7 @@ import { Login } from '../features/auth/Login'
 import { NewApp } from '../features/apps/NewApp'
 import { PlanPage } from '../features/ai/PlanPage'
 import { SessionGuard } from './SessionGuard'
+import { Memories } from '../features/settings/Memories'
 import { Secrets } from '../features/settings/Secrets'
 import { ApiTokens, Settings } from '../features/settings/Settings'
 import { AdminAI } from '../features/settings/admin/AdminAI'
@@ -40,6 +41,7 @@ export function AppRoutes() {
           children: [
             { index: true, element: <ApiTokens /> },
             { path: 'secrets', element: <Secrets /> },
+            { path: 'memories', element: <Memories /> },
             { path: 'apps', element: <AdminApps /> },
             { path: 'usage', element: <Usage /> },
             { path: 'backups', element: <Backups /> },
