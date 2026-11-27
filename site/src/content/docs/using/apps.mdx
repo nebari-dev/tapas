@@ -80,6 +80,22 @@ Your admin picks one of two shapes:
 - **Path**: `https://<javo address>/u/<owner>/<app>/`, or the same path on a separate apps host.
 - **Subdomain**: `https://<owner>-<app>.<apps domain>/`. Long names are shortened and end in a short hash.
 
+## Who is viewing
+
+When the person opening an app is signed in, every request Tapas sends to the app says who they are, so the app never has to ask. This is the viewer, who is not always the owner: someone you shared the app with, or someone opening a [preview](/using/previews/).
+
+| Header | Value |
+|---|---|
+| `X-Tapas-Id` | The person's Tapas name (`alice-1a2b3c4d`), the same as the owner part of app addresses. Unique and never changes: use it to key what the app stores per person. |
+| `X-Tapas-User` | Their username at the identity provider. |
+| `X-Tapas-Email` | Their email at the identity provider, which it may not have verified. |
+| `X-Tapas-Name` | Their display name. |
+| `X-Tapas-Groups` | Their groups, separated by commas. |
+
+Each value (and each group) is percent-encoded UTF-8: a comma, `%`, control characters and anything outside ASCII arrive as `%XX`, so decode with `decodeURIComponent` (JavaScript) or `urllib.parse.unquote` (Python). A value the provider did not give is empty. Username, email and display name come from the provider and two people can share one: show them, but use `X-Tapas-Id` to tell people apart.
+
+An app can trust these headers. Tapas removes every header whose name starts with `X-Tapas-` (in any case, or with `_` for `-`) from what the browser sent, and a template cannot set one. When nobody is signed in, for example on an app shared with anyone who has the link, the app gets none of them. Trust them only on requests that came through Tapas: on Kubernetes a network policy lets only Tapas reach an app, and on Docker each app has a network of its own, but a program running inside the app, or on the same machine when apps run as plain processes, can call the app directly with headers of its own.
+
 ## Stop when idle
 
 When your admin allows it, the **Stop when idle** switch and **Stop after** choice (from 15 minutes to 7 days, within your admin's limits) stop an app that has had no visits and no open connections for that long. An open JupyterLab or terminal tab counts as use. Some templates start with their own time: a new Terminal stops after 10 minutes unless you pick another time or turn it off. The app shows **Stopped when idle**; its files and settings are kept, and it starts again from its card. Jobs are not affected.
