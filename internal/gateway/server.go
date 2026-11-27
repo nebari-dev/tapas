@@ -43,6 +43,7 @@ import (
 	"github.com/nebari-dev/javo/internal/gateway/environments"
 	"github.com/nebari-dev/javo/internal/gateway/hooks"
 	"github.com/nebari-dev/javo/internal/gateway/jobs"
+	"github.com/nebari-dev/javo/internal/gateway/memories"
 	"github.com/nebari-dev/javo/internal/gateway/namespaces"
 	"github.com/nebari-dev/javo/internal/gateway/nebi"
 	"github.com/nebari-dev/javo/internal/gateway/problem"
@@ -191,6 +192,9 @@ type Config struct {
 	// AgentModel is the coding agents' model endpoint; nil serves none. Only
 	// the token of an app whose template has agentModel may call it.
 	AgentModel *agentproxy.Proxy
+	// Memories serves a person's memories at /api/memories; nil registers the
+	// routes with memory off, so they answer 404 and say so.
+	Memories *memories.API
 	// AISettings is the AI settings in force, which platform admins change
 	// in Settings > AI; nil while AI is off.
 	AISettings *aisettings.Live
@@ -320,6 +324,11 @@ func NewServer(cfg Config) *Server {
 	})
 	ws.Register(api)
 	(&secrets.API{DB: cfg.Store, Roles: cfg.Roles}).Register(api)
+	if cfg.Memories != nil {
+		cfg.Memories.Register(api)
+	} else {
+		(&memories.API{}).Register(api)
+	}
 	(&admin.API{Workspaces: ws, DB: cfg.Store, People: cfg.People, Roles: cfg.Roles, Now: now, Backups: cfg.Backups, Cluster: cfg.Cluster, Logs: cfg.Executor, AI: cfg.AISettings, Trust: trust}).Register(api)
 	(&templates.API{DB: cfg.Store, Roles: cfg.Roles, Run: run, Idle: cfg.IdleStop}).Register(api)
 	st := &storage.API{

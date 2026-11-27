@@ -267,6 +267,11 @@ const (
 	MsgWebhookTooLarge      MessageCode = "WebhookTooLarge"
 	MsgWebhookRateLimited   MessageCode = "WebhookRateLimited"
 
+	// Memories.
+	MsgMemoryOff         MessageCode = "MemoryOff"
+	MsgMemoryUnreachable MessageCode = "MemoryUnreachable"
+	MsgMemoryNotFound    MessageCode = "MemoryNotFound"
+
 	// Secrets.
 	MsgSecretNotFound         MessageCode = "SecretNotFound"
 	MsgSecretNameInvalid      MessageCode = "SecretNameInvalid"
@@ -592,6 +597,10 @@ var messages = map[MessageCode]string{
 	MsgWebhookSignature:     "The delivery is not signed with this app's webhook secret.",
 	MsgWebhookTooLarge:      "The delivery is larger than 1 MiB.",
 	MsgWebhookRateLimited:   "Too many deliveries from this address. Wait a minute, then try again.",
+
+	MsgMemoryOff:         "Memory is off on this platform.",
+	MsgMemoryUnreachable: "Memory could not be reached; try again later.",
+	MsgMemoryNotFound:    "No memory with that id.",
 
 	MsgSecretNotFound:         "No secret with that name.",
 	MsgSecretNameInvalid:      "Use a name of up to 100 letters, digits and underscores that does not start with a digit, such as OPENAI_API_KEY.",

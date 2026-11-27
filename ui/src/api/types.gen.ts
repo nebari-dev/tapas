@@ -1157,6 +1157,13 @@ export type Me = {
     username: string;
 };
 
+export type MemoryView = {
+    createdAt: string;
+    id: string;
+    text: string;
+    updatedAt: string;
+};
+
 export type NewFoldersOutputBody = {
     /**
      * Absent when the app would not start locked in
@@ -5036,6 +5043,97 @@ export type MeResponses = {
 };
 
 export type MeResponse = MeResponses[keyof MeResponses];
+
+export type ListMemoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/memories';
+};
+
+export type ListMemoriesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Bad Gateway
+     */
+    502: ErrorModel;
+};
+
+export type ListMemoriesError = ListMemoriesErrors[keyof ListMemoriesErrors];
+
+export type ListMemoriesResponses = {
+    /**
+     * OK
+     */
+    200: Array<MemoryView> | null;
+};
+
+export type ListMemoriesResponse = ListMemoriesResponses[keyof ListMemoriesResponses];
+
+export type DeleteMemoryData = {
+    body?: never;
+    path: {
+        /**
+         * The memory's id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/memories/{id}';
+};
+
+export type DeleteMemoryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Bad Gateway
+     */
+    502: ErrorModel;
+};
+
+export type DeleteMemoryError = DeleteMemoryErrors[keyof DeleteMemoryErrors];
+
+export type DeleteMemoryResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type DeleteMemoryResponse = DeleteMemoryResponses[keyof DeleteMemoryResponses];
 
 export type ListPlansData = {
     body?: never;
