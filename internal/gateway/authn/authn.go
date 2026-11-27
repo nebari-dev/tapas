@@ -314,21 +314,33 @@ func (a *Authenticator) tokenPrincipal(ctx context.Context, w http.ResponseWrite
 	return p.Principal, tok, true
 }
 
-// LiveToken returns the record of an API token that works now, by the same
+// LiveCaller returns the record of an API token that works now, by the same
 // checks as a request with it (its app or job still wants it, its owner's
-// groups are recent enough), or token.ErrInvalid.
-func (a *Authenticator) LiveToken(ctx context.Context, text string) (token.Token, error) {
+// groups are recent enough), with its owner and what its app may do as a
+// coding agent; token.ErrInvalid when it does not work. The owner gets no
+// admin role: nothing it is used for (the MCP endpoint) is admin work.
+func (a *Authenticator) LiveCaller(ctx context.Context, text string) (token.Token, authz.Principal, AgentCaps, error) {
 	tok, err := a.Tokens.Authenticate(ctx, text)
 	if err != nil {
-		return token.Token{}, err
+		return token.Token{}, authz.Principal{}, AgentCaps{}, err
 	}
-	switch _, why, err := a.liveToken(ctx, tok); {
+	owner, why, err := a.liveToken(ctx, tok)
+	switch {
 	case err != nil:
-		return token.Token{}, err
+		return token.Token{}, authz.Principal{}, AgentCaps{}, err
 	case why != "":
-		return token.Token{}, token.ErrInvalid
+		return token.Token{}, authz.Principal{}, AgentCaps{}, token.ErrInvalid
 	}
-	return tok, nil
+	var caps AgentCaps
+	if tok.App != nil && a.Agents != nil {
+		if caps, err = a.Agents(ctx, *tok.App); err != nil {
+			return token.Token{}, authz.Principal{}, AgentCaps{}, err
+		}
+		caps = capsOf(caps, tok)
+	}
+	p := owner.Principal
+	p.MemberOnly = true
+	return tok, p, caps, nil
 }
 
 // tokenOwner is the principal of a live token, and the template of the job
@@ -421,6 +433,7 @@ var sessionOnlyRoutes = []struct {
 	{IsTrustChange, reasons.MsgTrustSessionOnly},
 	{IsFoldersChange, reasons.MsgFoldersOwnerOnly},
 	{IsDeviceDecision, reasons.MsgDeviceSessionOnly},
+	{IsConnectorSignIn, reasons.MsgConnectorSessionOnly},
 }
 
 // SessionOnlyRefusal is the refusal an API token gets at path p, and true,
@@ -468,6 +481,16 @@ func restricted(ctx context.Context) bool { return viaAppToken(ctx) && !Trusted(
 func ViaAgentToken(ctx context.Context) bool {
 	caps, _ := ctx.Value(agentKey{}).(AgentCaps)
 	return caps.Deploy && restricted(ctx)
+}
+
+// AgentCapsOf is what the coding agent's app token the request came with
+// may do as an agent (Authenticator.Agents); zero for any other request.
+func AgentCapsOf(ctx context.Context) AgentCaps {
+	if !viaAppToken(ctx) {
+		return AgentCaps{}
+	}
+	caps, _ := ctx.Value(agentKey{}).(AgentCaps)
+	return caps
 }
 
 // ViaAgentModelToken reports whether the request came with the token of a
@@ -808,6 +831,27 @@ func isAppRoute(p, verb string) bool {
 	}
 	name, got, ok := strings.Cut(rest, "/")
 	return ok && name != "" && got == verb
+}
+
+// IsConnectorSignIn is true for the routes that connect or disconnect an
+// account at a connector's vendor, or finish connecting one, which only a
+// signed-in person in the browser may use: no token, so no agent, can
+// connect an account it would then use. The path is cleaned first, as
+// IsPlanDecision does; OpenAPI path templates ({id}) match too.
+func IsConnectorSignIn(p string) bool {
+	p = path.Clean("/" + p)
+	if p == "/api/connectors/oauth/complete" {
+		return true
+	}
+	rest, ok := strings.CutPrefix(p, "/api/connectors/")
+	if !ok {
+		rest, ok = strings.CutPrefix(p, "/api/admin/connectors/")
+	}
+	if !ok {
+		return false
+	}
+	id, verb, ok := strings.Cut(rest, "/")
+	return ok && id != "" && (verb == "connect" || verb == "connection")
 }
 
 // NoTokens refuses a request made with any API token: for the routes only a

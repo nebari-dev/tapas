@@ -325,6 +325,39 @@ func TestUserRemoveDeletesTheirSecrets(t *testing.T) {
 	}
 }
 
+// A removed person's connected accounts go; other people's stay.
+func TestUserRemoveDeletesTheirConnectedAccounts(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, _, err := runUserAdd(t, e, "alice", "--password-file", filepath.Join(t.TempDir(), "alice")); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := e.db.Connectors().Create(ctx, cliActor, store.Connector{
+		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", Enabled: true,
+	}, func(string) ([]byte, error) { return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, subject := range []string{local.UserID("alice"), "bob-1"} {
+		if _, err := e.db.ConnectorConnections().Put(ctx, cliActor, store.ConnectorConnection{
+			ConnectorID: conn.ID, Subject: subject, Resource: conn.URL,
+		}, conn.Rev, func(string) ([]byte, []byte, error) { return []byte("sealed"), nil, nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, _, err := runUser(t, e, "remove", "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "connected accounts deleted") {
+		t.Fatalf("summary %q", out)
+	}
+	left, err := e.db.ConnectorConnections().ForConnector(ctx, conn.ID)
+	if err != nil || len(left) != 1 || left[0].Subject != "bob-1" {
+		t.Fatalf("left %+v, %v", left, err)
+	}
+}
+
 // dockerInstall is the config file of an install that runs apps on
 // Docker, for the --config of a command.
 func dockerInstall(t *testing.T) string {

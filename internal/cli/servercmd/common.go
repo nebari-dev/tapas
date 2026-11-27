@@ -126,6 +126,8 @@ func refuseLeftOut(p config.Platform) error {
 		return buildinfo.LeftOut("the MCP endpoint (mcp.enabled)")
 	case p.Auth.OIDC != nil:
 		return buildinfo.LeftOut("single sign-on (auth.oidc)")
+	case p.Connectors.Enabled:
+		return buildinfo.LeftOut("connectors (connectors.enabled)")
 	}
 	return nil
 }

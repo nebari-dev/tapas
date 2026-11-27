@@ -675,3 +675,31 @@ func TestDeviceLoginDefaultsToOn(t *testing.T) {
 		t.Fatal("auth.deviceLogin.enabled false leaves device login on")
 	}
 }
+
+func TestConnectorsAreOffByDefaultAndNeedAPublicURL(t *testing.T) {
+	p, err := load(t, "auth:\n  local:\n    enabled: true\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Connectors.Enabled || len(p.Connectors.InternalHosts) != 0 {
+		t.Fatalf("connectors = %+v", p.Connectors)
+	}
+	p, err = load(t, "auth:\n  local:\n    enabled: true\nurls:\n  uiHost: tapas.example.org\nconnectors:\n  enabled: true\n  internalHosts: [mcp-slack.tapas.svc]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Connectors.Enabled || p.Connectors.InternalHosts[0] != "mcp-slack.tapas.svc" {
+		t.Fatalf("connectors = %+v", p.Connectors)
+	}
+	// The OAuth redirect address is built from the public URL, never from a
+	// request's Host header.
+	if _, err := load(t, "auth:\n  local:\n    enabled: true\nconnectors:\n  enabled: true\n"); err == nil || !strings.Contains(err.Error(), "mcp.publicURL") {
+		t.Fatalf("connectors without a public URL: %v", err)
+	}
+	for _, host := range []string{`""`, "http://mcp.tapas.svc", "mcp.tapas.svc:8080", "mcp.tapas.svc/mcp", `"two words"`} {
+		_, err := load(t, "auth:\n  local:\n    enabled: true\nconnectors:\n  internalHosts: ["+host+"]\n")
+		if err == nil || !strings.Contains(err.Error(), "connectors.internalHosts") {
+			t.Errorf("internal host %s: %v", host, err)
+		}
+	}
+}

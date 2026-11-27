@@ -1,6 +1,8 @@
 // Dev-only: runs the real UI against canned API answers so pages can be
 // looked at without a cluster (pnpm mock). Not part of the production build,
 // which starts from ui/index.html.
+import catalogJSON from '../../internal/connectors/catalog/catalog.json?raw'
+import type { CatalogEntry } from '../src/api'
 import {
   allReady,
   allStopped,
@@ -617,6 +619,126 @@ const secrets: { name: string; note: string; createdAt: string; updatedAt: strin
 // The weekly report's runs get the warehouse password; changing its secrets changes this copy.
 const weekly = { ...weeklyDetail, env: [{ name: 'PGPASSWORD', secret: 'WAREHOUSE_PASSWORD' }, { name: 'REGION', value: 'emea' }] }
 const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join('')
+// Connectors (Settings, Connectors). ?connectors=off answers as a platform with connectors.enabled false.
+const connectorsOff = params.get('connectors') === 'off'
+// Each connector's redirect address is this followed by its slug.
+const connectorRedirect = `${window.location.origin}/settings/connections/callback/`
+// The catalogue the gateway ships (internal/connectors/catalog), so the mock shows the real entries and logos.
+const connectorCatalog: CatalogEntry[] = (JSON.parse(catalogJSON) as { entries: Omit<CatalogEntry, 'oauth'>[] }).entries.map((e) => ({ oauth: {}, ...e }))
+type MockConnector = Record<string, unknown> & { id: string; rev: string; slug: string; name: string; oauth: Record<string, unknown> }
+let connectorRev = 10
+const connectors: MockConnector[] = [
+  {
+    id: 'c-1', rev: 'r-1', catalogId: 'slack', slug: 'slack', name: 'Slack', url: 'https://mcp.example.org/slack', enabled: true,
+    oauth: { clientId: 'client-1', secretStored: true, registration: 'static', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
+    scopes: ['channels:read', 'chat:write'], allowedGroups: ['data-science', 'ops'], toolModes: { list_channels: 'read', search: 'read' },
+    tools: [
+      { name: 'list_channels', description: 'List the channels you can see', readOnlyHint: true },
+      { name: 'search', description: 'Search messages', readOnlyHint: true },
+      { name: 'read_thread', description: 'Read a thread', readOnlyHint: true },
+      { name: 'post_message', description: 'Post a message to a channel', readOnlyHint: false },
+    ],
+    redirectUri: connectorRedirect + 'slack', updatedAt: at(-86400 * 3),
+  },
+  {
+    id: 'c-2', rev: 'r-2', catalogId: '', slug: 'wiki', name: 'Company wiki', url: 'https://wiki.example.org/mcp', enabled: false,
+    oauth: { clientId: '', secretStored: false, registration: '', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
+    scopes: [], allowedGroups: ['*'], toolModes: {}, tools: [], redirectUri: connectorRedirect + 'wiki', updatedAt: at(-86400),
+  },
+  {
+    id: 'c-3', rev: 'r-3', catalogId: 'github', slug: 'github', name: 'GitHub', url: 'https://mcp.example.org/github', enabled: true,
+    oauth: { clientId: 'client-3', secretStored: true, registration: 'static', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
+    scopes: ['repo'], allowedGroups: ['*'], toolModes: { list_issues: 'read' },
+    tools: [
+      { name: 'list_issues', description: 'List issues in a repository', readOnlyHint: true },
+      { name: 'create_issue', description: 'Open an issue', readOnlyHint: false },
+    ],
+    redirectUri: connectorRedirect + 'github', updatedAt: at(-86400 * 5),
+  },
+  {
+    id: 'c-4', rev: 'r-4', catalogId: 'notion', slug: 'notion', name: 'Notion', url: 'https://mcp.example.org/notion', enabled: true,
+    oauth: { clientId: '', secretStored: false, registration: 'dynamic', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
+    scopes: [], allowedGroups: ['*'], toolModes: { search: 'read' },
+    tools: [{ name: 'search', description: 'Search pages', readOnlyHint: true }],
+    redirectUri: connectorRedirect + 'notion', updatedAt: at(-86400 * 8),
+  },
+]
+// Who connected what. A sign-in leaves the page for the vendor and comes back with a fresh
+// mock, so this is kept in the tab's session storage. Keyed by connector id.
+// ?connections=none starts with nothing connected.
+type MockConnection = { connectedAt: string; status: 'active' | 'needs_reauth' }
+const CONNECTIONS_KEY = 'javo.mock.connections'
+const connectionsStart: Record<string, MockConnection> =
+  params.get('connections') === 'none'
+    ? {}
+    : {
+        'c-1': { connectedAt: at(-86400 * 6), status: 'active' },
+        'c-3': { connectedAt: at(-86400 * 40), status: 'needs_reauth' },
+        'c-4': { connectedAt: at(-86400 * 8), status: 'active' },
+      }
+function readConnections(): Record<string, MockConnection> {
+  try {
+    const raw = window.sessionStorage.getItem(CONNECTIONS_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, MockConnection>) : connectionsStart
+  } catch {
+    return connectionsStart
+  }
+}
+const mockConnections = params.get('connections') === 'none' ? {} : readConnections()
+function saveConnections() {
+  try {
+    window.sessionStorage.setItem(CONNECTIONS_KEY, JSON.stringify(mockConnections))
+  } catch {
+    // Nothing kept: the next page load starts over.
+  }
+}
+// The admin view of c with how many people connected it, as the gateway answers it.
+function withConnections(c: MockConnector): MockConnector {
+  return { ...c, connections: mockConnections[c.id] ? 3 : 2 }
+}
+// The member view of c, as GET /api/connectors answers it.
+function myConnector(c: MockConnector) {
+  const conn = mockConnections[c.id]
+  const modes = (c.toolModes ?? {}) as Record<string, string>
+  const tools = ((c.tools ?? []) as { name: string }[])
+    .map((t) => ({ name: `${c.slug}__${t.name}`, mode: modes[t.name] ?? 'write' }))
+    .filter((t) => t.mode !== 'off')
+  return {
+    id: c.id, catalogId: c.catalogId ?? '', slug: c.slug, name: c.name, connected: !!conn,
+    ...(conn ? { status: conn.status, connectedAt: conn.connectedAt } : {}),
+    connectUrl: `${window.location.origin}/settings/connections`, tools,
+  }
+}
+// The vendor's sign-in, faked: it sends the browser straight back to the callback with a state and code.
+// A state naming a connector the mock no longer has answers as an expired sign-in.
+const mockAuthorize = (c: MockConnector) =>
+  `${connectorRedirect}${c.slug}?state=mock-${c.id}&code=mock-code-${hex(4)}&iss=${encodeURIComponent('https://auth.example.org')}`
+// The admin connector the mock answers for a request body, as the gateway would store it (the secret is never returned).
+function connectorFrom(b: Record<string, unknown>, prev?: MockConnector): MockConnector {
+  const entry = connectorCatalog.find((e) => e.id === (prev?.catalogId ?? b.catalogId))
+  const o = (b.oauth ?? {}) as Record<string, string>
+  const clientId = o.clientId ?? ''
+  const secretStored = clientId !== '' && (!!o.clientSecret || (!!prev?.oauth.secretStored && prev.oauth.clientId === clientId))
+  return {
+    id: prev?.id ?? `c-${hex(4)}`,
+    rev: `r-${++connectorRev}`,
+    catalogId: prev?.catalogId ?? b.catalogId ?? '',
+    slug: prev?.slug ?? String(b.slug ?? entry?.slug ?? ''),
+    name: (b.name as string) || entry?.name || '',
+    url: (b.url as string) || entry?.url || '',
+    enabled: !!b.enabled,
+    oauth: {
+      clientId, secretStored, registration: clientId ? 'static' : '',
+      authorizeUrl: o.authorizeUrl ?? '', tokenUrl: o.tokenUrl ?? '', revokeUrl: o.revokeUrl ?? '',
+    },
+    scopes: b.scopes ?? entry?.scopes ?? [],
+    allowedGroups: b.allowedGroups ?? [],
+    toolModes: b.toolModes ?? entry?.toolModes ?? {},
+    tools: prev?.tools ?? [],
+    redirectUri: connectorRedirect + (prev?.slug ?? String(b.slug ?? entry?.slug ?? '')),
+    updatedAt: new Date().toISOString(),
+  }
+}
 
 // The mock signs in a platform admin, so Settings shows the admin pages.
 const admin = { ...me, roles: ['platform-admin', 'member'] }
@@ -917,6 +1039,69 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.pathname === '/api/admin/agents' && me.roles.includes('platform-admin')) {
     if (req.method === 'PUT') agentSettings = { ...agentSettings, allowTrusted: (await req.json()).allowTrusted }
     return reply(200, agentSettings)
+  }
+  if (url.pathname.startsWith('/api/connectors')) {
+    if (connectorsOff) return reply(409, { status: 409, title: 'Connectors are off on this platform (connectors.enabled in the platform config).' })
+    if (key === 'GET /api/connectors') return reply(200, { items: connectors.filter((c) => c.enabled).map(myConnector) })
+    if (key === 'POST /api/connectors/oauth/complete') {
+      const b = await req.json()
+      // As the gateway does, the answer must come back on the page of the connector it was started for.
+      const c = connectors.find((x) => `mock-${x.id}` === b.state && x.slug === b.slug)
+      if (!c || !b.code) return reply(400, { status: 400, title: 'This sign-in expired or was already used. Connect again from Connected accounts.' })
+      mockConnections[c.id] = { connectedAt: new Date().toISOString(), status: 'active' }
+      saveConnections()
+      return reply(200, { connector: myConnector(c) })
+    }
+    const m = url.pathname.match(/^\/api\/connectors\/([^/]+)\/(connect|connection)$/)
+    const c = m ? connectors.find((x) => x.id === m[1] && x.enabled) : undefined
+    if (!c) return reply(404, { status: 404, title: 'No such connector, or you may not use it.' })
+    if (req.method === 'POST' && m?.[2] === 'connect') return reply(200, { authorizeUrl: mockAuthorize(c) })
+    if (req.method === 'DELETE' && m?.[2] === 'connection') {
+      delete mockConnections[c.id]
+      saveConnections()
+      return reply(204, null)
+    }
+  }
+  if (url.pathname.startsWith('/api/admin/connectors')) {
+    if (connectorsOff) return reply(409, { status: 409, title: 'Connectors are off on this platform (connectors.enabled in the platform config).' })
+    if (key === 'GET /api/admin/connectors/catalog') return reply(200, { items: connectorCatalog, redirectUriPrefix: connectorRedirect })
+    if (key === 'GET /api/admin/connectors') return reply(200, { items: connectors.map(withConnections) })
+    const act = url.pathname.match(/^\/api\/admin\/connectors\/([^/]+)\/tools\/refresh$/)
+    if (act) {
+      const j = connectors.findIndex((c) => c.id === act[1])
+      if (j < 0) return reply(404, { status: 404, title: 'No such connector, or you may not use it.' })
+      const c = connectors[j]
+      // The server lists one tool more each time, so a refresh shows a change.
+      const tools = (c.tools ?? []) as { name: string }[]
+      const extra = { name: `new_tool_${tools.length + 1}`, description: 'A tool the server added since the last snapshot', readOnlyHint: false }
+      connectors[j] = { ...c, tools: [...tools, extra], rev: `r-${++connectorRev}`, updatedAt: new Date().toISOString() }
+      return reply(200, withConnections(connectors[j]))
+    }
+    if (key === 'POST /api/admin/connectors') {
+      const b = await req.json()
+      const slug = b.slug || connectorCatalog.find((e) => e.id === b.catalogId)?.slug
+      if (!/^[a-z][a-z0-9]{1,30}$/.test(slug ?? ''))
+        return reply(422, { status: 422, title: 'Something in this form is not valid. Check it and try again.', errors: [{ location: 'body.slug', message: 'Use 2 to 31 lowercase letters and digits, starting with a letter, such as slack.' }] })
+      if (connectors.some((c) => c.slug === slug)) return reply(409, { status: 409, title: `A connector called ${slug} already exists. Pick another short name.` })
+      const c = connectorFrom({ ...b, slug })
+      connectors.push(c)
+      connectors.sort((x, y) => x.slug.localeCompare(y.slug))
+      return reply(201, c)
+    }
+    const one = url.pathname.match(/^\/api\/admin\/connectors\/([^/]+)$/)
+    const i = one ? connectors.findIndex((c) => c.id === one[1]) : -1
+    if (i < 0) return reply(404, { status: 404, title: 'No such connector, or you may not use it.' })
+    if (req.method === 'GET') return reply(200, withConnections(connectors[i]))
+    if (req.method === 'DELETE') {
+      connectors.splice(i, 1)
+      return reply(204, null)
+    }
+    if (req.method === 'PUT') {
+      const b = await req.json()
+      if (b.rev !== connectors[i].rev) return reply(409, { status: 409, title: 'Someone else saved this connector in the meantime. Reload it and make your change again.' })
+      connectors[i] = connectorFrom(b, connectors[i])
+      return reply(200, withConnections(connectors[i]))
+    }
   }
   if (url.pathname === '/api/admin/ai' && me.roles.includes('platform-admin')) {
     if (req.method === 'PUT') {

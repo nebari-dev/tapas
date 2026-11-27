@@ -24,6 +24,9 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/token"
 	"github.com/nebari-dev/javo/internal/capacity"
 	"github.com/nebari-dev/javo/internal/config"
+	"github.com/nebari-dev/javo/internal/connectors"
+	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
+	"github.com/nebari-dev/javo/internal/connectors/vault"
 	ctrljobs "github.com/nebari-dev/javo/internal/controller/jobs"
 	"github.com/nebari-dev/javo/internal/controller/workspace"
 	"github.com/nebari-dev/javo/internal/core/registry"
@@ -40,6 +43,7 @@ import (
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/branding"
 	"github.com/nebari-dev/javo/internal/gateway/clusterview"
+	gwconnectors "github.com/nebari-dev/javo/internal/gateway/connectors"
 	"github.com/nebari-dev/javo/internal/gateway/environments"
 	"github.com/nebari-dev/javo/internal/gateway/hooks"
 	"github.com/nebari-dev/javo/internal/gateway/jobs"
@@ -198,6 +202,22 @@ type Config struct {
 	AIIncludeOwners bool
 	// MCP serves agents at /mcp when enabled.
 	MCP config.MCPCfg
+	// Connectors is the connectors platform admins add; nil while
+	// connectors are off (connectors.enabled), when their routes answer 409.
+	Connectors *connreg.Registry
+	// ConnectorTokens gives connector calls their bearer; nil means nobody
+	// is connected, so no connector tool is offered.
+	ConnectorTokens connectors.TokenSource
+	// ConnectorVault is the connected accounts (the same vault as
+	// ConnectorTokens in production); nil while connectors are off.
+	ConnectorVault *vault.Vault
+	// ConnectorSignIn signs people in at connectors' vendors; nil while
+	// connectors are off and in a binary built with the tag local.
+	ConnectorSignIn gwconnectors.SignIn
+	// ConnectorHTTP reaches connectors: the guarded client (httpx.Guard
+	// with connectors.internalHosts). nil is one that allows no internal
+	// host.
+	ConnectorHTTP *http.Client
 	// TrustedAgents is agents.allowTrusted: owners may let their coding
 	// agents act without asking, unless a platform admin switched it off.
 	TrustedAgents bool
@@ -306,6 +326,7 @@ func NewServer(cfg Config) *Server {
 	limits := cfg.API.Limits.WithDefaults()
 	logStreams := streams.New(limits.StreamsPerPerson)
 	run := workspace.Platform{Exposure: cfg.Exposure, PublicHost: cfg.PublicHost, PixiImage: cfg.PixiImage, LockAgents: cfg.LockAgents}
+	cb := newConnectorBroker(cfg)
 	ws := apps.New(apps.Config{
 		Run:   run,
 		Store: cfg.Store, Cluster: cfg.Cluster, Namespaces: nss, Homes: cfg.Homes, Sizing: sz, Exposure: cfg.Exposure,
@@ -317,11 +338,13 @@ func NewServer(cfg Config) *Server {
 		Plans: cfg.Plans, AI: cfg.AI, AIFeatures: cfg.AIFeatures, AIIncludeOwners: cfg.AIIncludeOwners,
 		People: cfg.People, Sharing: cfg.Sharing, StaleAfter: cfg.StaleAfter,
 		Streams: logStreams, ThumbnailDecodes: limits.ThumbnailDecodes, Agent: cfg.Agent,
+		ExtraActions: connectorActions(cb, cfg.Roles),
 	})
 	ws.Register(api)
 	(&secrets.API{DB: cfg.Store, Roles: cfg.Roles}).Register(api)
 	(&admin.API{Workspaces: ws, DB: cfg.Store, People: cfg.People, Roles: cfg.Roles, Now: now, Backups: cfg.Backups, Cluster: cfg.Cluster, Logs: cfg.Executor, AI: cfg.AISettings, Trust: trust}).Register(api)
 	(&templates.API{DB: cfg.Store, Roles: cfg.Roles, Run: run, Idle: cfg.IdleStop}).Register(api)
+	mountConnectors(api, cfg)
 	st := &storage.API{
 		DB: cfg.Store, Spec: cfg.Storage, Cluster: cfg.Cluster, Sizes: cfg.Sizes, Namespaces: nss, Roles: cfg.Roles,
 		Usage: cfg.Usage, Groups: cfg.Groups, Now: now, Upload: files.UploadLimits{Bytes: limits.UploadBytes, Entries: limits.UploadFiles}, UploadReadTimeout: limits.UploadReadTimeout.Duration,
@@ -365,7 +388,7 @@ func NewServer(cfg Config) *Server {
 		http.Redirect(w, r, apiDocsRoute, http.StatusMovedPermanently)
 	}))
 	if cfg.MCP.Enabled {
-		mountMCP(mux, api.OpenAPI(), ws.DescribeActions(), a.LiveToken, cfg.MCP.PublicURL)
+		mountMCP(mux, api.OpenAPI(), ws.DescribeActions(), a, cfg, cb)
 	}
 	if !cfg.DeviceLoginOff {
 		mux.Handle("GET "+llmsRoute, noSniff(a.WithOrigin(llmsHandler(cfg.MCP.PublicURL))))

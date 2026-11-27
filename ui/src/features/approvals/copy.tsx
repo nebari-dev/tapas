@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, EyeOff, FolderOpen, Power, RotateCw, Trash2, Undo2, type LucideIcon } from 'lucide-react'
+import { CircleAlert, CircleCheck, EyeOff, FolderOpen, Power, RotateCw, Send, Trash2, Undo2, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { Plan } from '../../api'
@@ -41,6 +41,8 @@ export interface Request {
   past: string
   /** The rows under Details. */
   details: { label: string; value: ReactNode }[]
+  /** Values shown on the card itself, not folded: what a connector call sends. */
+  values?: { label: string; value: ReactNode }[]
 }
 
 /** The agent that asked, as the person knows it. */
@@ -235,6 +237,33 @@ export function describe(plan: Plan): Request {
           details: [appRow, { label: 'Size', value: `${p.changes?.[0]?.from || 'default'} to ${size}` }],
         }
       }
+      case 'connector-call': {
+        // target is "<slug>__<tool>"; the tool is everything after the first separator.
+        const tool = p.target.slice(p.target.indexOf('__') + 2)
+        const service = p.targetName || p.target.slice(0, p.target.indexOf('__'))
+        const run = `Run ${tool}`
+        return {
+          ...base,
+          danger: p.destructive,
+          question: <>Let {agent} run <code>{tool}</code> in {service}?</>,
+          questionText: `Let ${agent} run ${tool} in ${service}?`,
+          banner: `${agent} asks: run ${tool} in ${service}?`,
+          bannerText: `${agent} asks: run ${tool} in ${service}?`,
+          say: `${service} gets this call once, with exactly these values.`,
+          chips: [
+            { tone: 'warn', icon: Send, text: `Acts in ${service}`, detail: `${service} sees it as done by the account connected to it.` },
+            ...(p.destructive ? [{ tone: 'err' as const, icon: CircleAlert, text: "Can't be undone", detail: `${service} says this tool's changes cannot be reversed.` }] : []),
+          ],
+          primary: run,
+          confirm: p.destructive ? { title: `${run} in ${service}?`, body: `${service} says this cannot be undone.`, yes: run, no: 'Cancel' } : undefined,
+          applied: `Done. ${service} took the call.`,
+          toast: `Done. ${service} took the call.`,
+          verb: `run ${tool} in ${service}`,
+          past: 'You approved it.',
+          values: (p.changes ?? []).map((c) => ({ label: visibleText(c.field), value: <code>{visibleText(c.to)}</code> })),
+          details: [{ label: 'Connector', value: service }, { label: 'Tool', value: <code>{tool}</code> }],
+        }
+      }
       case 'delete':
         return {
           ...base,
@@ -310,4 +339,11 @@ export function outcomeText(plan: Plan, r: Request, earlier = false): string {
 /** "Couldn't give access: {reason}. Nothing changed." */
 export function failed(r: Request, reason: string): string {
   return `Couldn't ${r.verb}: ${reason.replace(/\.$/, '')}. Nothing changed.`
+}
+
+// visibleText writes each control, invisible or text-direction character in s
+// as a \u escape, so a value on a card cannot hide text or reorder what the
+// person approving reads.
+function visibleText(s: string): string {
+  return s.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, (ch) => '\\u' + ch.codePointAt(0)!.toString(16).padStart(4, '0'))
 }

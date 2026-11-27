@@ -34,6 +34,16 @@ export function ApprovalCard({ plan, onDecided, toast }: { plan: Plan; onDecided
         ) : (
           <>
             {d.r.say && <p className="say">{d.r.say}</p>}
+            {d.r.values && d.r.values.length > 0 && (
+              <dl className="values" role="group" aria-label="Values sent">
+                {d.r.values.map((row) => (
+                  <div key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
             <Chips items={d.r.chips} />
             <div className="bar">
               <Actions d={d} />

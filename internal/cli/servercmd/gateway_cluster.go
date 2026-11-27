@@ -124,7 +124,7 @@ func (o *gatewayOptions) clusterParts(ctx context.Context, common *commonFlags, 
 	return gatewayParts{
 		cluster: kubeview.Of(c), machines: machines, apps: workloads, runs: workloads.Runs(),
 		policy: &netprobe.Store{Facts: db.Facts()}, homes: lister, usage: lister,
-		sessionsKey: sessionsKey, fingerprinter: fp, internalHost: o.internalHost,
+		sessionsKey: sessionsKey, sessionsKeyLasting: o.sessionsKeySecret != "", fingerprinter: fp, internalHost: o.internalHost,
 		memoryKey: memoryKey,
 	}, nil
 }

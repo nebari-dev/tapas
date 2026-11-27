@@ -13,6 +13,7 @@ import (
 	"github.com/nebari-dev/javo/internal/ai/aitest"
 	"github.com/nebari-dev/javo/internal/ai/provider"
 	"github.com/nebari-dev/javo/internal/config"
+	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/reasons"
 	"github.com/nebari-dev/javo/internal/secrets"
@@ -286,7 +287,7 @@ func TestAgentEndpointFollowsTheSettings(t *testing.T) {
 	// The endpoint's client never connects to a link-local address, whatever
 	// a name resolves to.
 	_, err := up.Client.Get("https://169.254.169.254/latest/meta-data/")
-	if !errors.Is(err, aisettings.ErrBlockedAddress) {
+	if !errors.Is(err, httpx.ErrBlockedAddress) {
 		t.Fatalf("link-local connect: %v", err)
 	}
 }

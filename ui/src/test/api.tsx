@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { vi } from 'vitest'
 import { AppRoutes } from '../app/App'
@@ -87,15 +87,17 @@ function LocationProbe() {
   return <output data-testid="location">{loc.pathname + loc.search}</output>
 }
 
-export function renderApp(path: string) {
-  return render(
+/** Renders the whole app at path; strict renders it in StrictMode, as main.tsx does, so effects run twice. */
+export function renderApp(path: string, { strict = false }: { strict?: boolean } = {}) {
+  const app = (
     <QueryClientProvider client={makeQueryClient()}>
       <MemoryRouter initialEntries={[path]}>
         <AppRoutes />
         <LocationProbe />
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  return render(strict ? <StrictMode>{app}</StrictMode> : app)
 }
 
 export function location(): string {

@@ -8,11 +8,14 @@ import { Login } from '../features/auth/Login'
 import { NewApp } from '../features/apps/NewApp'
 import { PlanPage } from '../features/ai/PlanPage'
 import { SessionGuard } from './SessionGuard'
+import { ConnectionCallback } from '../features/settings/ConnectionCallback'
+import { Connections } from '../features/settings/Connections'
 import { Secrets } from '../features/settings/Secrets'
 import { ApiTokens, Settings } from '../features/settings/Settings'
 import { AdminAI } from '../features/settings/admin/AdminAI'
 import { AdminAgents } from '../features/settings/admin/AdminAgents'
 import { AdminApps } from '../features/settings/admin/AdminApps'
+import { AdminConnectors } from '../features/settings/admin/AdminConnectors'
 import { Backups } from '../features/settings/admin/Backups'
 import { Storage } from '../features/settings/admin/Storage'
 import { Usage } from '../features/settings/admin/Usage'
@@ -40,12 +43,15 @@ export function AppRoutes() {
           children: [
             { index: true, element: <ApiTokens /> },
             { path: 'secrets', element: <Secrets /> },
+            { path: 'connections', element: <Connections /> },
+            { path: 'connections/callback/:slug', element: <ConnectionCallback /> },
             { path: 'apps', element: <AdminApps /> },
             { path: 'usage', element: <Usage /> },
             { path: 'backups', element: <Backups /> },
             { path: 'storage', element: <Storage /> },
             { path: 'ai', element: <AdminAI /> },
             { path: 'agents', element: <AdminAgents /> },
+            { path: 'connectors', element: <AdminConnectors /> },
           ],
         },
         { path: 'plans/:id', element: <PlanPage /> },

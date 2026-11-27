@@ -30,6 +30,7 @@ import {
   Lock,
   LockKeyhole,
   MoonStar,
+  Plug,
   Package,
   RotateCcw,
   Scale,
@@ -102,6 +103,7 @@ export const PART_ICONS = {
   timeLimit: Timer,
   notify: Bell,
   ai: Sparkles,
+  connectors: Plug,
   trust: ShieldAlert,
   review: ClipboardCheck,
   // What went wrong, on a failure card and in an AI diagnosis.

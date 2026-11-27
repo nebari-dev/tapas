@@ -27,6 +27,8 @@ import (
 	"github.com/nebari-dev/javo/internal/backup/restic"
 	"github.com/nebari-dev/javo/internal/buildinfo"
 	"github.com/nebari-dev/javo/internal/config"
+	connreg "github.com/nebari-dev/javo/internal/connectors/registry"
+	"github.com/nebari-dev/javo/internal/connectors/vault"
 	"github.com/nebari-dev/javo/internal/controller/jobs"
 	"github.com/nebari-dev/javo/internal/core/registry"
 	"github.com/nebari-dev/javo/internal/diagnose"
@@ -47,6 +49,7 @@ import (
 	storageperuser "github.com/nebari-dev/javo/internal/features/storage/peruser"
 	storageshared "github.com/nebari-dev/javo/internal/features/storage/shared"
 	"github.com/nebari-dev/javo/internal/gateway/admin"
+	gwconnectors "github.com/nebari-dev/javo/internal/gateway/connectors"
 	"github.com/nebari-dev/javo/internal/gateway/nebi"
 	"github.com/nebari-dev/javo/internal/identity"
 	"github.com/nebari-dev/javo/internal/jobs/engine"
@@ -207,6 +210,41 @@ func DiagnoseEngine() *diagnose.Engine { return diagnose.NewEngine(diagnose.Defa
 // and key seals its identity provider tokens.
 func Sessions(p config.Platform, db *store.Store, key tink.AEAD) *session.DBStore {
 	return &session.DBStore{Sessions: db.Sessions(), Key: key, TTL: p.Sessions.TTL.Duration}
+}
+
+// ConnectorParts is what connectors run on: the connectors admins add,
+// the vault of connected accounts (also the token source of connector
+// calls) and the sign-in at vendors. All are nil while connectors are off;
+// SignIn is nil in a binary built with the tag local too.
+type ConnectorParts struct {
+	Registry *connreg.Registry
+	Vault    *vault.Vault
+	SignIn   gwconnectors.SignIn
+}
+
+// Connectors builds the connector parts, sealed with the gateway's
+// sessions key; none while connectors.enabled is false. lasting says
+// whether that key survives a restart (read from a Secret or a file): one
+// made at start would lose every stored client secret and token on the
+// next one, so connectors are refused with it. publicURL is the base of
+// the OAuth redirect address.
+func Connectors(c config.ConnectorsCfg, db *store.Store, seal tink.AEAD, lasting bool, publicURL string) (ConnectorParts, error) {
+	if !c.Enabled {
+		return ConnectorParts{}, nil
+	}
+	if !lasting {
+		return ConnectorParts{}, errors.New("connectors.enabled needs a sessions key that survives restarts (--sessions-key-secret): connectors' client secrets and tokens are sealed with it")
+	}
+	// The sign-in reads clients from a registry, the vault refreshes and
+	// revokes through the sign-in, and the registry the API uses drops
+	// connections through the vault.
+	clients := connreg.New(connreg.Config{DB: db, Seal: seal, InternalHosts: c.InternalHosts})
+	var p ConnectorParts
+	var oauth vault.OAuth
+	p.SignIn, oauth = signIn(c, db, seal, clients, publicURL)
+	p.Vault = vault.New(vault.Config{DB: db, Seal: seal, OAuth: oauth})
+	p.Registry = connreg.New(connreg.Config{DB: db, Seal: seal, InternalHosts: c.InternalHosts, Connections: p.Vault})
+	return p, nil
 }
 
 // AISettings is the AI settings in force (the config's, with what a

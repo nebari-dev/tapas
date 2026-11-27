@@ -40,7 +40,7 @@ to start the first time (RStudio, Pluto). Values: `deploy/dev/values.yaml`. Pass
 
 End-to-end tests run in parallel: most sign in as a local account of their
 own, `E2E_PARALLEL` (default 8) at a time; the ones that restart the server,
-change a shared account or measure timings run alone first. A single test:
+change an account other tests sign in with or measure timings run alone first. A single test:
 `make up`, then `KUBECONFIG=.dev/kubeconfig JAVO_E2E_TARGET=dev go test -tags e2e -run TestSampleJob ./test/e2e/`
 (add `JAVO_E2E_IMAGE=$(sed -n 's/^# ref streamlit //p' .dev/images.yaml)`
 for tests that seed files). `make e2e-full` also sets `JAVO_E2E_GIT=1`: dev-up

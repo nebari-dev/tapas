@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AdminAuditLogData, AdminAuditLogErrors, AdminAuditLogResponses, AdminBackUpEverythingNowData, AdminBackUpEverythingNowErrors, AdminBackUpEverythingNowResponses, AdminBackUpNowData, AdminBackUpNowErrors, AdminBackUpNowResponses, AdminBackupRunData, AdminBackupRunErrors, AdminBackupRunResponses, AdminGetAgentSettingsData, AdminGetAgentSettingsErrors, AdminGetAgentSettingsResponses, AdminGetAiSettingsData, AdminGetAiSettingsErrors, AdminGetAiSettingsResponses, AdminListAppsData, AdminListAppsErrors, AdminListAppsResponses, AdminListBackupsData, AdminListBackupsErrors, AdminListBackupsResponses, AdminListRestoresData, AdminListRestoresErrors, AdminListRestoresResponses, AdminPreviewRestoreData, AdminPreviewRestoreErrors, AdminPreviewRestoreResponses, AdminReleaseRestoreData, AdminReleaseRestoreErrors, AdminReleaseRestoreResponses, AdminResetAiSettingsData, AdminResetAiSettingsErrors, AdminResetAiSettingsResponses, AdminRestoreData, AdminRestoreErrors, AdminRestoreNowData, AdminRestoreNowErrors, AdminRestoreNowResponses, AdminRestoreResponses, AdminRestoreRunData, AdminRestoreRunErrors, AdminRestoreRunResponses, AdminSetAgentSettingsData, AdminSetAgentSettingsErrors, AdminSetAgentSettingsResponses, AdminSetAiSettingsData, AdminSetAiSettingsErrors, AdminSetAiSettingsResponses, AdminStartBackupRunData, AdminStartBackupRunErrors, AdminStartBackupRunResponses, AdminStartRestoreRunData, AdminStartRestoreRunErrors, AdminStartRestoreRunResponses, AdminUsageData, AdminUsageErrors, AdminUsageResponses, AiCommandData, AiCommandErrors, AiCommandResponses, AiFeedbackData, AiFeedbackErrors, AiFeedbackResponses, ApproveDeviceLoginData, ApproveDeviceLoginErrors, ApproveDeviceLoginResponses, ApprovePlanData, ApprovePlanErrors, ApprovePlanResponses, AskAdminData, AskAdminErrors, AskAdminResponses, AuthOptionsData, AuthOptionsErrors, AuthOptionsResponses, BuildWithAgentData, BuildWithAgentErrors, BuildWithAgentResponses, CancelJobRunData, CancelJobRunErrors, CancelJobRunResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreatePlanData, CreatePlanErrors, CreatePlanResponses, CreateSecretData, CreateSecretErrors, CreateSecretResponses, CreateTokenData, CreateTokenErrors, CreateTokenResponses, CreateWorkspaceData, CreateWorkspaceErrors, CreateWorkspaceResponses, DeleteAgentSettingsData, DeleteAgentSettingsErrors, DeleteAgentSettingsResponses, DeleteJobData, DeleteJobErrors, DeleteJobResponses, DeleteSecretData, DeleteSecretErrors, DeleteSecretResponses, DeleteTemplateData, DeleteTemplateErrors, DeleteTemplateResponses, DeleteWorkspaceData, DeleteWorkspaceErrors, DeleteWorkspaceResponses, DeleteWorkspaceSourceTokenData, DeleteWorkspaceSourceTokenErrors, DeleteWorkspaceSourceTokenResponses, DenyDeviceLoginData, DenyDeviceLoginErrors, DenyDeviceLoginResponses, DraftWorkspaceData, DraftWorkspaceErrors, DraftWorkspaceResponses, ExplainDiagnosisData, ExplainDiagnosisErrors, ExplainDiagnosisResponses, ExportWorkspacesData, ExportWorkspacesErrors, ExportWorkspacesResponses, GetAdminReportData, GetAdminReportErrors, GetAdminReportResponses, GetAdminStorageData, GetAdminStorageErrors, GetAdminStorageResponses, GetAgentStatusData, GetAgentStatusErrors, GetAgentStatusResponses, GetAiStatusData, GetAiStatusErrors, GetAiStatusResponses, GetBrandingData, GetBrandingErrors, GetBrandingResponses, GetDeviceLoginData, GetDeviceLoginErrors, GetDeviceLoginResponses, GetDiagnosisData, GetDiagnosisErrors, GetDiagnosisResponses, GetIdleStopPolicyData, GetIdleStopPolicyErrors, GetIdleStopPolicyResponses, GetJobData, GetJobErrors, GetJobResponses, GetJobRunLogData, GetJobRunLogErrors, GetJobRunLogResponses, GetPlanData, GetPlanErrors, GetPlanResponses, GetPreviewOptionsData, GetPreviewOptionsErrors, GetPreviewOptionsResponses, GetRawFileData, GetRawFileErrors, GetRawFileResponses, GetSharingData, GetSharingErrors, GetSharingResponses, GetStorageData, GetStorageErrors, GetStorageResponses, GetWorkspaceData, GetWorkspaceErrors, GetWorkspaceLogsData, GetWorkspaceLogsErrors, GetWorkspaceLogsResponses, GetWorkspacePreviewsData, GetWorkspacePreviewsErrors, GetWorkspacePreviewsResponses, GetWorkspaceResponses, GetWorkspaceThumbnailData, GetWorkspaceThumbnailErrors, GetWorkspaceThumbnailResponses, ImportWorkspacesData, ImportWorkspacesErrors, ImportWorkspacesResponses, ListEnginesData, ListEnginesErrors, ListEnginesResponses, ListEnvironmentsData, ListEnvironmentsErrors, ListEnvironmentsResponses, ListFilesData, ListFilesErrors, ListFilesResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListPlansData, ListPlansErrors, ListPlansResponses, ListSecretNamesData, ListSecretNamesErrors, ListSecretNamesResponses, ListSecretsData, ListSecretsErrors, ListSecretsResponses, ListSharedData, ListSharedErrors, ListSharedResponses, ListSizesData, ListSizesErrors, ListSizesResponses, ListTemplatesData, ListTemplatesErrors, ListTemplatesResponses, ListTokensData, ListTokensErrors, ListTokensResponses, ListWorkspaceEventsData, ListWorkspaceEventsErrors, ListWorkspaceEventsResponses, ListWorkspacesData, ListWorkspacesErrors, ListWorkspacesResponses, LocalLoginData, LocalLoginErrors, LocalLoginResponses, LogoutData, LogoutErrors, LogoutResponses, MeData, MeErrors, MeResponses, NewPreviewsWebhookData, NewPreviewsWebhookErrors, NewPreviewsWebhookResponses, NewWorkspaceFoldersData, NewWorkspaceFoldersErrors, NewWorkspaceFoldersResponses, PauseJobData, PauseJobErrors, PauseJobResponses, PollDeviceLoginData, PollDeviceLoginErrors, PollDeviceLoginResponses, PreviewImportWorkspacesData, PreviewImportWorkspacesErrors, PreviewImportWorkspacesResponses, PreviewPlacementData, PreviewPlacementErrors, PreviewPlacementResponses, PreviewScheduleData, PreviewScheduleErrors, PreviewScheduleResponses, PutTemplateData, PutTemplateErrors, PutTemplateResponses, ReasonCopyData, ReasonCopyErrors, ReasonCopyResponses, RedeployWorkspaceData, RedeployWorkspaceErrors, RedeployWorkspaceResponses, RejectPlanData, RejectPlanErrors, RejectPlanResponses, RemoveWorkspaceThumbnailData, RemoveWorkspaceThumbnailErrors, RemoveWorkspaceThumbnailResponses, RestartWorkspaceData, RestartWorkspaceErrors, RestartWorkspaceResponses, ResumeJobData, ResumeJobErrors, ResumeJobResponses, RevokeTokenData, RevokeTokenErrors, RevokeTokenResponses, RunJobData, RunJobErrors, RunJobResponses, SaveRawFileData, SaveRawFileErrors, SaveRawFileResponses, SearchDirectoryData, SearchDirectoryErrors, SearchDirectoryResponses, ServerInfoData, ServerInfoErrors, ServerInfoResponses, SetAgentSettingsData, SetAgentSettingsErrors, SetAgentSettingsResponses, SetJobEnvData, SetJobEnvErrors, SetJobEnvResponses, SetJobSizeData, SetJobSizeErrors, SetJobSizeResponses, SetSharingData, SetSharingErrors, SetSharingResponses, SetWorkspaceApiAccessData, SetWorkspaceApiAccessErrors, SetWorkspaceApiAccessResponses, SetWorkspaceEnvData, SetWorkspaceEnvErrors, SetWorkspaceEnvResponses, SetWorkspaceFoldersData, SetWorkspaceFoldersErrors, SetWorkspaceFoldersResponses, SetWorkspaceIdleStopData, SetWorkspaceIdleStopErrors, SetWorkspaceIdleStopResponses, SetWorkspaceLaunchData, SetWorkspaceLaunchErrors, SetWorkspaceLaunchResponses, SetWorkspacePreviewsData, SetWorkspacePreviewsErrors, SetWorkspacePreviewsResponses, SetWorkspacePreviewsWebhookData, SetWorkspacePreviewsWebhookErrors, SetWorkspacePreviewsWebhookResponses, SetWorkspaceSizeData, SetWorkspaceSizeErrors, SetWorkspaceSizeResponses, SetWorkspaceSourceTokenData, SetWorkspaceSourceTokenErrors, SetWorkspaceSourceTokenResponses, SetWorkspaceThumbnailData, SetWorkspaceThumbnailErrors, SetWorkspaceThumbnailResponses, SetWorkspaceTrustData, SetWorkspaceTrustErrors, SetWorkspaceTrustResponses, StartDeviceLoginData, StartDeviceLoginErrors, StartDeviceLoginResponses, StartJobSampleData, StartJobSampleErrors, StartJobSampleResponses, StartSampleData, StartSampleErrors, StartSampleResponses, StartWorkspaceData, StartWorkspaceErrors, StartWorkspaceResponses, StopWorkspaceData, StopWorkspaceErrors, StopWorkspaceResponses, StreamWorkspaceLogsData, StreamWorkspaceLogsErrors, StreamWorkspaceLogsResponse, StreamWorkspaceLogsResponses, StreamWorkspaceStepLogData, StreamWorkspaceStepLogErrors, StreamWorkspaceStepLogResponses, SuggestAgentRequestData, SuggestAgentRequestErrors, SuggestAgentRequestResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses, UpdateSecretData, UpdateSecretErrors, UpdateSecretResponses, UploadArchiveData, UploadArchiveErrors, UploadArchiveResponses, WarmFilesData, WarmFilesErrors, WarmFilesResponses } from './types.gen';
+import type { AdminAuditLogData, AdminAuditLogErrors, AdminAuditLogResponses, AdminBackUpEverythingNowData, AdminBackUpEverythingNowErrors, AdminBackUpEverythingNowResponses, AdminBackUpNowData, AdminBackUpNowErrors, AdminBackUpNowResponses, AdminBackupRunData, AdminBackupRunErrors, AdminBackupRunResponses, AdminConnectorCatalogData, AdminConnectorCatalogErrors, AdminConnectorCatalogResponses, AdminCreateConnectorData, AdminCreateConnectorErrors, AdminCreateConnectorResponses, AdminDeleteConnectorData, AdminDeleteConnectorErrors, AdminDeleteConnectorResponses, AdminGetAgentSettingsData, AdminGetAgentSettingsErrors, AdminGetAgentSettingsResponses, AdminGetAiSettingsData, AdminGetAiSettingsErrors, AdminGetAiSettingsResponses, AdminGetConnectorData, AdminGetConnectorErrors, AdminGetConnectorResponses, AdminListAppsData, AdminListAppsErrors, AdminListAppsResponses, AdminListBackupsData, AdminListBackupsErrors, AdminListBackupsResponses, AdminListConnectorsData, AdminListConnectorsErrors, AdminListConnectorsResponses, AdminListRestoresData, AdminListRestoresErrors, AdminListRestoresResponses, AdminPreviewRestoreData, AdminPreviewRestoreErrors, AdminPreviewRestoreResponses, AdminRefreshConnectorToolsData, AdminRefreshConnectorToolsErrors, AdminRefreshConnectorToolsResponses, AdminReleaseRestoreData, AdminReleaseRestoreErrors, AdminReleaseRestoreResponses, AdminResetAiSettingsData, AdminResetAiSettingsErrors, AdminResetAiSettingsResponses, AdminRestoreData, AdminRestoreErrors, AdminRestoreNowData, AdminRestoreNowErrors, AdminRestoreNowResponses, AdminRestoreResponses, AdminRestoreRunData, AdminRestoreRunErrors, AdminRestoreRunResponses, AdminSetAgentSettingsData, AdminSetAgentSettingsErrors, AdminSetAgentSettingsResponses, AdminSetAiSettingsData, AdminSetAiSettingsErrors, AdminSetAiSettingsResponses, AdminStartBackupRunData, AdminStartBackupRunErrors, AdminStartBackupRunResponses, AdminStartRestoreRunData, AdminStartRestoreRunErrors, AdminStartRestoreRunResponses, AdminUpdateConnectorData, AdminUpdateConnectorErrors, AdminUpdateConnectorResponses, AdminUsageData, AdminUsageErrors, AdminUsageResponses, AiCommandData, AiCommandErrors, AiCommandResponses, AiFeedbackData, AiFeedbackErrors, AiFeedbackResponses, ApproveDeviceLoginData, ApproveDeviceLoginErrors, ApproveDeviceLoginResponses, ApprovePlanData, ApprovePlanErrors, ApprovePlanResponses, AskAdminData, AskAdminErrors, AskAdminResponses, AuthOptionsData, AuthOptionsErrors, AuthOptionsResponses, BuildWithAgentData, BuildWithAgentErrors, BuildWithAgentResponses, CancelJobRunData, CancelJobRunErrors, CancelJobRunResponses, CompleteConnectorSignInData, CompleteConnectorSignInErrors, CompleteConnectorSignInResponses, ConnectConnectorData, ConnectConnectorErrors, ConnectConnectorResponses, CreateJobData, CreateJobErrors, CreateJobResponses, CreatePlanData, CreatePlanErrors, CreatePlanResponses, CreateSecretData, CreateSecretErrors, CreateSecretResponses, CreateTokenData, CreateTokenErrors, CreateTokenResponses, CreateWorkspaceData, CreateWorkspaceErrors, CreateWorkspaceResponses, DeleteAgentSettingsData, DeleteAgentSettingsErrors, DeleteAgentSettingsResponses, DeleteJobData, DeleteJobErrors, DeleteJobResponses, DeleteSecretData, DeleteSecretErrors, DeleteSecretResponses, DeleteTemplateData, DeleteTemplateErrors, DeleteTemplateResponses, DeleteWorkspaceData, DeleteWorkspaceErrors, DeleteWorkspaceResponses, DeleteWorkspaceSourceTokenData, DeleteWorkspaceSourceTokenErrors, DeleteWorkspaceSourceTokenResponses, DenyDeviceLoginData, DenyDeviceLoginErrors, DenyDeviceLoginResponses, DisconnectConnectorData, DisconnectConnectorErrors, DisconnectConnectorResponses, DraftWorkspaceData, DraftWorkspaceErrors, DraftWorkspaceResponses, ExplainDiagnosisData, ExplainDiagnosisErrors, ExplainDiagnosisResponses, ExportWorkspacesData, ExportWorkspacesErrors, ExportWorkspacesResponses, GetAdminReportData, GetAdminReportErrors, GetAdminReportResponses, GetAdminStorageData, GetAdminStorageErrors, GetAdminStorageResponses, GetAgentStatusData, GetAgentStatusErrors, GetAgentStatusResponses, GetAiStatusData, GetAiStatusErrors, GetAiStatusResponses, GetBrandingData, GetBrandingErrors, GetBrandingResponses, GetDeviceLoginData, GetDeviceLoginErrors, GetDeviceLoginResponses, GetDiagnosisData, GetDiagnosisErrors, GetDiagnosisResponses, GetIdleStopPolicyData, GetIdleStopPolicyErrors, GetIdleStopPolicyResponses, GetJobData, GetJobErrors, GetJobResponses, GetJobRunLogData, GetJobRunLogErrors, GetJobRunLogResponses, GetPlanData, GetPlanErrors, GetPlanResponses, GetPreviewOptionsData, GetPreviewOptionsErrors, GetPreviewOptionsResponses, GetRawFileData, GetRawFileErrors, GetRawFileResponses, GetSharingData, GetSharingErrors, GetSharingResponses, GetStorageData, GetStorageErrors, GetStorageResponses, GetWorkspaceData, GetWorkspaceErrors, GetWorkspaceLogsData, GetWorkspaceLogsErrors, GetWorkspaceLogsResponses, GetWorkspacePreviewsData, GetWorkspacePreviewsErrors, GetWorkspacePreviewsResponses, GetWorkspaceResponses, GetWorkspaceThumbnailData, GetWorkspaceThumbnailErrors, GetWorkspaceThumbnailResponses, ImportWorkspacesData, ImportWorkspacesErrors, ImportWorkspacesResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListEnginesData, ListEnginesErrors, ListEnginesResponses, ListEnvironmentsData, ListEnvironmentsErrors, ListEnvironmentsResponses, ListFilesData, ListFilesErrors, ListFilesResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListPlansData, ListPlansErrors, ListPlansResponses, ListSecretNamesData, ListSecretNamesErrors, ListSecretNamesResponses, ListSecretsData, ListSecretsErrors, ListSecretsResponses, ListSharedData, ListSharedErrors, ListSharedResponses, ListSizesData, ListSizesErrors, ListSizesResponses, ListTemplatesData, ListTemplatesErrors, ListTemplatesResponses, ListTokensData, ListTokensErrors, ListTokensResponses, ListWorkspaceEventsData, ListWorkspaceEventsErrors, ListWorkspaceEventsResponses, ListWorkspacesData, ListWorkspacesErrors, ListWorkspacesResponses, LocalLoginData, LocalLoginErrors, LocalLoginResponses, LogoutData, LogoutErrors, LogoutResponses, MeData, MeErrors, MeResponses, NewPreviewsWebhookData, NewPreviewsWebhookErrors, NewPreviewsWebhookResponses, NewWorkspaceFoldersData, NewWorkspaceFoldersErrors, NewWorkspaceFoldersResponses, PauseJobData, PauseJobErrors, PauseJobResponses, PollDeviceLoginData, PollDeviceLoginErrors, PollDeviceLoginResponses, PreviewImportWorkspacesData, PreviewImportWorkspacesErrors, PreviewImportWorkspacesResponses, PreviewPlacementData, PreviewPlacementErrors, PreviewPlacementResponses, PreviewScheduleData, PreviewScheduleErrors, PreviewScheduleResponses, PutTemplateData, PutTemplateErrors, PutTemplateResponses, ReasonCopyData, ReasonCopyErrors, ReasonCopyResponses, RedeployWorkspaceData, RedeployWorkspaceErrors, RedeployWorkspaceResponses, RejectPlanData, RejectPlanErrors, RejectPlanResponses, RemoveWorkspaceThumbnailData, RemoveWorkspaceThumbnailErrors, RemoveWorkspaceThumbnailResponses, RestartWorkspaceData, RestartWorkspaceErrors, RestartWorkspaceResponses, ResumeJobData, ResumeJobErrors, ResumeJobResponses, RevokeTokenData, RevokeTokenErrors, RevokeTokenResponses, RunJobData, RunJobErrors, RunJobResponses, SaveRawFileData, SaveRawFileErrors, SaveRawFileResponses, SearchDirectoryData, SearchDirectoryErrors, SearchDirectoryResponses, ServerInfoData, ServerInfoErrors, ServerInfoResponses, SetAgentSettingsData, SetAgentSettingsErrors, SetAgentSettingsResponses, SetJobEnvData, SetJobEnvErrors, SetJobEnvResponses, SetJobSizeData, SetJobSizeErrors, SetJobSizeResponses, SetSharingData, SetSharingErrors, SetSharingResponses, SetWorkspaceApiAccessData, SetWorkspaceApiAccessErrors, SetWorkspaceApiAccessResponses, SetWorkspaceEnvData, SetWorkspaceEnvErrors, SetWorkspaceEnvResponses, SetWorkspaceFoldersData, SetWorkspaceFoldersErrors, SetWorkspaceFoldersResponses, SetWorkspaceIdleStopData, SetWorkspaceIdleStopErrors, SetWorkspaceIdleStopResponses, SetWorkspaceLaunchData, SetWorkspaceLaunchErrors, SetWorkspaceLaunchResponses, SetWorkspacePreviewsData, SetWorkspacePreviewsErrors, SetWorkspacePreviewsResponses, SetWorkspacePreviewsWebhookData, SetWorkspacePreviewsWebhookErrors, SetWorkspacePreviewsWebhookResponses, SetWorkspaceSizeData, SetWorkspaceSizeErrors, SetWorkspaceSizeResponses, SetWorkspaceSourceTokenData, SetWorkspaceSourceTokenErrors, SetWorkspaceSourceTokenResponses, SetWorkspaceThumbnailData, SetWorkspaceThumbnailErrors, SetWorkspaceThumbnailResponses, SetWorkspaceTrustData, SetWorkspaceTrustErrors, SetWorkspaceTrustResponses, StartDeviceLoginData, StartDeviceLoginErrors, StartDeviceLoginResponses, StartJobSampleData, StartJobSampleErrors, StartJobSampleResponses, StartSampleData, StartSampleErrors, StartSampleResponses, StartWorkspaceData, StartWorkspaceErrors, StartWorkspaceResponses, StopWorkspaceData, StopWorkspaceErrors, StopWorkspaceResponses, StreamWorkspaceLogsData, StreamWorkspaceLogsErrors, StreamWorkspaceLogsResponse, StreamWorkspaceLogsResponses, StreamWorkspaceStepLogData, StreamWorkspaceStepLogErrors, StreamWorkspaceStepLogResponses, SuggestAgentRequestData, SuggestAgentRequestErrors, SuggestAgentRequestResponses, UpdateJobData, UpdateJobErrors, UpdateJobResponses, UpdateSecretData, UpdateSecretErrors, UpdateSecretResponses, UploadArchiveData, UploadArchiveErrors, UploadArchiveResponses, WarmFilesData, WarmFilesErrors, WarmFilesResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -290,6 +290,111 @@ export const adminRestore = <ThrowOnError extends boolean = false>(options: Opti
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Every connector (platform admins)
+ */
+export const adminListConnectors = <ThrowOnError extends boolean = false>(options?: Options<AdminListConnectorsData, ThrowOnError>): RequestResult<AdminListConnectorsResponses, AdminListConnectorsErrors, ThrowOnError> => (options?.client ?? client).get<AdminListConnectorsResponses, AdminListConnectorsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/connectors',
+    ...options
+});
+
+/**
+ * Add a connector (platform admins)
+ *
+ * With catalogId, what the body leaves out is taken from that catalogue entry. The client secret is stored encrypted and never returned. Each change is on the audit log with the names of the fields, never their values.
+ */
+export const adminCreateConnector = <ThrowOnError extends boolean = false>(options: Options<AdminCreateConnectorData, ThrowOnError>): RequestResult<AdminCreateConnectorResponses, AdminCreateConnectorErrors, ThrowOnError> => (options.client ?? client).post<AdminCreateConnectorResponses, AdminCreateConnectorErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/connectors',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * The built-in catalogue of connectors (platform admins)
+ */
+export const adminConnectorCatalog = <ThrowOnError extends boolean = false>(options?: Options<AdminConnectorCatalogData, ThrowOnError>): RequestResult<AdminConnectorCatalogResponses, AdminConnectorCatalogErrors, ThrowOnError> => (options?.client ?? client).get<AdminConnectorCatalogResponses, AdminConnectorCatalogErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/connectors/catalog',
+    ...options
+});
+
+/**
+ * Remove a connector and everyone's connection to it (platform admins)
+ */
+export const adminDeleteConnector = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteConnectorData, ThrowOnError>): RequestResult<AdminDeleteConnectorResponses, AdminDeleteConnectorErrors, ThrowOnError> => (options.client ?? client).delete<AdminDeleteConnectorResponses, AdminDeleteConnectorErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/connectors/{id}',
+    ...options
+});
+
+/**
+ * One connector (platform admins)
+ */
+export const adminGetConnector = <ThrowOnError extends boolean = false>(options: Options<AdminGetConnectorData, ThrowOnError>): RequestResult<AdminGetConnectorResponses, AdminGetConnectorErrors, ThrowOnError> => (options.client ?? client).get<AdminGetConnectorResponses, AdminGetConnectorErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/connectors/{id}',
+    ...options
+});
+
+/**
+ * Change a connector (platform admins)
+ *
+ * rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again.
+ */
+export const adminUpdateConnector = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateConnectorData, ThrowOnError>): RequestResult<AdminUpdateConnectorResponses, AdminUpdateConnectorErrors, ThrowOnError> => (options.client ?? client).put<AdminUpdateConnectorResponses, AdminUpdateConnectorErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/connectors/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Take a new snapshot of a connector's tools (platform admins)
+ *
+ * Lists the tools at the connector's MCP server with your own connection to it.
+ */
+export const adminRefreshConnectorTools = <ThrowOnError extends boolean = false>(options: Options<AdminRefreshConnectorToolsData, ThrowOnError>): RequestResult<AdminRefreshConnectorToolsResponses, AdminRefreshConnectorToolsErrors, ThrowOnError> => (options.client ?? client).post<AdminRefreshConnectorToolsResponses, AdminRefreshConnectorToolsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/connectors/{id}/tools/refresh',
+    ...options
 });
 
 /**
@@ -607,6 +712,70 @@ export const authOptions = <ThrowOnError extends boolean = false>(options?: Opti
  * The install's product name, logo, favicon and accent
  */
 export const getBranding = <ThrowOnError extends boolean = false>(options?: Options<GetBrandingData, ThrowOnError>): RequestResult<GetBrandingResponses, GetBrandingErrors, ThrowOnError> => (options?.client ?? client).get<GetBrandingResponses, GetBrandingErrors, ThrowOnError>({ url: '/api/branding', ...options });
+
+/**
+ * Connectors you may use, and whether you connected them
+ *
+ * Each connector's tools are offered on /mcp as slug__tool once connected. Connect at connectUrl, in the browser.
+ */
+export const listConnectors = <ThrowOnError extends boolean = false>(options?: Options<ListConnectorsData, ThrowOnError>): RequestResult<ListConnectorsResponses, ListConnectorsErrors, ThrowOnError> => (options?.client ?? client).get<ListConnectorsResponses, ListConnectorsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/api/connectors',
+    ...options
+});
+
+/**
+ * Finish connecting an account (browser session only)
+ *
+ * Called by the page at /settings/connections/callback/{slug} with what the vendor sent back and that slug. A sign-in can be finished once, within 10 minutes, by the person who started it, and only from the page of the connector it was started for.
+ */
+export const completeConnectorSignIn = <ThrowOnError extends boolean = false>(options: Options<CompleteConnectorSignInData, ThrowOnError>): RequestResult<CompleteConnectorSignInResponses, CompleteConnectorSignInErrors, ThrowOnError> => (options.client ?? client).post<CompleteConnectorSignInResponses, CompleteConnectorSignInErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }],
+    url: '/api/connectors/oauth/complete',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Start connecting your account to a connector (browser session only)
+ *
+ * Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback/{slug}, which finishes with POST /api/connectors/oauth/complete.
+ */
+export const connectConnector = <ThrowOnError extends boolean = false>(options: Options<ConnectConnectorData, ThrowOnError>): RequestResult<ConnectConnectorResponses, ConnectConnectorErrors, ThrowOnError> => (options.client ?? client).post<ConnectConnectorResponses, ConnectConnectorErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }],
+    url: '/api/connectors/{id}/connect',
+    ...options
+});
+
+/**
+ * Disconnect your account from a connector (browser session only)
+ *
+ * Revokes the tokens at the vendor when it allows it, and deletes them whatever it answered.
+ */
+export const disconnectConnector = <ThrowOnError extends boolean = false>(options: Options<DisconnectConnectorData, ThrowOnError>): RequestResult<DisconnectConnectorResponses, DisconnectConnectorErrors, ThrowOnError> => (options.client ?? client).delete<DisconnectConnectorResponses, DisconnectConnectorErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-javo_session',
+            type: 'apiKey'
+        }],
+    url: '/api/connectors/{id}/connection',
+    ...options
+});
 
 /**
  * People and the caller's own groups matching a search

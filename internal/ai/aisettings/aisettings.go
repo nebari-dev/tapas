@@ -18,14 +18,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
-	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -36,6 +33,7 @@ import (
 	"github.com/nebari-dev/javo/internal/ai/agentproxy"
 	"github.com/nebari-dev/javo/internal/ai/provider"
 	"github.com/nebari-dev/javo/internal/config"
+	"github.com/nebari-dev/javo/internal/httpx"
 	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/reasons"
 	"github.com/nebari-dev/javo/internal/store"
@@ -367,55 +365,19 @@ func checkBaseURL(s string) reasons.MessageCode {
 	if err != nil || len(s) > MaxBaseURLBytes || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
 		return reasons.MsgAISettingsBaseURL
 	}
-	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
-	if slices.Contains(metadataHosts, host) {
+	host := u.Hostname()
+	if httpx.MetadataHost(host) {
 		return reasons.MsgAISettingsBaseURLHost
 	}
-	if ip, err := netip.ParseAddr(host); err == nil && blocked(ip) {
+	if ip, err := netip.ParseAddr(host); err == nil && httpx.Blocked(ip) {
 		return reasons.MsgAISettingsBaseURLHost
 	}
 	return ""
 }
 
-// metadataHosts are the cloud metadata services' names.
-var metadataHosts = []string{"metadata", "metadata.google.internal", "metadata.goog", "instance-data", "instance-data.ec2.internal"}
-
-// metadataAddrs are cloud metadata addresses outside the link-local ranges.
-var metadataAddrs = []netip.Addr{
-	netip.MustParseAddr("100.100.100.200"), // Alibaba Cloud
-	netip.MustParseAddr("168.63.129.16"),   // Azure platform
-	netip.MustParseAddr("fd00:ec2::254"),   // AWS over IPv6
-}
-
-// blocked is a link-local, unspecified or metadata address.
-func blocked(ip netip.Addr) bool {
-	ip = ip.Unmap()
-	return ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || slices.Contains(metadataAddrs, ip)
-}
-
-// ErrBlockedAddress is a connection refused because it would reach a
-// link-local or metadata address.
-var ErrBlockedAddress = errors.New("refused to connect to a link-local or cloud metadata address")
-
 // guardedTransport is the default transport whose connections never reach a
-// blocked address, checked on the address actually dialed, after name
-// resolution.
-func guardedTransport() *http.Transport {
-	d := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: func(_, address string, _ syscall.RawConn) error {
-		host, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return ErrBlockedAddress
-		}
-		ip, err := netip.ParseAddr(host)
-		if err != nil || blocked(ip) {
-			return ErrBlockedAddress
-		}
-		return nil
-	}}
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.DialContext = d.DialContext
-	return t
-}
+// link-local, unspecified or metadata address (httpx.Guard).
+func guardedTransport() *http.Transport { return httpx.Guard{}.Transport() }
 
 // agentClient waits at most the longer of timeout and five minutes for a
 // provider's first answer byte; a streamed answer then takes as long as it

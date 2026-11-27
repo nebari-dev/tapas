@@ -15,8 +15,9 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     // The CSP allows images from 'self' only, so assets ship as files, never data: URIs.
     build: { assetsInlineLimit: 0 },
-    // KindLogo.test.tsx reads the kind enum from the Go model.
-    server: { fs: { allow: ['.', '../internal/model'] }, proxy },
+    // KindLogo.test.tsx reads the kind enum from the Go model, and
+    // ConnectorLogo.test.tsx the connector catalogue the gateway ships.
+    server: { fs: { allow: ['.', '../internal/model', '../internal/connectors/catalog'] }, proxy },
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],

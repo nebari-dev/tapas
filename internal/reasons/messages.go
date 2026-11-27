@@ -327,6 +327,33 @@ const (
 	MsgEnvValueOrSecret    MessageCode = "EnvValueOrSecret"
 	MsgWebhookUnknown      MessageCode = "WebhookUnknown"
 
+	// Connectors: MCP servers an admin adds and people connect their own
+	// accounts to (internal/connectors and its routes).
+	MsgConnectorNotFound            MessageCode = "ConnectorNotFound"
+	MsgConnectorsOff                MessageCode = "ConnectorsOff"
+	MsgConnectorSlugTaken           MessageCode = "ConnectorSlugTaken" // arg: the slug
+	MsgConnectorURLNotAllowed       MessageCode = "ConnectorURLNotAllowed"
+	MsgConnectorSecretForNewAddress MessageCode = "ConnectorSecretForNewAddress"
+	MsgConnectorNotConnected        MessageCode = "ConnectorNotConnected" // args: the connector's name, where to connect it
+	MsgConnectorSignInFailed        MessageCode = "ConnectorSignInFailed" // arg: the OAuth error code the vendor answered
+	MsgConnectorSignInExpired       MessageCode = "ConnectorSignInExpired"
+	MsgConnectorNeedsOAuthClient    MessageCode = "ConnectorNeedsOAuthClient"
+	MsgConnectorServerMoved         MessageCode = "ConnectorServerMoved"
+	MsgConnectorToolNotFound        MessageCode = "ConnectorToolNotFound"
+	MsgConnectorCallChanged         MessageCode = "ConnectorCallChanged"
+	MsgConnectorForAgents           MessageCode = "ConnectorForAgents"
+	MsgConnectorDeniedByPolicy      MessageCode = "ConnectorDeniedByPolicy" // arg: the policy's reason, a sentence without its full stop
+	MsgConnectorNotForAppTokens     MessageCode = "ConnectorNotForAppTokens"
+	MsgConnectorSessionOnly         MessageCode = "ConnectorSessionOnly"
+	MsgConnectorChanged             MessageCode = "ConnectorChanged"
+	MsgConnectorSlugInvalid         MessageCode = "ConnectorSlugInvalid"
+	MsgConnectorNameInvalid         MessageCode = "ConnectorNameInvalid"
+	MsgConnectorScopesInvalid       MessageCode = "ConnectorScopesInvalid"
+	MsgConnectorGroupsInvalid       MessageCode = "ConnectorGroupsInvalid"
+	MsgConnectorToolModesInvalid    MessageCode = "ConnectorToolModesInvalid"
+	MsgConnectorEndpointsPaired     MessageCode = "ConnectorEndpointsPaired"
+	MsgConnectorCatalogUnknown      MessageCode = "ConnectorCatalogUnknown"
+
 	// Environments picked from an environment manager (internal/ext/envsource).
 	MsgEnvironmentsOff        MessageCode = "EnvironmentsOff"
 	MsgEnvironmentUnknown     MessageCode = "EnvironmentUnknown"
@@ -648,6 +675,31 @@ var messages = map[MessageCode]string{
 	MsgWorkloadTokenReadOnly:  "An app's or job's own API token can read, start, stop and run, but cannot change files or create or change apps and jobs. Use the browser, or a personal token from Settings.",
 	MsgRewriteOwnerOnly:       "Only its owner can change what it runs: its command, image, port, file, engine or template. It runs in their home folder, so a change could read or rewrite their files. Ask the owner.",
 	MsgWebhookUnknown:         "This webhook was not made here. Set up the webhook again and paste the new address and secret into GitHub.",
+
+	MsgConnectorNotFound:            "No such connector, or you may not use it.",
+	MsgConnectorsOff:                "Connectors are off on this platform (connectors.enabled in the platform config).",
+	MsgConnectorSlugTaken:           "A connector called %s already exists. Pick another short name.",
+	MsgConnectorURLNotAllowed:       "Give an https address, such as https://mcp.example.org/mcp, without a user name, password or #fragment. Plain http only works for a host listed in connectors.internalHosts.",
+	MsgConnectorSecretForNewAddress: "The address, the OAuth endpoints, the client or the server's authorization server changed, so paste the client secret again. A stored secret is only sent where it was saved for.",
+	MsgConnectorNotConnected:        "You have not connected %s yet, or it needs connecting again. Connect it at %s.",
+	MsgConnectorSignInFailed:        "The sign-in at the vendor did not complete (%s). Try connecting again; if it keeps failing, ask your admin to check the connector's OAuth client.",
+	MsgConnectorSignInExpired:       "This sign-in has expired or was already used. Start connecting again.",
+	MsgConnectorNeedsOAuthClient:    "This connector needs an OAuth client: create one at the vendor with the redirect address shown here, then paste its client id and secret.",
+	MsgConnectorServerMoved:         "This connector's server now sends sign-ins to another authorization server, so nobody can connect it until an admin checks it and saves the connector again.",
+	MsgConnectorToolNotFound:        "No such tool.",
+	MsgConnectorCallChanged:         "The connector was changed after this was asked, so the call was not made. Ask again.",
+	MsgConnectorForAgents:           "Connector tools are called by agents, through Tapas's MCP endpoint, not from the browser.",
+	MsgConnectorDeniedByPolicy:      "Not allowed by the platform's policy: %s.",
+	MsgConnectorNotForAppTokens:     "An app's or job's own API token cannot use connectors, unless the app is your own coding agent. Use a personal token from Settings.",
+	MsgConnectorSessionOnly:         "Only a person signed in in the browser can connect or disconnect an account. No API token can.",
+	MsgConnectorChanged:             "Someone else saved this connector in the meantime. Reload it and make your change again.",
+	MsgConnectorSlugInvalid:         "Use 2 to 31 lowercase letters and digits, starting with a letter, such as slack.",
+	MsgConnectorNameInvalid:         "Name it in 1 to 100 characters.",
+	MsgConnectorScopesInvalid:       "List up to 50 scopes, each up to 200 characters without spaces.",
+	MsgConnectorGroupsInvalid:       "List up to 100 group names, or * for everyone, without empty entries.",
+	MsgConnectorToolModesInvalid:    "Set each tool to read, write or off, for up to 500 tools with names up to 128 characters.",
+	MsgConnectorEndpointsPaired:     "Give the authorize and token addresses together, or neither to discover them from the MCP server.",
+	MsgConnectorCatalogUnknown:      "There is no such entry in the catalogue.",
 
 	MsgEnvironmentsOff:        "Environments are not set up on this platform.",
 	MsgEnvironmentUnknown:     "That environment was not found: it is not yours or shared with you, or it has no version yet.",

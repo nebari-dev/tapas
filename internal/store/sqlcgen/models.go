@@ -157,6 +157,60 @@ type ClusterFact struct {
 	ObservedAt dbtime.Time
 }
 
+type Connector struct {
+	ID                      string
+	Slug                    string
+	Name                    string
+	CatalogID               string
+	Url                     string
+	Enabled                 bool
+	OauthRegistration       string
+	OauthClientID           string
+	OauthClientSecretSealed []byte
+	OauthAuthorizeUrl       string
+	OauthTokenUrl           string
+	OauthRevokeUrl          string
+	Scopes                  string
+	AllowedGroups           string
+	ToolModes               string
+	Tools                   string
+	Rev                     string
+	CreatedAt               dbtime.Time
+	UpdatedAt               dbtime.Time
+	OauthIssuer             string
+	OauthServer             string
+	OauthServerMoved        bool
+}
+
+type ConnectorConnection struct {
+	ID              string
+	ConnectorID     string
+	Subject         string
+	ConnectedBy     string
+	Resource        string
+	AccessSealed    []byte
+	RefreshSealed   []byte
+	Scopes          string
+	Status          string
+	ExpiresAt       dbtime.NullTime
+	RefreshingUntil dbtime.Time
+	Rev             string
+	CreatedAt       dbtime.Time
+	UpdatedAt       dbtime.Time
+}
+
+type ConnectorOauthState struct {
+	StateHash      []byte
+	ConnectorID    string
+	ConnectorRev   string
+	Person         string
+	VerifierSealed []byte
+	RedirectUri    string
+	Issuer         string
+	CreatedAt      dbtime.Time
+	ExpiresAt      dbtime.Time
+}
+
 type DeviceLogin struct {
 	ID         string
 	UserCode   string

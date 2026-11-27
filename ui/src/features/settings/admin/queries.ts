@@ -8,6 +8,12 @@ import {
   adminResetAiSettings,
   adminSetAiSettings,
   adminBackUpNow,
+  adminConnectorCatalog,
+  adminCreateConnector,
+  adminDeleteConnector,
+  adminListConnectors,
+  adminRefreshConnectorTools,
+  adminUpdateConnector,
   adminListApps,
   adminListBackups,
   adminListRestores,
@@ -20,6 +26,7 @@ import {
   deleteWorkspace,
   stopWorkspace,
   type AdminSetAiSettingsData,
+  type ConnectorInput,
   type RestoreScope,
   type RunRequestBody,
 } from '../../../api'
@@ -32,6 +39,8 @@ const keys = {
   restores: ['admin', 'restores'] as const,
   ai: ['admin', 'ai'] as const,
   agents: ['admin', 'agents'] as const,
+  connectors: ['admin', 'connectors'] as const,
+  catalog: ['admin', 'connectors', 'catalog'] as const,
 }
 
 /** Whether the signed-in person is a platform admin (GET /api/me roles). */
@@ -248,4 +257,74 @@ export function useResetAISettings() {
       void qc.invalidateQueries({ queryKey: ['ai'] })
     },
   })
+}
+
+/** Every connector; asked only for a platform admin. */
+export function useConnectors(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.connectors,
+    enabled,
+    queryFn: async () => (await adminListConnectors({ throwOnError: true })).data.items ?? [],
+  })
+}
+
+/** The built-in catalogue an admin adds connectors from. */
+export function useConnectorCatalog(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.catalog,
+    enabled,
+    queryFn: async () => {
+      const d = (await adminConnectorCatalog({ throwOnError: true })).data
+      return { items: d.items ?? [], redirectUriPrefix: d.redirectUriPrefix ?? '' }
+    },
+  })
+}
+
+export function useCreateConnector() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: ConnectorInput) => (await adminCreateConnector({ body, throwOnError: true })).data,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.connectors }),
+  })
+}
+
+/**
+ * Change a connector. body.rev is the rev it was read at; a 409 means someone
+ * saved it first (or connectors were turned off), so the list is asked again
+ * either way.
+ */
+export function useUpdateConnector() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: ConnectorInput }) => (await adminUpdateConnector({ path: { id }, body, throwOnError: true })).data,
+    onSettled: () => void qc.invalidateQueries({ queryKey: keys.connectors }),
+  })
+}
+
+/** Remove a connector; everyone's connection to it goes with it. */
+export function useDeleteConnector() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await adminDeleteConnector({ path: { id }, throwOnError: true })
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.connectors }),
+  })
+}
+
+/**
+ * Read a connector's tool list from its server again. The answer is the
+ * connector at its new rev; the list is left alone so an open form is not
+ * made again from it, losing what was typed.
+ */
+export function useRefreshConnectorTools() {
+  return useMutation({
+    mutationFn: async (id: string) => (await adminRefreshConnectorTools({ path: { id }, throwOnError: true })).data,
+  })
+}
+
+/** Ask for the connector list again, such as after a form that refreshed tools closes. */
+export function useReloadConnectors() {
+  const qc = useQueryClient()
+  return () => void qc.invalidateQueries({ queryKey: keys.connectors })
 }
