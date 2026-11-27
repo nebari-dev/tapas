@@ -17,7 +17,6 @@ const chat = {
   slug: 'chat',
   name: 'Team chat',
   url: 'https://mcp.example.org/chat',
-  authMode: 'user',
   enabled: true,
   oauth: { clientId: 'client-1', secretStored: true, registration: 'static', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
   scopes: ['channels:read', 'chat:write'],
@@ -39,7 +38,6 @@ const wiki = {
   slug: 'wiki',
   name: 'Wiki',
   url: 'https://wiki.example.org/mcp',
-  authMode: 'shared',
   enabled: false,
   oauth: { clientId: '', secretStored: false, registration: '', authorizeUrl: '', tokenUrl: '', revokeUrl: '' },
   scopes: [],
@@ -56,7 +54,6 @@ const catalog = {
       slug: 'chat',
       name: 'Team chat',
       url: 'https://mcp.example.org/chat',
-      authMode: 'user',
       scopes: ['channels:read'],
       toolModes: { post_message: 'write' },
       oauthEndpoints: 'discovered',
@@ -69,7 +66,6 @@ const catalog = {
       slug: 'tickets',
       name: 'Tickets',
       url: '',
-      authMode: 'shared',
       scopes: [],
       toolModes: {},
       oauthEndpoints: 'static',
@@ -100,7 +96,7 @@ describe('Connectors (admin)', () => {
     expect(m.count('GET', '/api/admin/connectors')).toBe(0)
   })
 
-  it('lists every connector with whether it is on and who signs in', async () => {
+  it('lists every connector with whether it is on', async () => {
     api()
     renderApp('/settings/connectors')
     expect((await screen.findByRole('link', { name: 'Connectors' })).getAttribute('aria-current')).toBe('page')
@@ -109,13 +105,12 @@ describe('Connectors (admin)', () => {
     // Catalogue order first (set up or not), then the custom ones, one per row.
     expect(rows).toHaveLength(3)
     expect(rows[0].textContent).toContain('Team chat')
-    expect(rows[0].textContent).toContain('Each person signs in')
     expect(within(rows[0]).getByRole('switch', { name: 'Turn on Team chat' }).getAttribute('aria-checked')).toBe('true')
     expect(rows[1].textContent).toContain('Tickets')
     expect(rows[1].textContent).toContain('Not set up')
     expect(within(rows[1]).queryByRole('switch')).toBeNull()
     expect(within(rows[1]).getByRole('button', { name: 'Set up Tickets' })).toBeTruthy()
-    expect(rows[2].textContent).toContain('One shared account')
+    expect(rows[2].textContent).toContain('Wiki')
     expect(within(rows[2]).getByRole('switch', { name: 'Turn on Wiki' }).getAttribute('aria-checked')).toBe('false')
   })
 
@@ -163,7 +158,6 @@ describe('Connectors (admin)', () => {
       slug: 'chat',
       name: 'Team chat',
       url: 'https://mcp.example.org/chat',
-      authMode: 'user',
       enabled: true,
       oauth: { clientId: 'client-9', clientSecret: 'shh-9' },
       scopes: ['channels:read'],
@@ -185,14 +179,12 @@ describe('Connectors (admin)', () => {
     // Each connector has its own redirect address, ending in its short name.
     expect(within(form).getByText(PREFIX + 'docs')).toBeTruthy()
     await userEvent.type(within(form).getByLabelText('Address of the MCP server'), 'https://docs.example.org/mcp')
-    await userEvent.click(within(form).getByRole('radio', { name: 'One shared account' }))
     await userEvent.click(within(form).getByRole('button', { name: 'Add connector' }))
     await vi.waitFor(() => expect(m.count('POST', '/api/admin/connectors')).toBe(1))
     expect(body(m, 'POST')).toEqual({
       slug: 'docs',
       name: 'Docs',
       url: 'https://docs.example.org/mcp',
-      authMode: 'shared',
       enabled: true,
       oauth: { clientId: '' },
       scopes: [],
@@ -264,7 +256,6 @@ describe('Connectors (admin)', () => {
       slug: 'wiki',
       name: 'Wiki',
       url: 'https://wiki.example.org/mcp',
-      authMode: 'shared',
       enabled: true,
       oauth: { clientId: '' },
       scopes: [],
@@ -315,40 +306,6 @@ describe('Connectors (admin)', () => {
     expect(rows[0].textContent).toContain('3 people connected')
   })
 
-  it('connects the shared account by sending the admin to the vendor', async () => {
-    const assign = vi.fn()
-    vi.stubGlobal('location', { ...window.location, origin: window.location.origin, assign })
-    const signIn = 'https://wiki.example.org/oauth/authorize?state=s-9'
-    const m = api({
-      'GET /api/admin/connectors': { body: { items: [chat, { ...wiki, shared: { connected: false } }] } },
-      'POST /api/admin/connectors/c-2/connect': { body: { authorizeUrl: signIn } },
-    })
-    renderApp('/settings/connectors')
-    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
-    expect(rows[2].textContent).toContain('Shared account not connected')
-    await userEvent.click(within(rows[2]).getByRole('button', { name: 'Connect the shared account for Wiki' }))
-    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(signIn))
-    expect(m.count('POST', '/api/admin/connectors/c-2/connect')).toBe(1)
-  })
-
-  it('disconnects the shared account after asking', async () => {
-    const shared = { ...wiki, connections: 1, shared: { connected: true, connectedBy: 'alice', status: 'active' } }
-    const m = api({
-      'GET /api/admin/connectors': [{ body: { items: [chat, shared] } }, { body: { items: [chat, { ...wiki, shared: { connected: false } }] } }],
-      'DELETE /api/admin/connectors/c-2/connection': { status: 204 },
-    })
-    renderApp('/settings/connectors')
-    const rows = within(await screen.findByRole('table', { name: 'Connectors' })).getAllByRole('row').slice(1)
-    expect(rows[2].textContent).toContain('Shared account connected by alice')
-    expect(within(rows[2]).queryByRole('button', { name: /Connect the shared account/ })).toBeNull()
-    await userEvent.click(within(rows[2]).getByRole('button', { name: 'Disconnect the shared account for Wiki' }))
-    const ask = await screen.findByRole('alertdialog', { name: 'Disconnect the shared account for Wiki?' })
-    expect(m.count('DELETE', '/api/admin/connectors/c-2/connection')).toBe(0)
-    await userEvent.click(within(ask).getByRole('button', { name: 'Disconnect' }))
-    await vi.waitFor(() => expect(m.count('DELETE', '/api/admin/connectors/c-2/connection')).toBe(1))
-    expect(await screen.findByText('Shared account not connected')).toBeTruthy()
-  })
-
   it('says where sign-ins go, and warns when the server now names another sign-in server', async () => {
     const moved = { ...chat, connections: 2, oauth: { ...chat.oauth, issuer: 'https://login.example.org', serverMoved: true } }
     api({ 'GET /api/admin/connectors': { body: { items: [moved, wiki] } } })
@@ -358,13 +315,6 @@ describe('Connectors (admin)', () => {
     await userEvent.click(within(rows[0]).getByRole('button', { name: 'Edit Team chat' }))
     expect(await screen.findByText(/Sign-ins go to https:\/\/login\.example\.org/)).toBeTruthy()
     expect(screen.getByText(/Saving it trusts the new sign-in server/)).toBeTruthy()
-  })
-
-  it('offers to reconnect a shared account the vendor no longer accepts', async () => {
-    api({ 'GET /api/admin/connectors': { body: { items: [{ ...wiki, shared: { connected: true, connectedBy: 'alice', status: 'needs_reauth' } }] } } })
-    renderApp('/settings/connectors')
-    expect(await screen.findByText(/Shared account needs reconnecting/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Reconnect the shared account for Wiki' })).toBeTruthy()
   })
 
   it('refreshes the tool list from the server, keeping what was typed, and saves at the new rev', async () => {

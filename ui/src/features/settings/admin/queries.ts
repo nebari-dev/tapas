@@ -8,11 +8,9 @@ import {
   adminResetAiSettings,
   adminSetAiSettings,
   adminBackUpNow,
-  adminConnectConnector,
   adminConnectorCatalog,
   adminCreateConnector,
   adminDeleteConnector,
-  adminDisconnectConnector,
   adminListConnectors,
   adminRefreshConnectorTools,
   adminUpdateConnector,
@@ -311,24 +309,6 @@ export function useDeleteConnector() {
       await adminDeleteConnector({ path: { id }, throwOnError: true })
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.connectors }),
-  })
-}
-
-/** Start connecting a shared connector's one account: answers the vendor's sign-in address. */
-export function useConnectShared() {
-  return useMutation({
-    mutationFn: async (id: string) => (await adminConnectConnector({ path: { id }, throwOnError: true })).data.authorizeUrl,
-  })
-}
-
-/** Disconnect a shared connector's one account. */
-export function useDisconnectShared() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (id: string) => {
-      await adminDisconnectConnector({ path: { id }, throwOnError: true })
-    },
-    onSettled: () => void qc.invalidateQueries({ queryKey: keys.connectors }),
   })
 }
 

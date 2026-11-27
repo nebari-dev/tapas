@@ -13,7 +13,6 @@ const chat = {
   catalogId: '',
   slug: 'chat',
   name: 'Team chat',
-  authMode: 'user',
   connected: true,
   status: 'active',
   connectedAt: '2026-11-20T10:00:00Z',
@@ -25,13 +24,11 @@ const chat = {
 }
 const tickets = { ...chat, id: 'c-2', slug: 'tickets', name: 'Tickets', connected: false, status: undefined, connectedAt: undefined }
 const docs = { ...chat, id: 'c-3', slug: 'docs', name: 'Docs', status: 'needs_reauth' }
-const wiki = { ...chat, id: 'c-4', slug: 'wiki', name: 'Wiki', authMode: 'shared' }
-const crm = { ...tickets, id: 'c-5', slug: 'crm', name: 'CRM', authMode: 'shared' }
 
 function api(routes: Parameters<typeof mockApi>[0] = {}) {
   return mockApi({
     'GET /api/me': { body: me },
-    'GET /api/connectors': { body: { items: [chat, tickets, docs, wiki, crm] } },
+    'GET /api/connectors': { body: { items: [chat, tickets, docs] } },
     ...routes,
   })
 }
@@ -44,7 +41,7 @@ describe('Connected accounts', () => {
     renderApp('/settings/connections')
     expect((await screen.findByRole('link', { name: 'Connected accounts' })).getAttribute('aria-current')).toBe('page')
     const list = await screen.findByRole('list', { name: 'Connected accounts' })
-    expect(within(list).getAllByRole('listitem')).toHaveLength(5)
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3)
     expect((await row('Team chat')).textContent).toContain('Connected since 20 Nov 2026')
     expect((await row('Team chat')).textContent).toContain('Tools: list_channels; post_message asks you first')
     expect(within(await row('Team chat')).getByRole('button', { name: 'Disconnect Team chat' })).toBeTruthy()
@@ -59,17 +56,6 @@ describe('Connected accounts', () => {
     renderApp('/settings/connections')
     expect((await row('Slack')).querySelector('.mark')).not.toBeNull()
     expect((await row('Tickets')).querySelector('svg.lucide-plug')).not.toBeNull()
-  })
-
-  it('shows a company-wide connector without a button: the admin connects it', async () => {
-    api()
-    renderApp('/settings/connections')
-    const w = await row('Wiki')
-    expect(w.textContent).toContain('Connected by your admin')
-    expect(within(w).queryByRole('button')).toBeNull()
-    const c = await row('CRM')
-    expect(c.textContent).toContain('Not connected yet, ask your admin')
-    expect(within(c).queryByRole('button')).toBeNull()
   })
 
   it('says so when there is nothing to connect', async () => {

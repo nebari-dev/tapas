@@ -11,7 +11,6 @@ const tickets = {
   id: 'c-2',
   slug: 'tickets',
   name: 'Tickets',
-  authMode: 'user',
   connected: true,
   status: 'active',
   connectedAt: '2026-11-26T10:00:00Z',
@@ -61,12 +60,5 @@ describe('Connection callback', () => {
     expect(document.body.textContent).not.toContain('The user said no')
     expect(m.count('POST', '/api/connectors/oauth/complete')).toBe(0)
     expect(location()).toBe('/settings/connections/callback/tickets')
-  })
-
-  it('sends a company-wide sign-in back to the Connectors page', async () => {
-    mockApi({ 'GET /api/me': { body: me }, 'POST /api/connectors/oauth/complete': { body: { connector: { ...tickets, authMode: 'shared' } } } })
-    renderApp(CALLBACK)
-    expect(await screen.findByText('Tickets is connected')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Back to Connectors' }).getAttribute('href')).toBe('/settings/connectors')
   })
 })

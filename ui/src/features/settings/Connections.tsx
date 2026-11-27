@@ -18,7 +18,6 @@ function day(iso: string): string {
 
 /** What the person sees as the connection's state, and its tone. */
 function statusOf(c: MyConnector): { text: string; tone: 'ok' | 'warn' | 'off' } {
-  if (c.authMode === 'shared') return c.connected ? { text: 'Connected by your admin', tone: 'ok' } : { text: 'Not connected yet, ask your admin', tone: 'off' }
   if (!c.connected) return { text: 'Not connected', tone: 'off' }
   if (c.status === 'needs_reauth') return { text: 'Needs reconnecting: the service no longer accepts it', tone: 'warn' }
   return { text: c.connectedAt ? `Connected since ${day(c.connectedAt)}` : 'Connected', tone: 'ok' }
@@ -46,37 +45,33 @@ function ConnectionRow({ c, onError }: { c: MyConnector; onError: (msg: string) 
     onError('')
     connect.mutate(c.id, { onSuccess: (url) => window.location.assign(url), onError: (err) => onError(problemText(err)) })
   }
-  const user = c.authMode === 'user'
   return (
     <li className="con-row" aria-label={c.name}>
       <ConnectorLogo catalogId={c.catalogId} />
       <div className="con-main">
         <h3 className="con-name">{c.name}</h3>
-        <span className="faint small">{user ? 'You sign in with your own account' : 'One account for the whole company'}</span>
         <span className={`con-status ${st.tone}`}>{st.text}</span>
         {tools && <span className="faint small con-tools-line">{tools}</span>}
       </div>
-      {user && (
-        <div className="con-row-act row">
-          {c.connected && (
-            <Button ref={btn} size="sm" variant="ghost" icon={Unlink} aria-label={`Disconnect ${c.name}`} onClick={() => setAsking(true)}>
-              Disconnect
-            </Button>
-          )}
-          {(!c.connected || c.status === 'needs_reauth') && (
-            <Button
-              size="sm"
-              variant={c.connected ? 'primary' : undefined}
-              icon={Link2}
-              aria-label={`${c.connected ? 'Reconnect' : 'Connect'} ${c.name}`}
-              disabled={connect.isPending}
-              onClick={go}
-            >
-              {c.connected ? 'Reconnect' : 'Connect'}
-            </Button>
-          )}
-        </div>
-      )}
+      <div className="con-row-act row">
+        {c.connected && (
+          <Button ref={btn} size="sm" variant="ghost" icon={Unlink} aria-label={`Disconnect ${c.name}`} onClick={() => setAsking(true)}>
+            Disconnect
+          </Button>
+        )}
+        {(!c.connected || c.status === 'needs_reauth') && (
+          <Button
+            size="sm"
+            variant={c.connected ? 'primary' : undefined}
+            icon={Link2}
+            aria-label={`${c.connected ? 'Reconnect' : 'Connect'} ${c.name}`}
+            disabled={connect.isPending}
+            onClick={go}
+          >
+            {c.connected ? 'Reconnect' : 'Connect'}
+          </Button>
+        )}
+      </div>
       {asking && (
         <Confirm
           title={`Disconnect ${c.name}?`}

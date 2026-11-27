@@ -629,9 +629,6 @@ h2.part-title>.part-icon{width:20px;height:20px}
   .con-tools tbody th,.con-tools tbody td{display:block;border-bottom:none}
   .con-tools tbody td{padding-top:0}
 }
-.con-auth-sub{display:none}
-/* By the table's own width: it sits next to the sidebar, so the window width says too little. */
-@container (max-width:600px){.atable .con-auth{display:none}.con-auth-sub{display:block}}
 p.sub.con-setup{margin:0 0 16px}
 .con-add-tool .btn{flex:none}
 /* Settings, Connected accounts: one row per connector, the buttons keep their words at every width. */

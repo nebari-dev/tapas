@@ -101,7 +101,6 @@ export type AdminAppsOutputBody = {
 
 export type AdminConnector = {
     allowedGroups: Array<string> | null;
-    authMode: 'user' | 'shared';
     catalogId: string;
     /**
      * How many accounts are connected
@@ -117,10 +116,6 @@ export type AdminConnector = {
     redirectUri?: string;
     rev: string;
     scopes: Array<string> | null;
-    /**
-     * The account everyone's calls use; only in shared mode
-     */
-    shared?: SharedConnection;
     slug: string;
     toolModes: {
         [key: string]: string;
@@ -431,7 +426,6 @@ export type Bundle = {
 };
 
 export type CatalogEntry = {
-    authMode: 'user' | 'shared';
     /**
      * The vendor's documentation of its MCP server
      */
@@ -517,10 +511,6 @@ export type ConnectorInput = {
      * Groups whose members may use it; * is everyone; empty is nobody
      */
     allowedGroups?: Array<string> | null;
-    /**
-     * user: each person connects their own account; shared: one account an admin connects, used for everyone allowed
-     */
-    authMode?: 'user' | 'shared';
     /**
      * The catalogue entry this starts from; what is left out is taken from it. Fixed once created
      */
@@ -1323,10 +1313,6 @@ export type Me = {
 
 export type MyConnector = {
     /**
-     * user: you connect your own account; shared: an admin connected one account for everyone
-     */
-    authMode: 'user' | 'shared';
-    /**
      * The catalogue entry it was made from, for its vendor's logo; empty for a custom one
      */
     catalogId: string;
@@ -1335,7 +1321,7 @@ export type MyConnector = {
      */
     connectUrl: string;
     /**
-     * A connection exists (yours, or the shared one)
+     * You connected your account
      */
     connected: boolean;
     connectedAt?: string;
@@ -1894,15 +1880,6 @@ export type SharedApp = {
     thumbnail?: Thumbnail;
     url: string;
     via: string;
-};
-
-export type SharedConnection = {
-    connected: boolean;
-    /**
-     * The admin who connected it
-     */
-    connectedBy?: string;
-    status?: 'active' | 'needs_reauth';
 };
 
 export type SharedOutputBody = {
@@ -3608,104 +3585,6 @@ export type AdminUpdateConnectorResponses = {
 };
 
 export type AdminUpdateConnectorResponse = AdminUpdateConnectorResponses[keyof AdminUpdateConnectorResponses];
-
-export type AdminConnectConnectorData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/admin/connectors/{id}/connect';
-};
-
-export type AdminConnectConnectorErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ErrorModel;
-    /**
-     * Forbidden
-     */
-    403: ErrorModel;
-    /**
-     * Not Found
-     */
-    404: ErrorModel;
-    /**
-     * Conflict
-     */
-    409: ErrorModel;
-    /**
-     * Unprocessable Entity
-     */
-    422: ErrorModel;
-    /**
-     * Internal Server Error
-     */
-    500: ErrorModel;
-    /**
-     * Bad Gateway
-     */
-    502: ErrorModel;
-};
-
-export type AdminConnectConnectorError = AdminConnectConnectorErrors[keyof AdminConnectConnectorErrors];
-
-export type AdminConnectConnectorResponses = {
-    /**
-     * OK
-     */
-    200: AuthorizeUrl;
-};
-
-export type AdminConnectConnectorResponse = AdminConnectConnectorResponses[keyof AdminConnectConnectorResponses];
-
-export type AdminDisconnectConnectorData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/admin/connectors/{id}/connection';
-};
-
-export type AdminDisconnectConnectorErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ErrorModel;
-    /**
-     * Forbidden
-     */
-    403: ErrorModel;
-    /**
-     * Not Found
-     */
-    404: ErrorModel;
-    /**
-     * Conflict
-     */
-    409: ErrorModel;
-    /**
-     * Unprocessable Entity
-     */
-    422: ErrorModel;
-    /**
-     * Internal Server Error
-     */
-    500: ErrorModel;
-};
-
-export type AdminDisconnectConnectorError = AdminDisconnectConnectorErrors[keyof AdminDisconnectConnectorErrors];
-
-export type AdminDisconnectConnectorResponses = {
-    /**
-     * No Content
-     */
-    204: void;
-};
-
-export type AdminDisconnectConnectorResponse = AdminDisconnectConnectorResponses[keyof AdminDisconnectConnectorResponses];
 
 export type AdminRefreshConnectorToolsData = {
     body?: never;

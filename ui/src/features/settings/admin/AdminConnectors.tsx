@@ -1,4 +1,4 @@
-import { ExternalLink, Link2, Pencil, Plus, RefreshCw, Trash2, Unlink } from 'lucide-react'
+import { ExternalLink, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import type { AdminConnector, CatalogEntry, ConnectorInput } from '../../../api'
 import { Banner } from '../../../components/Banner'
@@ -11,30 +11,15 @@ import { Switch } from '../../../components/Switch'
 import { ApiError, fieldErrors, problemText } from '../../../lib/http'
 import { ConnectorLogo } from '../../../components/KindLogo'
 import {
-  useConnectShared,
   useConnectorCatalog,
   useConnectors,
   useCreateConnector,
   useDeleteConnector,
-  useDisconnectShared,
   useIsAdmin,
   useRefreshConnectorTools,
   useReloadConnectors,
   useUpdateConnector,
 } from './queries'
-
-type AuthMode = AdminConnector['authMode']
-
-const AUTH_MODES: { value: AuthMode; label: string }[] = [
-  { value: 'user', label: 'Each person signs in' },
-  { value: 'shared', label: 'One shared account' },
-]
-
-const AUTH_HINTS: Record<AuthMode, string> = {
-  user: 'Each person connects their own account and their agents act as them at the vendor.',
-  shared:
-    'One account connected by an admin is used for everyone allowed. Everything done through it shows at the vendor as that account, so use a service account.',
-}
 
 const TOOL_MODES = [
   { value: 'read', label: 'Read' },
@@ -49,15 +34,12 @@ const DEFAULT_MODE: ToolMode = 'write'
 
 const isConflict = (err: unknown) => err instanceof ApiError && err.status === 409
 
-const authLabel = (m: AuthMode) => AUTH_MODES.find((o) => o.value === m)?.label ?? m
-
 /** The form's fields; lists are kept as the text typed. */
 interface Draft {
   catalogId: string
   slug: string
   name: string
   url: string
-  authMode: AuthMode
   enabled: boolean
   clientId: string
   authorizeUrl: string
@@ -76,7 +58,6 @@ function draftOf(c: AdminConnector): Draft {
     slug: c.slug,
     name: c.name,
     url: c.url,
-    authMode: c.authMode,
     enabled: c.enabled,
     clientId: c.oauth.clientId,
     authorizeUrl: c.oauth.authorizeUrl ?? '',
@@ -94,7 +75,6 @@ function draftFrom(e: CatalogEntry | null): Draft {
     slug: e?.slug ?? '',
     name: e?.name ?? '',
     url: e?.url ?? '',
-    authMode: e?.authMode ?? 'user',
     enabled: true,
     clientId: '',
     authorizeUrl: e?.oauth.authorizeUrl ?? '',
@@ -132,7 +112,6 @@ function inputOf(d: Draft, secret: string, rev?: string): ConnectorInput {
     slug: d.slug.trim(),
     name: d.name.trim(),
     url: d.url.trim(),
-    authMode: d.authMode,
     enabled: d.enabled,
     oauth,
     scopes: words(d.scopes),
@@ -254,7 +233,7 @@ function ToolModes({
   )
 }
 
-/** Reads the tool list from the connector's server again, with the shared account or the admin's own. */
+/** Reads the tool list from the connector's server again, signed in as the admin. */
 function RefreshTools({ id, onFresh }: { id: string; onFresh: (c: AdminConnector) => void }) {
   const refresh = useRefreshConnectorTools()
   return (
@@ -264,7 +243,7 @@ function RefreshTools({ id, onFresh }: { id: string; onFresh: (c: AdminConnector
           {refresh.isPending ? 'Refreshing tools' : 'Refresh tools'}
         </Button>
         <span className="hint">
-          {refresh.isSuccess ? 'Read just now. New tools are listed below; save to keep the modes.' : 'Reads the list again from the server, signed in as the shared account or as you.'}
+          {refresh.isSuccess ? 'Read just now. New tools are listed below; save to keep the modes.' : 'Reads the list again from the server, signed in as you. Connect your own account first.'}
         </span>
       </div>
       {refresh.isError && <span className="hint err">{problemText(refresh.error)}</span>}
@@ -306,7 +285,7 @@ function ConnectorForm({
   const remove = useDeleteConnector()
   const [asking, setAsking] = useState(false)
   const save = existing ? update : create
-  const ids = { name: useId(), slug: useId(), url: useId(), auth: useId(), id: useId(), secret: useId(), scopes: useId(), groups: useId() }
+  const ids = { name: useId(), slug: useId(), url: useId(), id: useId(), secret: useId(), scopes: useId(), groups: useId() }
   const [d, setD] = useState(start)
   const [secret, setSecret] = useState('')
   // The connector as a tool refresh answered it: newer tools and rev than existing.
@@ -396,14 +375,6 @@ function ConnectorForm({
           />
           {existing && <span className="hint">Changing it disconnects everyone who connected.</span>}
           {err('url')}
-        </div>
-        <div className="field" role="group" aria-labelledby={ids.auth}>
-          <span id={ids.auth} className="field-label">
-            Who signs in
-          </span>
-          <Segmented label="Who signs in" value={d.authMode} options={AUTH_MODES} onChange={(v) => set('authMode', v)} />
-          <span className="hint">{AUTH_HINTS[d.authMode]}</span>
-          {existing && <span className="hint">Changing it disconnects everyone who connected.</span>}
         </div>
         <div className="field">
           <span className="field-label">Redirect address</span>
@@ -507,63 +478,13 @@ function ConnectorForm({
 }
 
 /** The catalogue to start from, or an empty form for any MCP server. */
-/** Who is connected: the shared account's state, or how many people connected their own. */
+/** How many people connected their own account. */
 function connectionsOf(c: AdminConnector): { text: string; tone: 'ok' | 'warn' | 'off' } {
   if (c.oauth.serverMoved) {
     return { text: 'Its server now sends sign-ins to another server: nobody can connect until you check and save it', tone: 'warn' }
   }
-  if (c.authMode === 'user') {
-    const n = c.connections
-    return { text: n === 0 ? 'Nobody connected yet' : n === 1 ? '1 person connected' : `${n} people connected`, tone: n > 0 ? 'ok' : 'off' }
-  }
-  const s = c.shared
-  if (!s?.connected) return { text: 'Shared account not connected', tone: 'off' }
-  if (s.status === 'needs_reauth') return { text: 'Shared account needs reconnecting: the service no longer accepts it', tone: 'warn' }
-  return { text: s.connectedBy ? `Shared account connected by ${s.connectedBy}` : 'Shared account connected', tone: 'ok' }
-}
-
-/** Connect, reconnect or disconnect a shared connector's one account. */
-function SharedAccount({ c, onError }: { c: AdminConnector; onError: (msg: string) => void }) {
-  const connect = useConnectShared()
-  const disconnect = useDisconnectShared()
-  const [asking, setAsking] = useState(false)
-  const connected = !!c.shared?.connected
-  const stale = c.shared?.status === 'needs_reauth'
-  const go = () => connect.mutate(c.id, { onSuccess: (url) => window.location.assign(url), onError: (err) => onError(problemText(err)) })
-  return (
-    <>
-      {connected && (
-        <Button size="sm" variant="ghost" icon={Unlink} aria-label={`Disconnect the shared account for ${c.name}`} onClick={() => setAsking(true)}>
-          <span className="atable-act-label">Disconnect account</span>
-        </Button>
-      )}
-      {(!connected || stale) && (
-        <Button
-          size="sm"
-          variant={stale ? 'primary' : undefined}
-          icon={Link2}
-          aria-label={`${stale ? 'Reconnect' : 'Connect'} the shared account for ${c.name}`}
-          disabled={connect.isPending}
-          onClick={go}
-        >
-          <span className="atable-act-label">{stale ? 'Reconnect account' : 'Connect account'}</span>
-        </Button>
-      )}
-      {asking && (
-        <Confirm
-          title={`Disconnect the shared account for ${c.name}?`}
-          body={`Agents stop using ${c.name} for everyone at once, until an admin connects an account again.`}
-          confirm="Disconnect"
-          icon={Unlink}
-          danger
-          busy={disconnect.isPending}
-          error={disconnect.isError ? disconnect.error : undefined}
-          onConfirm={() => disconnect.mutate(c.id, { onSuccess: () => setAsking(false) })}
-          onCancel={() => setAsking(false)}
-        />
-      )}
-    </>
-  )
+  const n = c.connections
+  return { text: n === 0 ? 'Nobody connected yet' : n === 1 ? '1 person connected' : `${n} people connected`, tone: n > 0 ? 'ok' : 'off' }
 }
 
 function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () => void; onError: (msg: string) => void }) {
@@ -579,17 +500,14 @@ function ConnectorRow({ c, onEdit, onError }: { c: AdminConnector; onEdit: () =>
           <div className="atable-name">
             <b>{c.name}</b>
             <span className="mono faint small">{c.slug}</span>
-            <span className="faint small con-auth-sub">{authLabel(c.authMode)}</span>
             <span className={`small con-status ${conn.tone}`}>{conn.text}</span>
           </div>
         </div>
       </th>
-      <td className="con-auth">{authLabel(c.authMode)}</td>
       <td>
         <Switch label={c.enabled ? 'On' : 'Off'} name={`Turn on ${c.name}`} checked={c.enabled} disabled={update.isPending} onChange={turn} />
       </td>
       <td className="col-act">
-        {c.authMode === 'shared' && <SharedAccount c={c} onError={onError} />}
         <Button size="sm" variant="ghost" icon={Pencil} aria-label={`Edit ${c.name}`} onClick={onEdit}>
           <span className="atable-act-label">Edit</span>
         </Button>
@@ -607,11 +525,9 @@ function SetupRow({ e, disabled, onSetUp }: { e: CatalogEntry; disabled: boolean
           <ConnectorLogo catalogId={e.id} />
           <div className="atable-name">
             <b>{e.name}</b>
-            <span className="faint small con-auth-sub">{authLabel(e.authMode)}</span>
           </div>
         </div>
       </th>
-      <td className="con-auth">{authLabel(e.authMode)}</td>
       <td className="faint">Not set up</td>
       <td className="col-act">
         <Button size="sm" icon={Plus} aria-label={`Set up ${e.name}`} disabled={disabled} onClick={onSetUp}>
@@ -626,7 +542,8 @@ type Open = { kind: 'new'; entry: CatalogEntry | null } | { kind: 'edit'; id: st
 
 /**
  * Settings, Connectors (platform admins): the MCP servers agents may reach
- * through Tapas, who signs in to each, and which of their tools only read.
+ * through Tapas (each person connects their own account), and which of their
+ * tools only read.
  */
 export function AdminConnectors() {
   const admin = useIsAdmin()
@@ -688,9 +605,6 @@ export function AdminConnectors() {
           <thead>
             <tr>
               <th scope="col">Connector</th>
-              <th scope="col" className="con-auth">
-                Who signs in
-              </th>
               <th scope="col">Status</th>
               <th scope="col" className="col-act">
                 <span className="sr-only">Actions</span>

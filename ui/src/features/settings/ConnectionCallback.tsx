@@ -18,11 +18,11 @@ function answerOf(search: string): Answer {
   return { kind: 'code', state, code, iss: q.get('iss') ?? '' }
 }
 
-function Back({ shared }: { shared?: boolean }) {
+function Back() {
   return (
-    <Link className="btn" to={shared ? '/settings/connectors' : '/settings/connections'}>
+    <Link className="btn" to="/settings/connections">
       <ArrowLeft size={16} aria-hidden="true" />
-      {shared ? 'Back to Connectors' : 'Back to Connected accounts'}
+      Back to Connected accounts
     </Link>
   )
 }
@@ -58,9 +58,7 @@ export function ConnectionCallback() {
   else if (complete.isSuccess)
     body = (
       <Banner tone="ok" title={`${complete.data.name} is connected`}>
-        {complete.data.authMode === 'shared'
-          ? 'Everyone allowed to use it can now use its tools through Tapas.'
-          : 'Your agents can now use its tools as you, through Tapas.'}
+        Your agents can now use its tools as you, through Tapas.
       </Banner>
     )
   else body = <div className="muted">Finishing the sign-in</div>
@@ -71,7 +69,7 @@ export function ConnectionCallback() {
         {body}
         {(answer.kind !== 'code' || !complete.isPending) && (
           <div className="row">
-            <Back shared={complete.data?.authMode === 'shared'} />
+            <Back />
           </div>
         )}
       </Card>
