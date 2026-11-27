@@ -12,6 +12,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/nebari-dev/javo/internal/ai/agentproxy"
 	"github.com/nebari-dev/javo/internal/ai/aitest"
 	"github.com/nebari-dev/javo/internal/ai/provider"
 	"github.com/nebari-dev/javo/internal/auth/local"
@@ -360,6 +361,46 @@ func TestMemoryRefusesWritesWithAnSSNAndSendsTheInstructions(t *testing.T) {
 			}
 			if tt.wantPrompt && prompt != extractionInstructions {
 				t.Errorf("prompt = %q, want the extraction instructions", prompt)
+			}
+		})
+	}
+}
+
+// The agent model proxy carries memory only when a memory service is given:
+// with none its Memory is a nil interface, so the proxy leaves memory off.
+func TestAgentModelGetsMemoryOnlyWhenOn(t *testing.T) {
+	key, err := secrets.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r provider.Registry
+	r.Register("openai", func(provider.Config) (provider.Provider, error) { return aitest.New(), nil })
+	cfg := config.AICfg{Enabled: true, Provider: "openai", Model: "m"}
+	live := aiSettings(cfg, "a-key", storetest.New(t), key, &r)
+	svc := Memory(config.MemoryCfg{Enabled: true, URL: "http://127.0.0.1:1"}, "k")
+	if svc == nil {
+		t.Fatal("Memory with memory on = nil")
+	}
+	tests := []struct {
+		name       string
+		mem        agentproxy.Memory
+		cache      *agentproxy.RecallCache
+		wantMemory bool
+	}{
+		{"no memory leaves the proxy without memory or recall", nil, nil, false},
+		{"a memory service gives the proxy memory, recall and the timeout", svc, agentproxy.NewRecallCache(), true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := AgentModel(context.Background(), cfg, live, tc.mem, tc.cache, 2*time.Second)
+			if p == nil {
+				t.Fatal("AgentModel = nil")
+			}
+			if (p.Memory != nil) != tc.wantMemory || (p.Recall != nil) != tc.wantMemory {
+				t.Fatalf("Memory set %v, Recall set %v, want both %v", p.Memory != nil, p.Recall != nil, tc.wantMemory)
+			}
+			if tc.wantMemory && p.RecallTimeout != 2*time.Second {
+				t.Fatalf("RecallTimeout = %v, want 2s", p.RecallTimeout)
 			}
 		})
 	}

@@ -165,6 +165,9 @@ type Options struct {
 	PublicURL string
 	// AgentModel serves the coding agents' model endpoint.
 	AgentModel *agentproxy.Proxy
+	// Memory, when set, is the memory store of the agent model endpoint's
+	// proxy, default or given, with a recall cache of its own.
+	Memory agentproxy.Memory
 	// Agent is the admin's agent model and template.
 	Agent apps.AgentConfig
 	// Usage reads a home's usage and groups tells a person's groups; nil
@@ -288,6 +291,9 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 		if o.Agent.Model == nil {
 			o.Agent.Model = live.AgentModel
 		}
+	}
+	if o.Memory != nil && o.AgentModel != nil {
+		o.AgentModel.Memory, o.AgentModel.Recall = o.Memory, agentproxy.NewRecallCache()
 	}
 	rv := authn.NewRevalidator(providers, sessions, people, 0, o.Now)
 	var exp exposure.Backend = exposurepath.New(o.Urls)

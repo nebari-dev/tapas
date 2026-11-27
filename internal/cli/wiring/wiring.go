@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/tink-crypto/tink-go/v2/tink"
@@ -306,15 +307,19 @@ func AIService(ctx context.Context, c config.AICfg, live *aisettings.Live, db *s
 // AgentModel is the coding agents' model endpoint, or nil while AI is off.
 // It forwards with the key of the settings in force; spend is capped at the
 // provider, not here. While those settings give no agent model
-// (config.AICfg.AgentModel) it answers that there is none.
-func AgentModel(ctx context.Context, c config.AICfg, live *aisettings.Live) *agentproxy.Proxy {
+// (config.AICfg.AgentModel) it answers that there is none. A nil mem leaves
+// memory off for these calls; otherwise cache and recallTimeout bound recall.
+func AgentModel(ctx context.Context, c config.AICfg, live *aisettings.Live, mem agentproxy.Memory, cache *agentproxy.RecallCache, recallTimeout time.Duration) *agentproxy.Proxy {
 	if live == nil {
 		return nil
 	}
 	if live.AgentModel(ctx) == "" {
 		slog.Info("the coding agents' model endpoint has no model now", "why", "it needs provider openai (any OpenAI-compatible server) and ai.agent.enabled, in the config or in Settings > AI")
 	}
-	return &agentproxy.Proxy{Upstream: live.Upstream, MaxRequestBytes: c.Agent.MaxRequestBytes}
+	return &agentproxy.Proxy{
+		Upstream: live.Upstream, MaxRequestBytes: c.Agent.MaxRequestBytes,
+		Memory: mem, Recall: cache, RecallTimeout: recallTimeout,
+	}
 }
 
 // JobAccess is the only place the job reconciler's access rule is chosen:
