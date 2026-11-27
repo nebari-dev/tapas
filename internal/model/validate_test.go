@@ -198,6 +198,15 @@ func TestProxyHeadersDenyList(t *testing.T) {
 	}).Validate())
 }
 
+// The gateway alone names the viewer to an app, under X-Tapas-*; a template
+// cannot set one, in any case or with "_" for "-".
+func TestProxyHeadersCannotNameTheViewer(t *testing.T) {
+	for _, key := range []string{"X-Tapas-User", "x-tapas-groups", "X_Tapas_Email", "X-TAPAS-ANYTHING"} {
+		err := newTemplate(func(s *model.TemplateSpec) { s.ProxyHeaders = map[string]string{key: "x"} }).Validate()
+		wantInvalid(t, err, "spec.proxyHeaders", "proxyHeaders may not set X-Tapas- headers: the gateway sets them to name the viewer")
+	}
+}
+
 func TestTemplateDefaults(t *testing.T) {
 	s := newTemplate(func(s *model.TemplateSpec) { s.Kind, s.Port = "jupyterlab", 8888 })
 	s.ApplyDefaults()
