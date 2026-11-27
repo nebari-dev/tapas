@@ -2,6 +2,8 @@ package wiring
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -16,6 +18,7 @@ import (
 	"github.com/nebari-dev/javo/internal/auth/session"
 	"github.com/nebari-dev/javo/internal/config"
 	"github.com/nebari-dev/javo/internal/gateway/apitest"
+	"github.com/nebari-dev/javo/internal/memory"
 	"github.com/nebari-dev/javo/internal/model"
 	"github.com/nebari-dev/javo/internal/secrets"
 	"github.com/nebari-dev/javo/internal/storage/ids"
@@ -282,5 +285,82 @@ func TestMemoryIsNilWhenOffAndTalksToTheConfiguredURLWithTheKeyWhenOn(t *testing
 	}
 	if gotKey != "the-admin-key" || gotPath != "/memories" {
 		t.Errorf("mem0 saw key %q on path %q, want the key on /memories", gotKey, gotPath)
+	}
+}
+
+// The wired memory service sends Tapas's extraction instructions on every
+// add, and refuses a write holding an SSN before anything reaches mem0, on
+// both the add path and the explicit remember path.
+func TestMemoryRefusesWritesWithAnSSNAndSendsTheInstructions(t *testing.T) {
+	var bodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		bodies = append(bodies, b)
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+	svc := Memory(config.MemoryCfg{
+		Enabled:    true,
+		URL:        srv.URL,
+		Timeout:    metav1.Duration{Duration: 5 * time.Second},
+		AddTimeout: metav1.Duration{Duration: 5 * time.Second},
+	}, "k")
+	if svc == nil {
+		t.Fatal("Memory returned nil with memory enabled")
+	}
+	ctx := context.Background()
+	const ssn = "my SSN is 123-45-6789"
+
+	tests := []struct {
+		name        string
+		call        func() error
+		wantRefused bool
+		wantPrompt  bool
+	}{
+		{"add with an SSN is refused", func() error {
+			_, err := svc.Add(ctx, "alice", "", []memory.Message{{Role: "user", Text: ssn}})
+			return err
+		}, true, false},
+		{"remember with an SSN is refused", func() error {
+			_, err := svc.Remember(ctx, "alice", ssn)
+			return err
+		}, true, false},
+		{"a clean add carries the extraction instructions", func() error {
+			_, err := svc.Add(ctx, "alice", "", []memory.Message{{Role: "user", Text: "I prefer Go"}})
+			return err
+		}, false, true},
+		{"a clean remember carries no instructions", func() error {
+			_, err := svc.Remember(ctx, "alice", "I prefer Go")
+			return err
+		}, false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bodies = nil
+			err := tt.call()
+			if tt.wantRefused {
+				if !errors.Is(err, memory.ErrWriteRefused) {
+					t.Fatalf("error = %v, want ErrWriteRefused", err)
+				}
+				if len(bodies) != 0 {
+					t.Fatalf("%d requests reached mem0, want none", len(bodies))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(bodies) != 1 {
+				t.Fatalf("%d requests, want 1", len(bodies))
+			}
+			prompt, has := bodies[0]["prompt"]
+			if has != tt.wantPrompt {
+				t.Fatalf("prompt present = %v, want %v", has, tt.wantPrompt)
+			}
+			if tt.wantPrompt && prompt != extractionInstructions {
+				t.Errorf("prompt = %q, want the extraction instructions", prompt)
+			}
+		})
 	}
 }

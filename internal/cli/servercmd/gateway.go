@@ -218,10 +218,11 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		return err
 	}
 	// Memory is built here when it is on. Recall, learning and the memories
-	// API take the service from this point. The check runs beside start, so a
-	// mem0 that is down is logged and never holds the gateway back.
+	// API take the service from this point. The start check runs beside start and
+	// keeps retrying with a growing wait until mem0 answers, so a mem0 that is
+	// down is logged and never holds the gateway back.
 	if mem := wiring.Memory(platform.Memory, on.memoryKey); mem != nil {
-		go func() { _ = memory.Probe(ctx, mem, platform.Memory.URL) }()
+		go memory.WaitReady(ctx, mem, platform.Memory.URL)
 	}
 	proposals := &plans.Service{DB: db, TTL: platform.Plans.TTL.Duration}
 	go proposals.RunJanitor(ctx, time.Minute)
