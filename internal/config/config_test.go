@@ -142,6 +142,37 @@ func TestLoadKeepsExplicitMemoryValues(t *testing.T) {
 	}
 }
 
+func TestMemoryRecallTimeoutDefaultsAndMustBePositive(t *testing.T) {
+	cases := []struct {
+		name    string
+		extra   string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"unset defaults to 2s", "", 2 * time.Second, false},
+		{"explicit value is kept", "  recallTimeout: 500ms\n", 500 * time.Millisecond, false},
+		{"explicit zero means the default", "  recallTimeout: 0s\n", 2 * time.Second, false},
+		{"negative is rejected", "  recallTimeout: -1s\n", 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := load(t, "auth:\n  local:\n    enabled: true\nexecutor: kubernetes\n"+memoryOn+tc.extra)
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "memory.recallTimeout") {
+					t.Fatalf("err = %v, want it to name memory.recallTimeout", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := p.Memory.RecallTimeout.Duration; got != tc.want {
+				t.Fatalf("recallTimeout = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMemoryIsOffByDefault(t *testing.T) {
 	p, err := load(t, "auth:\n  local:\n    enabled: true\n")
 	if err != nil {

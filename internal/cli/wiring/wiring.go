@@ -57,6 +57,7 @@ import (
 	"github.com/nebari-dev/javo/internal/jobs/engines/quarto"
 	"github.com/nebari-dev/javo/internal/memory"
 	"github.com/nebari-dev/javo/internal/model"
+	"github.com/nebari-dev/javo/internal/policy/detect"
 	"github.com/nebari-dev/javo/internal/secrets"
 	"github.com/nebari-dev/javo/internal/storage/ids"
 	"github.com/nebari-dev/javo/internal/storage/podstorage"
@@ -141,17 +142,34 @@ func CodeHosts(p config.Platform) *registry.Registry[codehost.Host] {
 	return r
 }
 
+// extractionInstructions tell mem0 what to keep from a conversation: lasting
+// facts about the person, nothing about the task at hand.
+const extractionInstructions = "Extract only lasting facts about the person themself that would help an assistant in future, unrelated conversations: their name, role, team, skills, tools and languages they prefer, how they like answers or code written, and standing instructions. Ignore the task at hand, code, file contents, errors, command output and anything the assistant suggested or did. If there is no such fact, extract nothing."
+
+// ssnCheck refuses a memory write when any message holds a US Social Security
+// number. The error names the kind of data, never the number.
+func ssnCheck(_ context.Context, _, _ string, msgs []memory.Message) error {
+	for _, m := range msgs {
+		if len(detect.SSN().Find(m.Text)) > 0 {
+			return fmt.Errorf("%w: ssn", memory.ErrWriteRefused)
+		}
+	}
+	return nil
+}
+
 // Memory is the memory service over the mem0 pack when memory.enabled, or nil
 // when it is off: then nothing talks to mem0. key is mem0's admin key; adding
 // memories gets its own, longer timeout because mem0 asks a model to extract
-// them.
+// them. Writes holding an SSN are refused, and adds carry Tapas's extraction
+// instructions.
 func Memory(c config.MemoryCfg, key string) *memory.Service {
 	if !c.Enabled {
 		return nil
 	}
 	client := memory.NewMem0(c.URL, key, &http.Client{Timeout: c.Timeout.Duration},
-		memory.WithAddClient(&http.Client{Timeout: c.AddTimeout.Duration}))
-	return memory.NewService(client, nil)
+		memory.WithAddClient(&http.Client{Timeout: c.AddTimeout.Duration}),
+		memory.WithInstructions(extractionInstructions))
+	return memory.NewService(client, ssnCheck)
 }
 
 // EnvironmentSource is the environment manager apps and jobs may pick a
