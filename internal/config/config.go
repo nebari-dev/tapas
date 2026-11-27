@@ -250,6 +250,9 @@ type MemoryCfg struct {
 	// AddTimeout bounds add calls, which are slower because mem0 runs model
 	// extraction inline; default 120s.
 	AddTimeout metav1.Duration `json:"addTimeout"`
+	// RecallTimeout bounds the memory search before an agent's model call;
+	// default 2s.
+	RecallTimeout metav1.Duration `json:"recallTimeout"`
 	// APIKeySecret is where mem0's admin key lives.
 	APIKeySecret SecretKeyRef `json:"apiKeySecret"`
 }
@@ -850,6 +853,7 @@ func (p *Platform) applyDefaults() {
 	setDur(&p.AI.Timeout, 60*time.Second)
 	setDur(&p.Memory.Timeout, 10*time.Second)
 	setDur(&p.Memory.AddTimeout, 120*time.Second)
+	setDur(&p.Memory.RecallTimeout, 2*time.Second)
 	setStr(&p.Memory.APIKeySecret.Name, "mem0-admin-key")
 	setStr(&p.Memory.APIKeySecret.Key, "api-key")
 	setDur(&p.Plans.TTL, 10*time.Minute)
@@ -964,6 +968,7 @@ func (p Platform) Validate() error {
 		}
 		positive("memory.timeout", m.Timeout)
 		positive("memory.addTimeout", m.AddTimeout)
+		positive("memory.recallTimeout", m.RecallTimeout)
 		if n := m.APIKeySecret.Name; n != "" {
 			if msgs := validation.IsDNS1123Subdomain(n); len(msgs) > 0 {
 				bad("memory.apiKeySecret.name", "%q is not a valid Secret name: %s", n, strings.Join(msgs, "; "))
