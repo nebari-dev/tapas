@@ -30,6 +30,9 @@ var (
 	// ErrInvalid is a request that would not name one person: an empty or
 	// wildcard owner, or a search limit of zero or less.
 	ErrInvalid = errors.New("invalid memory request")
+	// ErrWriteRefused is the write check refusing to let a sentence or
+	// exchange be remembered.
+	ErrWriteRefused = errors.New("memory write refused")
 )
 
 // Client is the memory store.
@@ -37,6 +40,9 @@ type Client interface {
 	Search(ctx context.Context, owner, agent, query string, limit int) ([]Memory, error)
 	// Add returns the memories mem0 stored; empty when nothing was extracted.
 	Add(ctx context.Context, owner, agent string, msgs []Message) ([]Memory, error)
+	// Remember stores text as given, with no extraction, and returns what
+	// was stored.
+	Remember(ctx context.Context, owner, text string) ([]Memory, error)
 	List(ctx context.Context, owner string) ([]Memory, error)
 	Get(ctx context.Context, id string) (Memory, error)
 	Delete(ctx context.Context, id string) error

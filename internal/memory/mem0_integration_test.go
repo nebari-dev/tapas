@@ -106,3 +106,31 @@ func TestIntegrationOneOwnersMemoriesRoundTripAndStayTheirs(t *testing.T) {
 		t.Errorf("Get after Delete = %v, want ErrNotFound", err)
 	}
 }
+
+func TestIntegrationRememberAndInstructionsAgainstTheMemPack(t *testing.T) {
+	url, key := os.Getenv("MEM0_URL"), os.Getenv("MEM0_API_KEY")
+	if url == "" || key == "" {
+		t.Skip("MEM0_URL and MEM0_API_KEY are not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	slow := &http.Client{Timeout: time.Minute}
+	c := NewMem0(url, key, nil, WithAddClient(slow), WithInstructions("Keep only lasting personal facts."))
+	owner := randomName(t, "alice")
+
+	const text = "I prefer tabs over spaces"
+	if _, err := c.Remember(ctx, owner, text); err != nil {
+		t.Fatalf("Remember: %v", err)
+	}
+	listed, err := c.List(ctx, owner)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Text != text {
+		t.Errorf("List = %+v, want exactly one memory with the text as given", listed)
+	}
+	if _, err := c.Add(ctx, owner, "", []Message{{Role: "user", Text: "My dog is called Biscuit"}}); err != nil {
+		t.Errorf("Add with instructions: %v", err)
+	}
+}

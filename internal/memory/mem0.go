@@ -34,6 +34,9 @@ type Mem0 struct {
 	key       string
 	client    *http.Client
 	addClient *http.Client
+	// prompt replaces mem0's fact extraction instructions on Add; empty
+	// means mem0's own.
+	prompt string
 }
 
 var _ Client = (*Mem0)(nil)
@@ -47,6 +50,12 @@ type Option func(*Mem0)
 // callers must not retry it blindly.
 func WithAddClient(hc *http.Client) Option {
 	return func(m *Mem0) { m.addClient = noRedirects(hc) }
+}
+
+// WithInstructions makes Add send prompt as mem0's extraction instructions,
+// replacing its defaults. Remember never sends it: it stores text unchanged.
+func WithInstructions(prompt string) Option {
+	return func(m *Mem0) { m.prompt = prompt }
 }
 
 // NewMem0 returns a client for the mem0 pack at baseURL, sending apiKey as
@@ -205,6 +214,30 @@ func (m *Mem0) Add(ctx context.Context, owner, agent string, msgs []Message) ([]
 	if agent != "" {
 		body["agent_id"] = agent
 	}
+	if m.prompt != "" {
+		body["prompt"] = m.prompt
+	}
+	return m.store(ctx, body, owner, agent)
+}
+
+// Remember stores text for the owner exactly as given: mem0 is told not to
+// extract facts from it, so what comes back from List is the sentence itself.
+// It is sent through the add client, and a timed-out call may still have
+// stored the text.
+func (m *Mem0) Remember(ctx context.Context, owner, text string) ([]Memory, error) {
+	if err := checkOwner(owner); err != nil {
+		return nil, err
+	}
+	body := map[string]any{
+		"messages": []map[string]string{{"role": "user", "content": text}},
+		"user_id":  owner,
+		"infer":    false,
+	}
+	return m.store(ctx, body, owner, "")
+}
+
+// store posts an add body and returns the memories mem0 answers with.
+func (m *Mem0) store(ctx context.Context, body map[string]any, owner, agent string) ([]Memory, error) {
 	raw, err := m.post(ctx, m.addClient, "/memories", body)
 	if err != nil {
 		return nil, err

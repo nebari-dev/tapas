@@ -46,6 +46,19 @@ func (s *Service) Add(ctx context.Context, owner, agent string, msgs []Message) 
 	return s.c.Add(ctx, owner, agent, msgs)
 }
 
+// Remember stores text for owner as given, once the write check allows it.
+func (s *Service) Remember(ctx context.Context, owner, text string) ([]Memory, error) {
+	if err := checkOwner(owner); err != nil {
+		return nil, err
+	}
+	if s.check != nil {
+		if err := s.check(ctx, owner, "", []Message{{Role: "user", Text: text}}); err != nil {
+			return nil, err
+		}
+	}
+	return s.c.Remember(ctx, owner, text)
+}
+
 // List returns owner's memories.
 func (s *Service) List(ctx context.Context, owner string) ([]Memory, error) {
 	if err := checkOwner(owner); err != nil {

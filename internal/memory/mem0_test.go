@@ -540,3 +540,69 @@ func TestMem0A404IsNotFoundOnlyForByIDCalls(t *testing.T) {
 		})
 	}
 }
+
+func TestRememberStoresTheTextAsGivenWithoutExtraction(t *testing.T) {
+	f := newFakeMem0(t)
+	c := NewMem0(f.URL, testKey, f.Client(), WithInstructions("x"))
+	got, err := c.Remember(context.Background(), "alice", "I prefer tabs over spaces")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].UserID != "alice" {
+		t.Fatalf("Remember = %+v, want one memory for alice", got)
+	}
+	r := f.requests()[0]
+	if r.Method != "POST" || r.Path != "/memories" {
+		t.Fatalf("sent %s %s", r.Method, r.Path)
+	}
+	if r.Header.Get("X-API-Key") != testKey {
+		t.Errorf("X-API-Key = %q", r.Header.Get("X-API-Key"))
+	}
+	body := jsonOf(t, r.Body)
+	if _, has := body["prompt"]; has {
+		t.Errorf("remember body carries prompt: %s", r.Body)
+	}
+	want := `{"messages":[{"role":"user","content":"I prefer tabs over spaces"}],"user_id":"alice","infer":false}`
+	if !jsonEqual(t, r.Body, want) {
+		t.Errorf("body = %s, want %s", r.Body, want)
+	}
+}
+
+func TestRememberRefusesAnOwnerThatIsNotOnePersonWithoutARequest(t *testing.T) {
+	for _, owner := range []string{"", "*", " alice", "alice\n", "   "} {
+		t.Run("owner "+owner, func(t *testing.T) {
+			f := newFakeMem0(t)
+			if _, err := f.client().Remember(context.Background(), owner, "hi"); !errors.Is(err, ErrInvalid) {
+				t.Fatalf("error = %v, want ErrInvalid", err)
+			}
+			if n := len(f.requests()); n != 0 {
+				t.Errorf("sent %d requests, want none", n)
+			}
+		})
+	}
+}
+
+func TestAddSendsTheExtractionInstructionsOnlyWhenSet(t *testing.T) {
+	tests := []struct {
+		name   string
+		opts   []Option
+		want   string
+		wantIn bool
+	}{
+		{"with instructions", []Option{WithInstructions("keep only lasting facts")}, "keep only lasting facts", true},
+		{"without instructions", nil, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeMem0(t)
+			c := NewMem0(f.URL, testKey, f.Client(), tt.opts...)
+			if _, err := c.Add(context.Background(), "alice", "", []Message{{"user", "hi"}}); err != nil {
+				t.Fatal(err)
+			}
+			got, has := jsonOf(t, f.requests()[0].Body)["prompt"]
+			if has != tt.wantIn || (has && got != tt.want) {
+				t.Errorf("prompt = %v (present %v), want %q (present %v)", got, has, tt.want, tt.wantIn)
+			}
+		})
+	}
+}

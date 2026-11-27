@@ -93,6 +93,17 @@ func (f *Fake) Add(_ context.Context, owner, agent string, msgs []memory.Message
 	return added, nil
 }
 
+// Remember stores one memory holding text as given.
+func (f *Fake) Remember(_ context.Context, owner, text string) ([]memory.Memory, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.record(Call{Method: "Remember", Owner: owner, Messages: []memory.Message{{Role: "user", Text: text}}})
+	now := time.Now().UTC()
+	m := memory.Memory{ID: newID(), Text: text, UserID: owner, CreatedAt: now, UpdatedAt: now}
+	f.memories = append(f.memories, m)
+	return []memory.Memory{m}, nil
+}
+
 func (f *Fake) List(_ context.Context, owner string) ([]memory.Memory, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

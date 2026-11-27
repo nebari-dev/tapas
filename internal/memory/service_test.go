@@ -338,3 +338,30 @@ func TestServiceCapsTheIDsInTheWarningButKeepsTheFullCount(t *testing.T) {
 		t.Errorf("record %q should hold the first 20 ids only", got)
 	}
 }
+
+func TestRememberRunsTheWriteCheck(t *testing.T) {
+	tests := []struct {
+		name         string
+		check        memory.WriteCheck
+		wantErr      error
+		wantRemember int
+	}{
+		{"a refusing check stores nothing and its error is returned", func(context.Context, string, string, []memory.Message) error { return memory.ErrWriteRefused }, memory.ErrWriteRefused, 0},
+		{"no check stores", nil, nil, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := memorytest.New()
+			got, err := memory.NewService(f, tt.check).Remember(context.Background(), "alice", "I like tea")
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tt.wantErr)
+			}
+			if n := countCalls(f, "Remember"); n != tt.wantRemember {
+				t.Errorf("store saw %d remembers, want %d", n, tt.wantRemember)
+			}
+			if tt.wantRemember == 1 && (len(got) != 1 || got[0].UserID != "alice" || got[0].Text != "I like tea") {
+				t.Errorf("got %+v, want one memory for alice", got)
+			}
+		})
+	}
+}
