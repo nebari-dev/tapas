@@ -22,6 +22,7 @@ import (
 	"github.com/nebari-dev/javo/internal/capacity/nodes"
 	"github.com/nebari-dev/javo/internal/gateway/apps"
 	"github.com/nebari-dev/javo/internal/gateway/clusterview/kubeview"
+	"github.com/nebari-dev/javo/internal/gateway/memories"
 
 	"golang.org/x/crypto/argon2"
 	corev1 "k8s.io/api/core/v1"
@@ -168,6 +169,11 @@ type Options struct {
 	// Memory, when set, is the memory store of the agent model endpoint's
 	// proxy, default or given, with a recall cache of its own.
 	Memory agentproxy.Memory
+	// Memories is the store behind /api/memories and MemoriesCache the
+	// recall cache a delete forgets; unset, the routes answer that memory is
+	// off.
+	Memories      memories.Store
+	MemoriesCache memories.Forgetter
 	// Agent is the admin's agent model and template.
 	Agent apps.AgentConfig
 	// Usage reads a home's usage and groups tells a person's groups; nil
@@ -310,7 +316,12 @@ func New(t *testing.T, o Options, objs ...any) *Fixture {
 	if o.Logs != nil {
 		runs.PodLogs = o.Logs
 	}
+	var memoriesAPI *memories.API
+	if o.Memories != nil || o.MemoriesCache != nil {
+		memoriesAPI = &memories.API{Memories: o.Memories, Cache: o.MemoriesCache}
+	}
 	srv := gateway.NewServer(gateway.Config{
+		Memories:   memoriesAPI,
 		NebiTokens: nebiTokens, Revalidator: rv,
 		Tokens: tokens, API: api, IdleStop: o.Idle,
 		Usage: o.Usage, Groups: o.Groups, Storage: o.Storage,

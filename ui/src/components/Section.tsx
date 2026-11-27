@@ -4,6 +4,7 @@ import {
   ArchiveRestore,
   Bell,
   Box,
+  Brain,
   Braces,
   CalendarClock,
   ChartColumn,
@@ -71,6 +72,7 @@ export const PART_ICONS = {
   // Settings and admin.
   tokens: KeyRound,
   secrets: LockKeyhole,
+  memories: Brain,
   usage: ChartColumn,
   hours: Hourglass,
   people: Users,

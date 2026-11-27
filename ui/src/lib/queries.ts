@@ -4,7 +4,9 @@ import {
   authOptions,
   createSecret,
   createToken,
+  deleteMemory,
   deleteSecret,
+  listMemories,
   listSecrets,
   listEnvironments,
   setWorkspaceEnv,
@@ -60,6 +62,7 @@ import {
   type SecretCreateInputBody,
   type SecretUpdateInputBody,
   type SecretView,
+  type MemoryView,
   type LaunchBody,
   type PreviewsBody,
   type SharingInputBody,
@@ -110,6 +113,7 @@ const keys = {
   previewApps: (name: string) => ['workspaces', name, 'previews', 'apps'] as const,
   tokens: ['tokens'] as const,
   secrets: ['secrets'] as const,
+  memories: ['memories'] as const,
   info: ['info'] as const,
   environments: ['environments'] as const,
 }
@@ -680,6 +684,29 @@ export function useSecrets({ enabled = true }: { enabled?: boolean } = {}) {
     queryKey: keys.secrets,
     enabled,
     queryFn: async () => (await listSecrets({ throwOnError: true })).data ?? [],
+  })
+}
+
+/** What the memory service holds about the user, newest first. It answers 404 when memory is off on the platform. */
+export function useMemories() {
+  return useQuery({
+    queryKey: keys.memories,
+    retry: false,
+    queryFn: async () => (await listMemories({ throwOnError: true })).data ?? [],
+  })
+}
+
+/** Delete one memory: its row leaves the list at once, then the list is read again. */
+export function useDeleteMemory(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      await deleteMemory({ path: { id }, throwOnError: true })
+    },
+    onSuccess: () => {
+      qc.setQueryData<MemoryView[]>(keys.memories, (list) => list?.filter((m) => m.id !== id))
+      void qc.invalidateQueries({ queryKey: keys.memories, exact: true })
+    },
   })
 }
 

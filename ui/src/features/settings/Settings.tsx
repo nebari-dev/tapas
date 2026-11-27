@@ -335,6 +335,10 @@ export function Settings() {
           <PartIcon part="secrets" size={16} />
           Secrets
         </NavLink>
+        <NavLink to="/settings/memories">
+          <PartIcon part="memories" size={16} />
+          Memories
+        </NavLink>
         {admin &&
           ADMIN.map((a) => (
             <NavLink key={a.to} to={`/settings/${a.to}`}>

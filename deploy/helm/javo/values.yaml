@@ -685,6 +685,7 @@ config:
   #   url: http://mem0-nebari-mem0.mem0.svc:8000 # the mem0 pack's Service
   #   timeout: 10s # search, list, get and delete calls
   #   addTimeout: 120s # add calls, which run model extraction inline
+  #   recallTimeout: 2s # the search before an agent's model call
   #   apiKeySecret:
   #     namespace: mem0 # required: the namespace the mem0 pack is installed in
   #     name: mem0-admin-key

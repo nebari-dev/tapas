@@ -30,6 +30,7 @@ import (
 	"github.com/nebari-dev/javo/internal/gateway/apps"
 	"github.com/nebari-dev/javo/internal/gateway/authn"
 	"github.com/nebari-dev/javo/internal/gateway/branding"
+	"github.com/nebari-dev/javo/internal/gateway/memories"
 	"github.com/nebari-dev/javo/internal/gateway/proxy"
 	"github.com/nebari-dev/javo/internal/memory"
 	"github.com/nebari-dev/javo/internal/plans"
@@ -226,8 +227,10 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 	// inside it would look like a service to the proxy.
 	var mem agentproxy.Memory
 	var cache *agentproxy.RecallCache
+	var memoriesAPI *memories.API
 	if svc := wiring.Memory(platform.Memory, on.memoryKey); svc != nil {
 		mem, cache = svc, agentproxy.NewRecallCache()
+		memoriesAPI = &memories.API{Memories: svc, Cache: cache}
 		go memory.WaitReady(ctx, svc, platform.Memory.URL)
 	}
 	proposals := &plans.Service{DB: db, TTL: platform.Plans.TTL.Duration}
@@ -287,6 +290,7 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		Diagnose:        wiring.DiagnoseEngine(),
 		Plans:           proposals,
 		AI:              aiSvc,
+		Memories:        memoriesAPI,
 		AgentModel:      wiring.AgentModel(ctx, platform.AI, aiLive, mem, cache, platform.Memory.RecallTimeout.Duration),
 		AISettings:      aiLive,
 		InternalHost:    on.internalHost,
