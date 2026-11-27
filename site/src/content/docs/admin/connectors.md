@@ -25,13 +25,12 @@ Connectors need the gateway's sessions key to survive restarts (`--sessions-key-
 1. Click **Set up**. The form is filled in from the catalogue; for an MCP server of your own, use **Add a custom MCP server**.
 2. At the vendor, create an OAuth app and give it the **redirect address** the form shows. Each connector has its own address, `https://<tapas host>/settings/connections/callback/<short name>`; the vendor must have it exactly.
 3. Paste the OAuth client id and secret. The secret is never shown again; leave the field empty to keep it. Some servers (such as Notion's) register a client themselves: leave both empty.
-4. Choose **who signs in**: each person with their own account, or **one shared account** that you connect once (everything done through it appears at the vendor as that account, so use a service account).
-5. Choose the **allowed groups**. `*` means every member; an empty list means nobody. Being a platform admin does not let you use a connector.
-6. Mark each tool **read**, **write** or **off**. Reads run straight away; writes (and any tool not marked) become a request the person approves in the browser; off tools are not offered. **Refresh tools** reads the server's current list.
+4. Choose the **allowed groups**. `*` means every member; an empty list means nobody. Being a platform admin does not let you use a connector.
+5. Mark each tool **read**, **write** or **off**. Reads run straight away; writes (and any tool not marked) become a request the person approves in the browser; off tools are not offered. **Refresh tools** reads the server's current list, signed in with your own account, so connect yours first.
 
-People then connect their accounts in **Settings, Connected accounts**.
+Every person connects their own account in **Settings, Connected accounts**, and their agents act as them at the vendor. There is no account an admin connects for everyone.
 
-Changing a connector's address, OAuth client or who signs in disconnects everyone (their tokens are revoked at the vendor), and a new address or client needs the secret again. If the server's sign-in service changes, Tapas stops new sign-ins until you save the connector again.
+Changing a connector's address or OAuth client disconnects everyone (their tokens are revoked at the vendor), and a new address or client needs the secret again. If the server's sign-in service changes, Tapas stops new sign-ins until you save the connector again.
 
 ## MCP servers inside the cluster
 
