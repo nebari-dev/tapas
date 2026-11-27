@@ -21,6 +21,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/nebari-dev/javo/internal/memory"
 )
 
 // Route is where the endpoint is served; an agent's base URL is
@@ -70,6 +74,30 @@ type Proxy struct {
 	Caller func(ctx context.Context) (person string, ok bool)
 	// Client sends the requests; nil is http.DefaultClient.
 	Client *http.Client
+	// Memory is the person's memory store; nil turns memory off, and requests
+	// are forwarded exactly as without it.
+	Memory Memory
+	// Recall caches recall results so the steps of one agent tool loop do not
+	// each search; nil searches every time.
+	Recall *RecallCache
+	// RecallTimeout is the longest a call waits for memories before going on
+	// without them; zero or less is 2 seconds.
+	RecallTimeout time.Duration
+
+	learnSlotsOnce sync.Once
+	learnSlots     chan struct{}
+	// learning counts running learn goroutines, so tests can wait for them.
+	learning sync.WaitGroup
+}
+
+// defaultRecallTimeout is used when Proxy.RecallTimeout is not set.
+const defaultRecallTimeout = 2 * time.Second
+
+// Memory is what the proxy needs from the memory store.
+type Memory interface {
+	Search(ctx context.Context, owner, agent, query string, limit int) ([]memory.Memory, error)
+	Add(ctx context.Context, owner, agent string, msgs []memory.Message) ([]memory.Memory, error)
+	Remember(ctx context.Context, owner, text string) ([]memory.Memory, error)
 }
 
 // Register adds the routes to mux.
@@ -134,6 +162,28 @@ func (p *Proxy) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, model, stream := rewrite(body, up)
+	// text, typed and skipLearning are for learning from the exchange; recall
+	// below changes body only when it adds the note.
+	text, typed, skipLearning := "", false, false
+	if p.Memory != nil {
+		var msgs []json.RawMessage
+		if json.Unmarshal(body["messages"], &msgs) == nil && msgs != nil {
+			text, typed = lastUserText(msgs)
+			skipLearning = housekeeping(msgs, text)
+			if text != "" && !skipLearning {
+				if mems := p.recall(r.Context(), person, text); len(mems) > 0 {
+					if with := withNote(msgs, mems); len(with) != len(msgs) || !sameFirst(with, msgs) {
+						body["messages"], _ = json.Marshal(with)
+					}
+				}
+			}
+		}
+	}
+	// ans collects the answer text only when the exchange may be learned.
+	var ans *answer
+	if p.Memory != nil && typed && !skipLearning && text != "" {
+		ans = &answer{}
+	}
 	out, _ := json.Marshal(body)
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, up.base()+"/chat/completions", bytes.NewReader(out))
@@ -161,18 +211,23 @@ func (p *Proxy) chat(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	var in, outTok int
+	var werr error
 	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-		in, outTok, _ = copyEvents(w, resp.Body)
+		in, outTok, _, werr = copyEvents(w, resp.Body, ans)
 	} else {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, maxAnswerBytes))
-		_, _ = w.Write(b)
+		_, werr = w.Write(b)
 		in, outTok, _ = usageOf(b)
+		ans.addMessage(b)
 	}
 	result := "ok"
 	if resp.StatusCode >= 400 {
 		result = fmt.Sprintf("status %d", resp.StatusCode)
 	}
 	audit(person, model, in, outTok, result)
+	if ans != nil && resp.StatusCode/100 == 2 && werr == nil {
+		p.startLearning(r.Context(), person, text, ans.String())
+	}
 }
 
 // forwarded are the OpenAI chat completions fields that go to the provider;
@@ -259,20 +314,24 @@ func (p *Proxy) client(up Upstream) *http.Client {
 }
 
 // copyEvents passes a server-sent event stream through line by line,
-// flushing each event, and reads the usage the last events report.
-func copyEvents(w http.ResponseWriter, r io.Reader) (in, out int, found bool) {
+// flushing each event, and reads the usage the last events report. When ans
+// is not nil it collects the answer text the events carry. err is the first
+// error writing to w, after which copying stops.
+func copyEvents(w http.ResponseWriter, r io.Reader, ans *answer) (in, out int, found bool, err error) {
 	f, _ := w.(http.Flusher)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), 16<<20)
 	for sc.Scan() {
 		line := sc.Bytes()
 		if data, ok := bytes.CutPrefix(line, []byte("data:")); ok {
-			if i, o, ok := usageOf(bytes.TrimSpace(data)); ok {
+			data = bytes.TrimSpace(data)
+			if i, o, ok := usageOf(data); ok {
 				in, out, found = i, o, true
 			}
+			ans.addDelta(data)
 		}
 		if _, err := w.Write(append(line, '\n')); err != nil {
-			return in, out, found
+			return in, out, found, err
 		}
 		if len(line) == 0 && f != nil {
 			f.Flush()
@@ -281,7 +340,7 @@ func copyEvents(w http.ResponseWriter, r io.Reader) (in, out int, found bool) {
 	if f != nil {
 		f.Flush()
 	}
-	return in, out, found
+	return in, out, found, nil
 }
 
 // usageOf reads the usage of an answer or an event.
@@ -302,4 +361,36 @@ func usageOf(b []byte) (in, out int, found bool) {
 // outcome. Never the prompt or the answer.
 func audit(person, model string, in, out int, result string) {
 	slog.Info("ai.call", "user", person, "feature", "agent", "model", model, "tokens_in", in, "tokens_out", out, "outcome", result)
+}
+
+// sameFirst reports whether both slices start with the same message, which
+// withNote does only when it added nothing.
+func sameFirst(a, b []json.RawMessage) bool {
+	return len(a) > 0 && len(b) > 0 && bytes.Equal(a[0], b[0])
+}
+
+// recall returns the memories to show for the query: the cached result, else
+// a search that waits at most the recall timeout. A failure is logged without
+// the query and is not cached, so the call goes on without memories.
+func (p *Proxy) recall(ctx context.Context, person, query string) []memory.Memory {
+	if p.Recall != nil {
+		if mems, ok := p.Recall.get(person, query); ok {
+			return mems
+		}
+	}
+	timeout := p.RecallTimeout
+	if timeout <= 0 {
+		timeout = defaultRecallTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	mems, err := p.Memory.Search(ctx, person, "", query, maxNoteMemories)
+	if err != nil {
+		slog.Warn("memory.recall_failed", "user", person, "err", err)
+		return nil
+	}
+	if p.Recall != nil {
+		p.Recall.put(person, query, mems)
+	}
+	return mems
 }
