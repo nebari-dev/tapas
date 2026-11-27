@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -356,6 +357,15 @@ func (p *Proxy) startLearning(ctx context.Context, person, text, ans string) {
 	go func() {
 		defer p.learning.Done()
 		defer func() { <-p.learnSlots }()
+		// A panic here would end the whole process, because only handler
+		// goroutines are recovered. The request is already answered, so log the
+		// stack (not the panic value, which may carry typed or memory text) and
+		// go on. This runs first, before the slot is released.
+		defer func() {
+			if recover() != nil {
+				slog.Error("memory.learn_panicked", "user", person, "stack", string(debug.Stack()))
+			}
+		}()
 		p.learn(ctx, person, text, capture, explicit, ans)
 	}()
 }

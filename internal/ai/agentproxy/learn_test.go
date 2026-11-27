@@ -31,6 +31,7 @@ type rememberCall struct{ owner, text string }
 type learnMemory struct {
 	mu        sync.Mutex
 	err       error
+	panicWith any // when set, Add and Remember record the call, then panic with it
 	started   chan struct{}
 	release   chan struct{}
 	adds      []addCall
@@ -45,6 +46,9 @@ func (f *learnMemory) Add(ctx context.Context, owner, agent string, msgs []memor
 	f.mu.Lock()
 	f.adds = append(f.adds, addCall{owner, agent, append([]memory.Message(nil), msgs...)})
 	f.mu.Unlock()
+	if f.panicWith != nil {
+		panic(f.panicWith)
+	}
 	if f.release != nil {
 		f.started <- struct{}{}
 		<-f.release
@@ -59,6 +63,9 @@ func (f *learnMemory) Remember(ctx context.Context, owner, text string) ([]memor
 	f.mu.Lock()
 	f.remembers = append(f.remembers, rememberCall{owner, text})
 	f.mu.Unlock()
+	if f.panicWith != nil {
+		panic(f.panicWith)
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -377,5 +384,42 @@ func TestLearnSkipsOverlongExplicitText(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "memory.learn_skipped user=alice reason=too_long") {
 		t.Fatalf("no too_long line: %s", logs)
+	}
+}
+
+func TestLearnSurvivesAPanicInTheMemoryService(t *testing.T) {
+	cases := []struct{ name, typed, secret string }{
+		{"automatic", "SECRET-TYPED-TEXT", "SECRET-TYPED-TEXT"},
+		{"explicit", "remember that SECRET-TYPED-TEXT", "SECRET-TYPED-TEXT"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := captureLogs(t)
+			mem := &learnMemory{panicWith: "boom while storing " + tc.secret}
+			p, h := learnProxy(scripted(t, 200, "application/json", notedJSON), mem)
+			post(h, userTurn(tc.typed, false))
+			agentproxy.WaitLearning(p)
+
+			got := logs.String()
+			if n := strings.Count(got, "memory.learn_panicked user=alice"); n != 1 {
+				t.Fatalf("%d memory.learn_panicked lines, want 1: %s", n, got)
+			}
+			if strings.Contains(got, tc.secret) || strings.Contains(got, "boom while storing") {
+				t.Fatalf("the typed text or the panic value reached the log: %s", got)
+			}
+
+			// The slot was released: more turns than there are slots all learn.
+			for i := 0; i < 4; i++ {
+				post(h, userTurn(tc.typed, false))
+				agentproxy.WaitLearning(p)
+			}
+			got = logs.String()
+			if strings.Contains(got, "reason=busy") {
+				t.Fatalf("a learn slot was not released after the panic: %s", got)
+			}
+			if n := strings.Count(got, "memory.learn_panicked user=alice"); n != 5 {
+				t.Fatalf("%d memory.learn_panicked lines, want 5: %s", n, got)
+			}
+		})
 	}
 }
