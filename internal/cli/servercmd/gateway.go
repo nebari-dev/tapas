@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/nebari-dev/javo/internal/activity"
+	"github.com/nebari-dev/javo/internal/ai/agentproxy"
 	"github.com/nebari-dev/javo/internal/ai/aisettings"
 	"github.com/nebari-dev/javo/internal/auth/local"
 	"github.com/nebari-dev/javo/internal/auth/token"
@@ -221,8 +222,13 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 	// API take the service from this point. The start check runs beside start and
 	// keeps retrying with a growing wait until mem0 answers, so a mem0 that is
 	// down is logged and never holds the gateway back.
-	if mem := wiring.Memory(platform.Memory, on.memoryKey); mem != nil {
-		go memory.WaitReady(ctx, mem, platform.Memory.URL)
+	// mem stays a nil interface while memory is off: a nil *memory.Service
+	// inside it would look like a service to the proxy.
+	var mem agentproxy.Memory
+	var cache *agentproxy.RecallCache
+	if svc := wiring.Memory(platform.Memory, on.memoryKey); svc != nil {
+		mem, cache = svc, agentproxy.NewRecallCache()
+		go memory.WaitReady(ctx, svc, platform.Memory.URL)
 	}
 	proposals := &plans.Service{DB: db, TTL: platform.Plans.TTL.Duration}
 	go proposals.RunJanitor(ctx, time.Minute)
@@ -281,7 +287,7 @@ func (o *gatewayOptions) run(ctx context.Context, common *commonFlags, platform 
 		Diagnose:        wiring.DiagnoseEngine(),
 		Plans:           proposals,
 		AI:              aiSvc,
-		AgentModel:      wiring.AgentModel(ctx, platform.AI, aiLive),
+		AgentModel:      wiring.AgentModel(ctx, platform.AI, aiLive, mem, cache, platform.Memory.RecallTimeout.Duration),
 		AISettings:      aiLive,
 		InternalHost:    on.internalHost,
 		Agent:           apps.AgentConfig{Model: agentModelOf(aiLive), Template: platform.AI.Agent.Template},
