@@ -155,7 +155,7 @@ func TestApplyingChecksAgain(t *testing.T) {
 		f := newFixture(t, options{})
 		p := pl(t, f)
 		if _, err := f.reg.Update(ctx, admin, f.conn.ID, registry.Input{
-			Slug: "fake", Name: "Fake", URL: f.fake.URL, AuthMode: connectors.AuthShared, Enabled: false, Rev: f.conn.Rev,
+			Slug: "fake", Name: "Fake", URL: f.fake.URL, Enabled: false, Rev: f.conn.Rev,
 			AllowedGroups: []string{"sales"}, ToolModes: f.conn.ToolModes,
 		}); err != nil {
 			t.Fatal(err)
@@ -172,7 +172,7 @@ func TestApplyingChecksAgain(t *testing.T) {
 		p := pl(t, f)
 		elsewhere := connectorstest.NewConnector(t, bearer)
 		if _, err := f.reg.Update(ctx, admin, f.conn.ID, registry.Input{
-			Slug: "fake", Name: "Fake", URL: elsewhere.URL, AuthMode: connectors.AuthShared, Enabled: true, Rev: f.conn.Rev,
+			Slug: "fake", Name: "Fake", URL: elsewhere.URL, Enabled: true, Rev: f.conn.Rev,
 			AllowedGroups: []string{"sales"}, ToolModes: f.conn.ToolModes,
 		}); err != nil {
 			t.Fatal(err)
@@ -188,7 +188,7 @@ func TestApplyingChecksAgain(t *testing.T) {
 			t.Fatal(err)
 		}
 		if _, err := f.reg.Create(ctx, admin, registry.Input{
-			Slug: "fake", Name: "Fake", URL: f.fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
+			Slug: "fake", Name: "Fake", URL: f.fake.URL, Enabled: true,
 			AllowedGroups: []string{"sales"}, ToolModes: f.conn.ToolModes,
 		}); err != nil {
 			t.Fatal(err)

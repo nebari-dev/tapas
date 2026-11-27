@@ -21,9 +21,9 @@ import (
 
 // SignIn runs sign-ins at connectors' vendors (package oauth).
 type SignIn interface {
-	// Start returns the vendor's address to send person to, for subject's
-	// connection (person, or "" for the company's).
-	Start(ctx context.Context, actor model.Actor, c connectors.Connector, person, subject string) (string, error)
+	// Start returns the vendor's address to send person to, for their own
+	// connection.
+	Start(ctx context.Context, actor model.Actor, c connectors.Connector, person string) (string, error)
 	// Complete finishes person's sign-in with what the vendor sent back.
 	Complete(ctx context.Context, person, slug, state, code, iss string) (vault.Grant, error)
 }
@@ -49,8 +49,7 @@ type MyConnector struct {
 	Slug        string     `json:"slug"`
 	CatalogID   string     `json:"catalogId" doc:"The catalogue entry it was made from, for its vendor's logo; empty for a custom one"`
 	Name        string     `json:"name"`
-	AuthMode    string     `json:"authMode" enum:"user,shared" doc:"user: you connect your own account; shared: an admin connected one account for everyone"`
-	Connected   bool       `json:"connected" doc:"A connection exists (yours, or the shared one)"`
+	Connected   bool       `json:"connected" doc:"You connected your account"`
 	Status      string     `json:"status,omitempty" enum:"active,needs_reauth" doc:"needs_reauth: the vendor no longer accepts it; connect again"`
 	ConnectedAt *time.Time `json:"connectedAt,omitempty"`
 	ConnectURL  string     `json:"connectUrl" doc:"The page to connect it at"`
@@ -118,11 +117,6 @@ func (a *API) registerMember(api huma.API) {
 				continue
 			}
 			conn, ok := find(mine, c.ID)
-			if c.AuthMode == connectors.AuthShared {
-				if conn, ok, err = a.shared(ctx, c.ID); err != nil {
-					return nil, problem.Internal("read a connection", err)
-				}
-			}
 			out.Body.Items = append(out.Body.Items, a.myView(c, conn, ok))
 		}
 		return out, nil
@@ -131,7 +125,7 @@ func (a *API) registerMember(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "connectConnector", Method: http.MethodPost, Path: "/api/connectors/{id}/connect",
 		Summary:     "Start connecting your account to a connector (browser session only)",
-		Description: "Answers the vendor's sign-in address. The vendor sends the browser back to " + connectors.RedirectPath + "/{slug}, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.",
+		Description: "Answers the vendor's sign-in address. The vendor sends the browser back to " + connectors.RedirectPath + "/{slug}, which finishes with POST /api/connectors/oauth/complete.",
 		Tags:        tag, Security: authn.SessionOnly,
 		Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusBadGateway},
 	}, func(ctx context.Context, in *idInput) (*authorizeOutput, error) {
@@ -143,10 +137,10 @@ func (a *API) registerMember(api huma.API) {
 		}
 		u := authn.User(ctx)
 		c, err := a.Registry.Get(ctx, in.ID)
-		if err != nil || c.AuthMode != connectors.AuthUser || !a.mayUse(u, c) {
+		if err != nil || !a.mayUse(u, c) {
 			return nil, notFound(err)
 		}
-		return a.start(ctx, c, u.ID, u.ID)
+		return a.start(ctx, c, u.ID)
 	})
 
 	huma.Register(api, huma.Operation{
@@ -169,17 +163,17 @@ func (a *API) registerMember(api huma.API) {
 		}
 		// Who may connect is checked again: it may have changed since the
 		// sign-in started.
-		if g.Subject == "" && !a.admin(u) || g.Subject != "" && !a.mayUse(u, g.Connector) {
+		if !a.mayUse(u, g.Connector) {
 			return nil, notFound(nil)
 		}
-		if err := a.Vault.Put(ctx, authn.Actor(ctx), g.Connector, g.Subject, g.Tokens); errors.Is(err, store.ErrConflict) {
+		if err := a.Vault.Put(ctx, authn.Actor(ctx), g.Connector, u.ID, g.Tokens); errors.Is(err, store.ErrConflict) {
 			// An admin changed the connector during the exchange: the tokens
 			// belong to its old configuration and are not kept.
 			return nil, signInFailed(connectors.ErrSignInExpired)
 		} else if err != nil {
 			return nil, problem.Internal("store a connection", err)
 		}
-		conn, ok, err := a.connection(ctx, g.Connector.ID, g.Subject)
+		conn, ok, err := a.connection(ctx, g.Connector.ID, u.ID)
 		if err != nil {
 			return nil, problem.Internal("read a connection", err)
 		}
@@ -206,7 +200,7 @@ func (a *API) registerMember(api huma.API) {
 		// learns nothing of it.
 		u := authn.User(ctx)
 		c, err := a.Registry.Get(ctx, in.ID)
-		if err != nil || c.AuthMode != connectors.AuthUser {
+		if err != nil {
 			return nil, notFound(err)
 		}
 		err = a.disconnect(ctx, c, u.ID)
@@ -217,50 +211,13 @@ func (a *API) registerMember(api huma.API) {
 	})
 }
 
-// registerShared adds the platform admins' routes for a shared connector's
-// one connection, and the tool snapshot refresh.
-func (a *API) registerShared(api huma.API, base string) {
-	authn.RegisterAdmin(api, a.Roles, huma.Operation{
-		OperationID: "adminConnectConnector", Method: http.MethodPost, Path: base + "/{id}/connect",
-		Summary:     "Start connecting the account everyone's calls use (platform admins, browser session only)",
-		Description: "Only for connectors in shared mode. Everything done through it appears at the vendor as this account: connect a service account.",
-		Security:    authn.SessionOnly, Errors: []int{http.StatusNotFound, http.StatusConflict, http.StatusBadGateway},
-	}, func(ctx context.Context, in *idInput) (*authorizeOutput, error) {
-		if !a.on() {
-			return nil, off()
-		}
-		if err := authn.NoTokens(ctx); err != nil {
-			return nil, err
-		}
-		c, err := a.Registry.Get(ctx, in.ID)
-		if err != nil || c.AuthMode != connectors.AuthShared {
-			return nil, notFound(err)
-		}
-		return a.start(ctx, c, authn.User(ctx).ID, "")
-	})
-
-	authn.RegisterAdmin(api, a.Roles, huma.Operation{
-		OperationID: "adminDisconnectConnector", Method: http.MethodDelete, Path: base + "/{id}/connection",
-		Summary:  "Disconnect the account everyone's calls use (platform admins, browser session only)",
-		Security: authn.SessionOnly, DefaultStatus: http.StatusNoContent, Errors: []int{http.StatusNotFound, http.StatusConflict},
-	}, func(ctx context.Context, in *idInput) (*struct{}, error) {
-		if !a.on() {
-			return nil, off()
-		}
-		if err := authn.NoTokens(ctx); err != nil {
-			return nil, err
-		}
-		c, err := a.Registry.Get(ctx, in.ID)
-		if err != nil || c.AuthMode != connectors.AuthShared {
-			return nil, notFound(err)
-		}
-		return nil, a.disconnect(ctx, c, "")
-	})
-
+// registerRefresh adds the platform admins' route that takes a new
+// snapshot of a connector's tools.
+func (a *API) registerRefresh(api huma.API, base string) {
 	authn.RegisterAdmin(api, a.Roles, huma.Operation{
 		OperationID: "adminRefreshConnectorTools", Method: http.MethodPost, Path: base + "/{id}/tools/refresh",
 		Summary:     "Take a new snapshot of a connector's tools (platform admins)",
-		Description: "Lists the tools at the connector's MCP server with the shared connection, or for a user-mode connector with your own.",
+		Description: "Lists the tools at the connector's MCP server with your own connection to it.",
 		Errors:      []int{http.StatusNotFound, http.StatusConflict, http.StatusBadGateway},
 	}, func(ctx context.Context, in *idInput) (*connectorOutput, error) {
 		if !a.on() || a.Tools == nil {
@@ -270,11 +227,7 @@ func (a *API) registerShared(api huma.API, base string) {
 		if err != nil {
 			return nil, failed("read the connector", err, "")
 		}
-		subject := authn.User(ctx).ID
-		if c.AuthMode == connectors.AuthShared {
-			subject = ""
-		}
-		bearer, err := a.Vault.Token(ctx, c, subject)
+		bearer, err := a.Vault.Token(ctx, c, authn.User(ctx).ID)
 		if errors.Is(err, connectors.ErrNotConnected) {
 			return nil, problem.New(http.StatusConflict, reasons.Msg(reasons.MsgConnectorNotConnected, c.Name, a.connectURL()))
 		}
@@ -296,8 +249,8 @@ func (a *API) registerShared(api huma.API, base string) {
 	})
 }
 
-func (a *API) start(ctx context.Context, c connectors.Connector, person, subject string) (*authorizeOutput, error) {
-	u, err := a.SignIn.Start(ctx, authn.Actor(ctx), c, person, subject)
+func (a *API) start(ctx context.Context, c connectors.Connector, person string) (*authorizeOutput, error) {
+	u, err := a.SignIn.Start(ctx, authn.Actor(ctx), c, person)
 	if err != nil {
 		return nil, signInFailed(err)
 	}
@@ -322,37 +275,17 @@ func (a *API) mayUse(p authz.Principal, c connectors.Connector) bool {
 	}).Allowed
 }
 
-// admin reports whether p is a platform admin.
-func (a *API) admin(p authz.Principal) bool {
-	return authz.Decide(p, authz.RolesOf(p, a.Roles), authz.ActAdminConsole, authz.Object{}).Allowed
-}
-
 func (a *API) connectURL() string { return strings.TrimRight(a.PublicURL, "/") + ConnectionsPath }
 
-// connection is subject's connection to the connector with id, and whether
-// there is one.
+// connection is the person subject's connection to the connector with id,
+// and whether there is one.
 func (a *API) connection(ctx context.Context, id, subject string) (vault.Connection, bool, error) {
-	var all []vault.Connection
-	var err error
-	if subject == "" {
-		all, err = a.Vault.ForConnector(ctx, id)
-	} else {
-		all, err = a.Vault.ForSubject(ctx, subject)
-	}
+	all, err := a.Vault.ForSubject(ctx, subject)
 	if err != nil {
 		return vault.Connection{}, false, err
 	}
-	for _, c := range all {
-		if c.ConnectorID == id && c.Subject == subject {
-			return c, true, nil
-		}
-	}
-	return vault.Connection{}, false, nil
-}
-
-// shared is the company-wide connection to the connector with id.
-func (a *API) shared(ctx context.Context, id string) (vault.Connection, bool, error) {
-	return a.connection(ctx, id, "")
+	c, ok := find(all, id)
+	return c, ok, nil
 }
 
 func find(all []vault.Connection, connectorID string) (vault.Connection, bool) {
@@ -366,7 +299,7 @@ func find(all []vault.Connection, connectorID string) (vault.Connection, bool) {
 
 func (a *API) myView(c connectors.Connector, conn vault.Connection, connected bool) MyConnector {
 	v := MyConnector{
-		ID: c.ID, Slug: c.Slug, CatalogID: c.CatalogID, Name: c.Name, AuthMode: string(c.AuthMode), Connected: connected,
+		ID: c.ID, Slug: c.Slug, CatalogID: c.CatalogID, Name: c.Name, Connected: connected,
 		ConnectURL: a.connectURL(), Tools: []MyTool{},
 	}
 	if connected {

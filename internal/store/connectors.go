@@ -20,20 +20,20 @@ import (
 // before), OAuthServerMoved whether a later discovery named another
 // issuer. Rev is new on every write.
 type Connector struct {
-	ID, Slug, Name, CatalogID, URL, AuthMode string
-	Enabled                                  bool
-	OAuthRegistration, OAuthClientID         string
-	OAuthClientSecretSealed                  []byte
-	OAuthAuthorizeURL, OAuthTokenURL         string
-	OAuthRevokeURL                           string
-	OAuthIssuer                              string
-	OAuthServer                              ConnectorAuthServer
-	OAuthServerMoved                         bool
-	Scopes, AllowedGroups                    []string
-	ToolModes                                map[string]string
-	Tools                                    []ConnectorTool
-	Rev                                      string
-	CreatedAt, UpdatedAt                     time.Time
+	ID, Slug, Name, CatalogID, URL   string
+	Enabled                          bool
+	OAuthRegistration, OAuthClientID string
+	OAuthClientSecretSealed          []byte
+	OAuthAuthorizeURL, OAuthTokenURL string
+	OAuthRevokeURL                   string
+	OAuthIssuer                      string
+	OAuthServer                      ConnectorAuthServer
+	OAuthServerMoved                 bool
+	Scopes, AllowedGroups            []string
+	ToolModes                        map[string]string
+	Tools                            []ConnectorTool
+	Rev                              string
+	CreatedAt, UpdatedAt             time.Time
 }
 
 // ConnectorTool is one upstream tool as last listed.
@@ -93,7 +93,7 @@ func (x *Connectors) Create(ctx context.Context, actor model.Actor, c Connector,
 	var out Connector
 	err = x.s.mutate(ctx, actor, func(q *sqlcgen.Queries) (effect, error) {
 		n, err := q.InsertConnector(ctx, sqlcgen.InsertConnectorParams{
-			ID: c.ID, Slug: c.Slug, Name: c.Name, CatalogID: c.CatalogID, Url: c.URL, AuthMode: c.AuthMode, Enabled: c.Enabled,
+			ID: c.ID, Slug: c.Slug, Name: c.Name, CatalogID: c.CatalogID, Url: c.URL, Enabled: c.Enabled,
 			OauthRegistration: c.OAuthRegistration, OauthClientID: c.OAuthClientID, OauthClientSecretSealed: c.OAuthClientSecretSealed,
 			OauthAuthorizeUrl: c.OAuthAuthorizeURL, OauthTokenUrl: c.OAuthTokenURL, OauthRevokeUrl: c.OAuthRevokeURL,
 			Scopes: cols.scopes, AllowedGroups: cols.groups, ToolModes: cols.modes, Tools: cols.tools,
@@ -157,7 +157,7 @@ func (x *Connectors) update(ctx context.Context, actor model.Actor, c Connector,
 	var out Connector
 	err = x.s.mutate(ctx, actor, func(q *sqlcgen.Queries) (effect, error) {
 		n, err := q.UpdateConnector(ctx, sqlcgen.UpdateConnectorParams{
-			Name: c.Name, Url: c.URL, AuthMode: c.AuthMode, Enabled: c.Enabled,
+			Name: c.Name, Url: c.URL, Enabled: c.Enabled,
 			OauthRegistration: c.OAuthRegistration, OauthClientID: c.OAuthClientID, OauthClientSecretSealed: c.OAuthClientSecretSealed,
 			OauthAuthorizeUrl: c.OAuthAuthorizeURL, OauthTokenUrl: c.OAuthTokenURL, OauthRevokeUrl: c.OAuthRevokeURL,
 			Scopes: cols.scopes, AllowedGroups: cols.groups, ToolModes: cols.modes,
@@ -308,7 +308,7 @@ func readConnector(r sqlcgen.Connector, err error) (Connector, error) {
 		return Connector{}, err
 	}
 	c := Connector{
-		ID: r.ID, Slug: r.Slug, Name: r.Name, CatalogID: r.CatalogID, URL: r.Url, AuthMode: r.AuthMode, Enabled: r.Enabled,
+		ID: r.ID, Slug: r.Slug, Name: r.Name, CatalogID: r.CatalogID, URL: r.Url, Enabled: r.Enabled,
 		OAuthRegistration: r.OauthRegistration, OAuthClientID: r.OauthClientID, OAuthClientSecretSealed: r.OauthClientSecretSealed,
 		OAuthAuthorizeURL: r.OauthAuthorizeUrl, OAuthTokenURL: r.OauthTokenUrl, OAuthRevokeURL: r.OauthRevokeUrl,
 		OAuthIssuer: r.OauthIssuer, OAuthServerMoved: r.OauthServerMoved,

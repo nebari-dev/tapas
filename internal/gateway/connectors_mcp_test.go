@@ -55,7 +55,7 @@ func TestConnectorToolsThroughMCP(t *testing.T) {
 	fake := connectorstest.NewConnector(t, "tok-fake")
 	f := newConnectorsFixture(t, "tok-fake")
 	in := registry.Input{
-		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
+		Slug: "fake", Name: "Fake", URL: fake.URL, Enabled: true,
 		AllowedGroups: []string{"*"}, ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}
 	conn, err := f.Connectors.Create(context.Background(), model.Actor{Person: "alice"}, in)
@@ -109,7 +109,7 @@ func TestOnlyAgentAppTokensReachConnectors(t *testing.T) {
 	t.Cleanup(s.Close)
 	f := &mcpFixture{Fixture: agent.Fixture, url: s.URL, alice: agent.alice}
 	if _, err := f.Connectors.Create(context.Background(), model.Actor{Person: "alice"}, registry.Input{
-		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthShared, Enabled: true, AllowedGroups: []string{"*"},
+		Slug: "fake", Name: "Fake", URL: fake.URL, Enabled: true, AllowedGroups: []string{"*"},
 		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}); err != nil {
 		t.Fatal(err)
@@ -157,8 +157,7 @@ func complete(t *testing.T, f *mcpFixture, body string, c *http.Cookie, want int
 // End to end: alice connects her own account through the fake vendor, and
 // her agent's /mcp call reaches the connector with her token, refreshed
 // when the connector stops taking it; bob cannot finish her sign-in and has
-// no tools of hers. A shared connector's calls use the account an admin
-// connected, for bob too.
+// no tools of hers.
 func TestConnectedAccountsThroughMCP(t *testing.T) {
 	t.Parallel()
 	af := apitest.New(t, apitest.Options{
@@ -173,7 +172,7 @@ func TestConnectedAccountsThroughMCP(t *testing.T) {
 	as := connectorstest.NewAuthServer(t)
 	mine := connectorstest.NewOAuthConnector(t, as)
 	conn, err := f.Connectors.Create(ctx, model.Actor{Person: "admin"}, registry.Input{
-		Slug: "mine", Name: "Mine", URL: mine.URL, AuthMode: connectors.AuthUser, Enabled: true, AllowedGroups: []string{"*"},
+		Slug: "mine", Name: "Mine", URL: mine.URL, Enabled: true, AllowedGroups: []string{"*"},
 		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret,
 		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	})
@@ -218,27 +217,5 @@ func TestConnectedAccountsThroughMCP(t *testing.T) {
 	calls := mine.Calls()
 	if len(calls) != 2 || calls[1].Bearer == stored || as.Refreshes() != 1 {
 		t.Fatalf("calls %+v after %d refreshes", calls, as.Refreshes())
-	}
-
-	sharedSrv := connectorstest.NewOAuthConnector(t, as)
-	shared, err := f.Connectors.Create(ctx, model.Actor{Person: "admin"}, registry.Input{
-		Slug: "team", Name: "Team", URL: sharedSrv.URL, AuthMode: connectors.AuthShared, Enabled: true, AllowedGroups: []string{"*"},
-		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret,
-		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin := f.Session(apitest.AdminID, "javo-admins")
-	complete(t, f, signIn(t, f, as, "/api/admin/connectors/"+shared.ID+"/connect", admin), admin, http.StatusOK)
-	if res, text := callTool(t, f.connect(t, bobTok), "team__echo", map[string]any{"who": "bob"}); res.IsError || text != `{"who":"bob"}` {
-		t.Fatalf("bob's shared echo: %v %q", res.IsError, text)
-	}
-	adminTok, err := f.Vault.Token(ctx, shared, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if calls := sharedSrv.Calls(); len(calls) != 1 || calls[0].Bearer != adminTok {
-		t.Fatalf("shared calls %+v", calls)
 	}
 }

@@ -29,7 +29,7 @@ type writesFixture struct {
 }
 
 // newWritesFixture is a gateway with the fake connector added for everyone,
-// shared, its echo a read and its post a write.
+// its echo a read and its post a write.
 func newWritesFixture(t *testing.T) *writesFixture {
 	t.Helper()
 	clk := &apitest.TestClock{T: time.Now()}
@@ -42,7 +42,7 @@ func newWritesFixture(t *testing.T) *writesFixture {
 	t.Cleanup(s.Close)
 	f := &writesFixture{mcpFixture: &mcpFixture{Fixture: af, url: s.URL, alice: af.LoginAlice()}, fake: fake, clock: clk}
 	f.in = registry.Input{
-		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
+		Slug: "fake", Name: "Fake", URL: fake.URL, Enabled: true,
 		AllowedGroups: []string{"*"}, ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}
 	conn, err := f.Connectors.Create(context.Background(), model.Actor{Person: "admin"}, f.in)

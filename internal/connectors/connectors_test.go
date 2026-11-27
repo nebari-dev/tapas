@@ -87,7 +87,7 @@ func TestCheckURL(t *testing.T) {
 
 func TestValidateNamesTheFirstBadField(t *testing.T) {
 	good := connectors.Connector{
-		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", AuthMode: connectors.AuthUser,
+		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp",
 		Scopes: []string{"read"}, AllowedGroups: []string{"sales", "*"},
 		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}
@@ -98,7 +98,6 @@ func TestValidateNamesTheFirstBadField(t *testing.T) {
 		"slug":               func(c *connectors.Connector) { c.Slug = "Fake" },
 		"name":               func(c *connectors.Connector) { c.Name = " " },
 		"url":                func(c *connectors.Connector) { c.URL = "http://mcp.example.org/mcp" },
-		"authMode":           func(c *connectors.Connector) { c.AuthMode = "everyone" },
 		"oauth.authorizeUrl": func(c *connectors.Connector) { c.OAuth.AuthorizeURL = "http://idp.example.org/authorize" },
 		"oauth.tokenUrl":     func(c *connectors.Connector) { c.OAuth.TokenURL = "not a url" },
 		"oauth.revokeUrl":    func(c *connectors.Connector) { c.OAuth.RevokeURL = "https://idp.example.org/revoke#x" },

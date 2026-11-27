@@ -348,7 +348,6 @@ const (
 	MsgConnectorChanged             MessageCode = "ConnectorChanged"
 	MsgConnectorSlugInvalid         MessageCode = "ConnectorSlugInvalid"
 	MsgConnectorNameInvalid         MessageCode = "ConnectorNameInvalid"
-	MsgConnectorAuthModeInvalid     MessageCode = "ConnectorAuthModeInvalid"
 	MsgConnectorScopesInvalid       MessageCode = "ConnectorScopesInvalid"
 	MsgConnectorGroupsInvalid       MessageCode = "ConnectorGroupsInvalid"
 	MsgConnectorToolModesInvalid    MessageCode = "ConnectorToolModesInvalid"
@@ -696,7 +695,6 @@ var messages = map[MessageCode]string{
 	MsgConnectorChanged:             "Someone else saved this connector in the meantime. Reload it and make your change again.",
 	MsgConnectorSlugInvalid:         "Use 2 to 31 lowercase letters and digits, starting with a letter, such as slack.",
 	MsgConnectorNameInvalid:         "Name it in 1 to 100 characters.",
-	MsgConnectorAuthModeInvalid:     "Choose user (each person connects their own account) or shared (one account for everyone).",
 	MsgConnectorScopesInvalid:       "List up to 50 scopes, each up to 200 characters without spaces.",
 	MsgConnectorGroupsInvalid:       "List up to 100 group names, or * for everyone, without empty entries.",
 	MsgConnectorToolModesInvalid:    "Set each tool to read, write or off, for up to 500 tools with names up to 128 characters.",

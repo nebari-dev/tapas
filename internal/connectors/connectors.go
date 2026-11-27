@@ -16,17 +16,6 @@ import (
 	"github.com/nebari-dev/javo/internal/reasons"
 )
 
-// AuthMode is whose vendor account a connector's calls use.
-type AuthMode string
-
-const (
-	// AuthUser: each person connects their own account.
-	AuthUser AuthMode = "user"
-	// AuthShared: an admin connects one account that every allowed person's
-	// calls use.
-	AuthShared AuthMode = "shared"
-)
-
 // ToolMode is how a connector's tool is treated: a read runs at once, a
 // write becomes a plan its owner approves, an off tool is neither listed
 // nor callable.
@@ -60,7 +49,6 @@ const (
 // OAuth client secret: OAuth.SecretStored says whether one is stored.
 type Connector struct {
 	ID, Slug, Name, CatalogID, URL string
-	AuthMode                       AuthMode
 	Enabled                        bool
 	OAuth                          OAuth
 	Scopes, AllowedGroups          []string
@@ -197,9 +185,6 @@ func (c Connector) Validate(internalHosts []string) error {
 	}
 	if err := CheckURL(c.URL, internalHosts); err != nil {
 		return field("url", reasons.MsgConnectorURLNotAllowed)
-	}
-	if c.AuthMode != AuthUser && c.AuthMode != AuthShared {
-		return field("authMode", reasons.MsgConnectorAuthModeInvalid)
 	}
 	for _, e := range []struct{ name, url string }{
 		{"oauth.authorizeUrl", c.OAuth.AuthorizeURL}, {"oauth.tokenUrl", c.OAuth.TokenURL}, {"oauth.revokeUrl", c.OAuth.RevokeURL},

@@ -12,7 +12,7 @@ import (
 )
 
 // ConnectorConnection is one row of the token vault: the account a person
-// (Subject), or the company (Subject ""), connected to a connector.
+// (Subject) connected to a connector. Every connection is one person's own.
 // AccessSealed and RefreshSealed are the tokens as the gateway sealed them
 // for this row's id (RefreshSealed nil: none); the clear tokens are never
 // stored. Resource is the MCP address they were issued for. ExpiresAt is
@@ -38,16 +38,16 @@ const (
 
 // ConnectorOAuthState is an OAuth sign-in in progress. StateHash is the
 // SHA-256 of the state only the browser holds; VerifierSealed the sealed
-// PKCE verifier. Person started it and is the only one who may finish it,
-// for Subject (Person, or "" for a company-wide connection). Issuer is the
+// PKCE verifier. Person started it, for their own connection, and is the
+// only one who may finish it. Issuer is the
 // authorization server that must name itself in the answer (RFC 9207), ""
 // when it does not say it will.
 type ConnectorOAuthState struct {
-	StateHash                                  []byte
-	ConnectorID, ConnectorRev, Person, Subject string
-	VerifierSealed                             []byte
-	RedirectURI, Issuer                        string
-	CreatedAt, ExpiresAt                       time.Time
+	StateHash                         []byte
+	ConnectorID, ConnectorRev, Person string
+	VerifierSealed                    []byte
+	RedirectURI, Issuer               string
+	CreatedAt, ExpiresAt              time.Time
 }
 
 // ConnectorConnections is the token vault's tables. Connecting and
@@ -69,13 +69,20 @@ func connectionAudit(action string, c Connector, subject string, detail any) *au
 	return &auditRow{action: action, kind: connectorKind, name: c.Slug, id: c.ID, owner: subject, detail: detail}
 }
 
+// ErrNoSubject is a connection that is no person's own.
+var ErrNoSubject = errors.New("store: a connector connection needs the person whose it is")
+
 // Put stores c as the connection of c.Subject to c.ConnectorID, replacing
-// any there was, under a new id and rev; seal gets the new id. It is
+// any there was, under a new id and rev; seal gets the new id. A
+// connection without a person (Subject "") is ErrNoSubject. It is
 // active, with no refresh claim. A missing connector is ErrNotFound, one
 // whose revision is no longer connectorRev (the revision the tokens were
 // obtained under) ErrConflict, checked in the same transaction. It is
 // audited.
 func (x *ConnectorConnections) Put(ctx context.Context, actor model.Actor, c ConnectorConnection, connectorRev string, seal sealTokensFunc) (ConnectorConnection, error) {
+	if c.Subject == "" {
+		return ConnectorConnection{}, ErrNoSubject
+	}
 	c.ID, c.Rev, c.Status = newID(), newID(), ConnectionActive
 	var err error
 	if c.AccessSealed, c.RefreshSealed, err = seal(c.ID); err != nil {
@@ -113,7 +120,7 @@ func (x *ConnectorConnections) Put(ctx context.Context, actor model.Actor, c Con
 }
 
 // Get returns the connection of subject to the connector with connectorID,
-// or ErrNotFound.
+// or ErrNotFound (always for subject "").
 func (x *ConnectorConnections) Get(ctx context.Context, connectorID, subject string) (ConnectorConnection, error) {
 	return readConnection(x.s.q.GetConnectorConnection(ctx, sqlcgen.GetConnectorConnectionParams{ConnectorID: connectorID, Subject: subject}))
 }
@@ -191,9 +198,9 @@ func (x *ConnectorConnections) Delete(ctx context.Context, actor model.Actor, co
 	})
 }
 
-// DeleteForSubject removes every connection of the person subject (never
-// the company-wide ones), without revoking them, and records how many on
-// the audit log: for a person who is removed.
+// DeleteForSubject removes every connection of the person subject, without
+// revoking them, and records how many on the audit log: for a person who is
+// removed.
 func (x *ConnectorConnections) DeleteForSubject(ctx context.Context, actor model.Actor, subject string) (int64, error) {
 	var n int64
 	err := x.s.mutate(ctx, actor, func(q *sqlcgen.Queries) (effect, error) {
@@ -209,7 +216,7 @@ func (x *ConnectorConnections) DeleteForSubject(ctx context.Context, actor model
 // StartOAuth stores a sign-in in progress.
 func (x *ConnectorConnections) StartOAuth(ctx context.Context, st ConnectorOAuthState) error {
 	return x.s.q.InsertConnectorOAuthState(ctx, sqlcgen.InsertConnectorOAuthStateParams{
-		StateHash: st.StateHash, ConnectorID: st.ConnectorID, ConnectorRev: st.ConnectorRev, Person: st.Person, Subject: st.Subject,
+		StateHash: st.StateHash, ConnectorID: st.ConnectorID, ConnectorRev: st.ConnectorRev, Person: st.Person,
 		VerifierSealed: st.VerifierSealed, RedirectUri: st.RedirectURI, Issuer: st.Issuer,
 		CreatedAt: dbtime.From(st.CreatedAt), ExpiresAt: dbtime.From(st.ExpiresAt),
 	})
@@ -227,7 +234,7 @@ func (x *ConnectorConnections) TakeOAuthState(ctx context.Context, hash []byte) 
 		return ConnectorOAuthState{}, err
 	}
 	return ConnectorOAuthState{
-		StateHash: r.StateHash, ConnectorID: r.ConnectorID, ConnectorRev: r.ConnectorRev, Person: r.Person, Subject: r.Subject,
+		StateHash: r.StateHash, ConnectorID: r.ConnectorID, ConnectorRev: r.ConnectorRev, Person: r.Person,
 		VerifierSealed: r.VerifierSealed, RedirectURI: r.RedirectUri, Issuer: r.Issuer,
 		CreatedAt: r.CreatedAt.Time(), ExpiresAt: r.ExpiresAt.Time(),
 	}, nil

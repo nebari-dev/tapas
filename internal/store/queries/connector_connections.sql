@@ -13,17 +13,19 @@ ON CONFLICT (connector_id, subject) DO UPDATE SET id = excluded.id, connected_by
 -- name: LockConnectorRev :execrows
 UPDATE connectors SET rev = rev WHERE id = $1 AND rev = $2;
 
+-- Every connection is one person's own: a stray row with no person (subject
+-- '') is never read.
 -- name: GetConnectorConnection :one
-SELECT * FROM connector_connections WHERE connector_id = $1 AND subject = $2;
+SELECT * FROM connector_connections WHERE connector_id = $1 AND subject = $2 AND subject <> '';
 
 -- name: GetConnectorConnectionByID :one
 SELECT * FROM connector_connections WHERE id = $1;
 
 -- name: ListConnectorConnectionsForSubject :many
-SELECT * FROM connector_connections WHERE subject = $1 ORDER BY connector_id;
+SELECT * FROM connector_connections WHERE subject = $1 AND subject <> '' ORDER BY connector_id;
 
 -- name: ListConnectorConnectionsForConnector :many
-SELECT * FROM connector_connections WHERE connector_id = $1 ORDER BY subject;
+SELECT * FROM connector_connections WHERE connector_id = $1 AND subject <> '' ORDER BY subject;
 
 -- One caller wins the right to refresh until refreshing_until.
 -- name: ClaimConnectorRefresh :execrows
@@ -48,9 +50,9 @@ DELETE FROM connector_connections WHERE connector_id = $1;
 DELETE FROM connector_connections WHERE subject = $1 AND subject <> '';
 
 -- name: InsertConnectorOAuthState :exec
-INSERT INTO connector_oauth_states (state_hash, connector_id, connector_rev, person, subject, verifier_sealed,
+INSERT INTO connector_oauth_states (state_hash, connector_id, connector_rev, person, verifier_sealed,
     redirect_uri, issuer, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 
 -- Single use: the row is gone once read. The caller checks person and expiry.
 -- name: TakeConnectorOAuthState :one

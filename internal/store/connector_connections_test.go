@@ -71,8 +71,8 @@ func TestConnectorConnectionsPutGetListDelete(t *testing.T) {
 	}
 	other := createConnector(t, s, "other")
 	if _, err := s.ConnectorConnections().Put(ctx, alice, store.ConnectorConnection{
-		ConnectorID: other.ID, Subject: "", ConnectedBy: "alice", Resource: other.URL,
-	}, other.Rev, sealedTokens("shared", "")); err != nil {
+		ConnectorID: other.ID, Subject: "bob", ConnectedBy: "bob", Resource: other.URL,
+	}, other.Rev, sealedTokens("b1", "")); err != nil {
 		t.Fatal(err)
 	}
 	mine, err := s.ConnectorConnections().ForSubject(ctx, "alice")
@@ -80,7 +80,7 @@ func TestConnectorConnectionsPutGetListDelete(t *testing.T) {
 		t.Fatalf("ForSubject = %+v, %v", mine, err)
 	}
 	all, err := s.ConnectorConnections().ForConnector(ctx, other.ID)
-	if err != nil || len(all) != 1 || all[0].Subject != "" {
+	if err != nil || len(all) != 1 || all[0].Subject != "bob" {
 		t.Fatalf("ForConnector = %+v, %v", all, err)
 	}
 
@@ -172,34 +172,31 @@ func TestConnectorConnectionRefreshClaimAndTokens(t *testing.T) {
 	}
 }
 
-func TestConnectorConnectionsDeleteForSubjectSparesShared(t *testing.T) {
+func TestConnectorConnectionsDeleteForSubject(t *testing.T) {
 	t.Parallel()
 	s := storetest.New(t)
 	c := createConnector(t, s, "fake")
-	shared := createConnector(t, s, "shared")
+	other := createConnector(t, s, "other")
 	conns := s.ConnectorConnections()
 	for _, in := range []store.ConnectorConnection{
 		{ConnectorID: c.ID, Subject: "alice", ConnectedBy: "alice", Resource: c.URL},
 		{ConnectorID: c.ID, Subject: "bob", ConnectedBy: "bob", Resource: c.URL},
-		{ConnectorID: shared.ID, Subject: "", ConnectedBy: "alice", Resource: shared.URL},
+		{ConnectorID: other.ID, Subject: "alice", ConnectedBy: "alice", Resource: other.URL},
 	} {
-		rev := map[string]string{c.ID: c.Rev, shared.ID: shared.Rev}[in.ConnectorID]
+		rev := map[string]string{c.ID: c.Rev, other.ID: other.Rev}[in.ConnectorID]
 		if _, err := conns.Put(ctx, alice, in, rev, sealedTokens("a", "")); err != nil {
 			t.Fatal(err)
 		}
 	}
 	n, err := conns.DeleteForSubject(ctx, model.Actor{System: model.SystemCLI}, "alice")
-	if err != nil || n != 1 {
+	if err != nil || n != 2 {
 		t.Fatalf("DeleteForSubject = %d, %v", n, err)
 	}
 	if n, err := conns.DeleteForSubject(ctx, alice, ""); err != nil || n != 0 {
-		t.Fatalf("DeleteForSubject of the shared subject = %d, %v; want nothing deleted", n, err)
+		t.Fatalf("DeleteForSubject of no person = %d, %v; want nothing deleted", n, err)
 	}
 	if _, err := conns.Get(ctx, c.ID, "bob"); err != nil {
 		t.Fatalf("bob's connection: %v", err)
-	}
-	if _, err := conns.Get(ctx, shared.ID, ""); err != nil {
-		t.Fatalf("the shared connection: %v", err)
 	}
 }
 
@@ -256,7 +253,7 @@ func TestConnectorOAuthStatesAreSingleUse(t *testing.T) {
 	conns := s.ConnectorConnections()
 	now := time.Now().Truncate(time.Millisecond)
 	st := store.ConnectorOAuthState{
-		StateHash: []byte("hash-1"), ConnectorID: c.ID, ConnectorRev: c.Rev, Person: "alice", Subject: "alice",
+		StateHash: []byte("hash-1"), ConnectorID: c.ID, ConnectorRev: c.Rev, Person: "alice",
 		VerifierSealed: []byte("sealed"), RedirectURI: "https://tapas.example.org/settings/connections/callback",
 		Issuer: "https://as.example.org", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute),
 	}

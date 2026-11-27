@@ -41,11 +41,10 @@ func (Tokens) LogValue() slog.Value { return slog.StringValue(redacted) }
 // Format keeps tokens out of anything printed with fmt.
 func (Tokens) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, redacted) }
 
-// Grant is a finished sign-in: the connector, whose connection it is (the
-// person, or "" for the company's) and the tokens, ready for Put.
+// Grant is a finished sign-in: the connector and the tokens, ready for Put
+// as the connection of the person who signed in.
 type Grant struct {
 	Connector connectors.Connector
-	Subject   string
 	Tokens    Tokens
 }
 
@@ -142,8 +141,8 @@ func (v *Vault) open(id, column string, sealed []byte) (string, error) {
 	return string(b), nil
 }
 
-// Put stores t as subject's connection to c (subject "" for the company's),
-// replacing any there was. actor connected it. When c is no longer at
+// Put stores t as the person subject's own connection to c, replacing any
+// there was; with no subject nothing is stored. actor connected it. When c is no longer at
 // c.Rev (an admin changed it while the tokens were obtained) nothing is
 // stored and the error is store.ErrConflict.
 func (v *Vault) Put(ctx context.Context, actor model.Actor, c connectors.Connector, subject string, t Tokens) error {
@@ -159,7 +158,7 @@ func (v *Vault) Put(ctx context.Context, actor model.Actor, c connectors.Connect
 // Token is the access token of subject's connection to c, refreshed first
 // when it expires within RefreshBefore. An error wrapping
 // connectors.ErrNotConnected means there is no usable connection: none, one
-// for another address, or one that needs connecting again.
+// for another address, one that needs connecting again, or no subject.
 func (v *Vault) Token(ctx context.Context, c connectors.Connector, subject string) (string, error) {
 	row, err := v.usable(ctx, c, subject)
 	if err != nil {
@@ -342,7 +341,7 @@ func (v *Vault) Delete(ctx context.Context, actor model.Actor, c connectors.Conn
 }
 
 // DeleteForConnector disconnects everyone from c, as Delete does each: when
-// c is removed, or its address, endpoints, client or auth mode change.
+// c is removed, or its address, endpoints or client change.
 func (v *Vault) DeleteForConnector(ctx context.Context, actor model.Actor, c connectors.Connector) error {
 	rows, err := v.c.DB.ConnectorConnections().ForConnector(ctx, c.ID)
 	if err != nil {

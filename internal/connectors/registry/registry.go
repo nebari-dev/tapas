@@ -61,7 +61,6 @@ func New(c Config) *Registry {
 // only).
 type Input struct {
 	CatalogID, Slug, Name, URL        string
-	AuthMode                          connectors.AuthMode
 	Enabled                           bool
 	ClientID, ClientSecret            string
 	AuthorizeURL, TokenURL, RevokeURL string
@@ -124,9 +123,6 @@ func fill(in Input, e catalog.Entry) Input {
 			*f.dst = f.src
 		}
 	}
-	if in.AuthMode == "" {
-		in.AuthMode = c.AuthMode
-	}
 	if in.AuthorizeURL == "" && in.TokenURL == "" && in.RevokeURL == "" {
 		in.AuthorizeURL, in.TokenURL, in.RevokeURL = c.OAuth.AuthorizeURL, c.OAuth.TokenURL, c.OAuth.RevokeURL
 	}
@@ -163,8 +159,7 @@ func (r *Registry) ListEnabled(ctx context.Context) ([]connectors.Connector, err
 // is still its revision (store.ErrConflict otherwise; store.ErrNotFound
 // when there is none). The names of the changed fields go on the audit log.
 // A new address, new OAuth endpoints or a new client id need the client
-// secret again when one is stored, and drop what people connected; a new
-// auth mode drops what was connected too.
+// secret again when one is stored, and drop what people connected.
 func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in Input) (connectors.Connector, error) {
 	prev, err := r.c.DB.Connectors().Get(ctx, id)
 	if err != nil {
@@ -216,10 +211,8 @@ func (r *Registry) Update(ctx context.Context, actor model.Actor, id string, in 
 	}
 	// A stored token must never be sent to a host other than the one it
 	// was issued for, nor used under another client. They are revoked where
-	// they were issued, with the client they were issued to. Switching whose
-	// account is used drops them too, so switching back does not silently
-	// revive a connection nobody made again.
-	forget := moved || newClient || prev.AuthMode != string(in.AuthMode)
+	// they were issued, with the client they were issued to.
+	forget := moved || newClient
 	if forget {
 		if err := r.forgetConnections(ctx, actor, viewOf(prev)); err != nil {
 			return connectors.Connector{}, err
@@ -253,7 +246,7 @@ func (r *Registry) Delete(ctx context.Context, actor model.Actor, id string) err
 
 // forgetConnections revokes and deletes every account connected to c (as
 // it is before the change): on delete, and when its address, OAuth
-// endpoints, client or auth mode change (people then connect again).
+// endpoints or client change (people then connect again).
 func (r *Registry) forgetConnections(ctx context.Context, actor model.Actor, c connectors.Connector) error {
 	if r.c.Connections == nil {
 		return nil
@@ -343,7 +336,6 @@ func changedFields(prev, next store.Connector, secretChanged bool) []string {
 	}
 	add("name", prev.Name != next.Name)
 	add("url", prev.URL != next.URL)
-	add("authMode", prev.AuthMode != next.AuthMode)
 	add("enabled", prev.Enabled != next.Enabled)
 	add("oauth.clientId", prev.OAuthClientID != next.OAuthClientID)
 	add("oauth.clientSecret", secretChanged)
@@ -360,7 +352,7 @@ func changedFields(prev, next store.Connector, secretChanged bool) []string {
 // connectorOf is the connector in describes, for validation.
 func connectorOf(in Input) connectors.Connector {
 	return connectors.Connector{
-		Slug: in.Slug, Name: in.Name, CatalogID: in.CatalogID, URL: in.URL, AuthMode: in.AuthMode, Enabled: in.Enabled,
+		Slug: in.Slug, Name: in.Name, CatalogID: in.CatalogID, URL: in.URL, Enabled: in.Enabled,
 		OAuth:  connectors.OAuth{ClientID: in.ClientID, AuthorizeURL: in.AuthorizeURL, TokenURL: in.TokenURL, RevokeURL: in.RevokeURL},
 		Scopes: in.Scopes, AllowedGroups: in.AllowedGroups, ToolModes: in.ToolModes,
 	}
@@ -370,7 +362,7 @@ func connectorOf(in Input) connectors.Connector {
 // registration, tools and rev stay prev's.
 func rowOf(c connectors.Connector, prev store.Connector) store.Connector {
 	row := prev
-	row.Slug, row.Name, row.CatalogID, row.URL, row.AuthMode, row.Enabled = c.Slug, c.Name, c.CatalogID, c.URL, string(c.AuthMode), c.Enabled
+	row.Slug, row.Name, row.CatalogID, row.URL, row.Enabled = c.Slug, c.Name, c.CatalogID, c.URL, c.Enabled
 	row.OAuthClientID, row.OAuthAuthorizeURL, row.OAuthTokenURL, row.OAuthRevokeURL = c.OAuth.ClientID, c.OAuth.AuthorizeURL, c.OAuth.TokenURL, c.OAuth.RevokeURL
 	row.Scopes, row.AllowedGroups = slices.Clone(c.Scopes), slices.Clone(c.AllowedGroups)
 	row.ToolModes = make(map[string]string, len(c.ToolModes))
@@ -383,8 +375,7 @@ func rowOf(c connectors.Connector, prev store.Connector) store.Connector {
 // viewOf is row without its secret.
 func viewOf(row store.Connector) connectors.Connector {
 	c := connectors.Connector{
-		ID: row.ID, Slug: row.Slug, Name: row.Name, CatalogID: row.CatalogID, URL: row.URL,
-		AuthMode: connectors.AuthMode(row.AuthMode), Enabled: row.Enabled,
+		ID: row.ID, Slug: row.Slug, Name: row.Name, CatalogID: row.CatalogID, URL: row.URL, Enabled: row.Enabled,
 		OAuth: connectors.OAuth{
 			Registration: row.OAuthRegistration, ClientID: row.OAuthClientID, SecretStored: row.OAuthClientSecretSealed != nil,
 			AuthorizeURL: row.OAuthAuthorizeURL, TokenURL: row.OAuthTokenURL, RevokeURL: row.OAuthRevokeURL,

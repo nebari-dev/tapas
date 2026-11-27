@@ -325,8 +325,7 @@ func TestUserRemoveDeletesTheirSecrets(t *testing.T) {
 	}
 }
 
-// A removed person's connected accounts go; the company-wide connection
-// and other people's stay.
+// A removed person's connected accounts go; other people's stay.
 func TestUserRemoveDeletesTheirConnectedAccounts(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -334,12 +333,12 @@ func TestUserRemoveDeletesTheirConnectedAccounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn, err := e.db.Connectors().Create(ctx, cliActor, store.Connector{
-		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", AuthMode: "user", Enabled: true,
+		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", Enabled: true,
 	}, func(string) ([]byte, error) { return nil, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, subject := range []string{local.UserID("alice"), "bob-1", ""} {
+	for _, subject := range []string{local.UserID("alice"), "bob-1"} {
 		if _, err := e.db.ConnectorConnections().Put(ctx, cliActor, store.ConnectorConnection{
 			ConnectorID: conn.ID, Subject: subject, Resource: conn.URL,
 		}, conn.Rev, func(string) ([]byte, []byte, error) { return []byte("sealed"), nil, nil }); err != nil {
@@ -354,7 +353,7 @@ func TestUserRemoveDeletesTheirConnectedAccounts(t *testing.T) {
 		t.Fatalf("summary %q", out)
 	}
 	left, err := e.db.ConnectorConnections().ForConnector(ctx, conn.ID)
-	if err != nil || len(left) != 2 || left[0].Subject != "" || left[1].Subject != "bob-1" {
+	if err != nil || len(left) != 1 || left[0].Subject != "bob-1" {
 		t.Fatalf("left %+v, %v", left, err)
 	}
 }

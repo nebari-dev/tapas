@@ -78,7 +78,7 @@ func (q *Queries) DeleteConnectorConnectionsForSubject(ctx context.Context, subj
 }
 
 const getConnectorConnection = `-- name: GetConnectorConnection :one
-SELECT id, connector_id, subject, connected_by, resource, access_sealed, refresh_sealed, scopes, status, expires_at, refreshing_until, rev, created_at, updated_at FROM connector_connections WHERE connector_id = $1 AND subject = $2
+SELECT id, connector_id, subject, connected_by, resource, access_sealed, refresh_sealed, scopes, status, expires_at, refreshing_until, rev, created_at, updated_at FROM connector_connections WHERE connector_id = $1 AND subject = $2 AND subject <> ''
 `
 
 type GetConnectorConnectionParams struct {
@@ -86,6 +86,8 @@ type GetConnectorConnectionParams struct {
 	Subject     string
 }
 
+// Every connection is one person's own: a stray row with no person (subject
+// ”) is never read.
 func (q *Queries) GetConnectorConnection(ctx context.Context, arg GetConnectorConnectionParams) (ConnectorConnection, error) {
 	row := q.db.QueryRowContext(ctx, getConnectorConnection, arg.ConnectorID, arg.Subject)
 	var i ConnectorConnection
@@ -135,9 +137,9 @@ func (q *Queries) GetConnectorConnectionByID(ctx context.Context, id string) (Co
 }
 
 const insertConnectorOAuthState = `-- name: InsertConnectorOAuthState :exec
-INSERT INTO connector_oauth_states (state_hash, connector_id, connector_rev, person, subject, verifier_sealed,
+INSERT INTO connector_oauth_states (state_hash, connector_id, connector_rev, person, verifier_sealed,
     redirect_uri, issuer, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertConnectorOAuthStateParams struct {
@@ -145,7 +147,6 @@ type InsertConnectorOAuthStateParams struct {
 	ConnectorID    string
 	ConnectorRev   string
 	Person         string
-	Subject        string
 	VerifierSealed []byte
 	RedirectUri    string
 	Issuer         string
@@ -159,7 +160,6 @@ func (q *Queries) InsertConnectorOAuthState(ctx context.Context, arg InsertConne
 		arg.ConnectorID,
 		arg.ConnectorRev,
 		arg.Person,
-		arg.Subject,
 		arg.VerifierSealed,
 		arg.RedirectUri,
 		arg.Issuer,
@@ -170,7 +170,7 @@ func (q *Queries) InsertConnectorOAuthState(ctx context.Context, arg InsertConne
 }
 
 const listConnectorConnectionsForConnector = `-- name: ListConnectorConnectionsForConnector :many
-SELECT id, connector_id, subject, connected_by, resource, access_sealed, refresh_sealed, scopes, status, expires_at, refreshing_until, rev, created_at, updated_at FROM connector_connections WHERE connector_id = $1 ORDER BY subject
+SELECT id, connector_id, subject, connected_by, resource, access_sealed, refresh_sealed, scopes, status, expires_at, refreshing_until, rev, created_at, updated_at FROM connector_connections WHERE connector_id = $1 AND subject <> '' ORDER BY subject
 `
 
 func (q *Queries) ListConnectorConnectionsForConnector(ctx context.Context, connectorID string) ([]ConnectorConnection, error) {
@@ -212,7 +212,7 @@ func (q *Queries) ListConnectorConnectionsForConnector(ctx context.Context, conn
 }
 
 const listConnectorConnectionsForSubject = `-- name: ListConnectorConnectionsForSubject :many
-SELECT id, connector_id, subject, connected_by, resource, access_sealed, refresh_sealed, scopes, status, expires_at, refreshing_until, rev, created_at, updated_at FROM connector_connections WHERE subject = $1 ORDER BY connector_id
+SELECT id, connector_id, subject, connected_by, resource, access_sealed, refresh_sealed, scopes, status, expires_at, refreshing_until, rev, created_at, updated_at FROM connector_connections WHERE subject = $1 AND subject <> '' ORDER BY connector_id
 `
 
 func (q *Queries) ListConnectorConnectionsForSubject(ctx context.Context, subject string) ([]ConnectorConnection, error) {
@@ -339,7 +339,7 @@ func (q *Queries) SweepConnectorOAuthStates(ctx context.Context, expiresAt dbtim
 }
 
 const takeConnectorOAuthState = `-- name: TakeConnectorOAuthState :one
-DELETE FROM connector_oauth_states WHERE state_hash = $1 RETURNING state_hash, connector_id, connector_rev, person, subject, verifier_sealed, redirect_uri, issuer, created_at, expires_at
+DELETE FROM connector_oauth_states WHERE state_hash = $1 RETURNING state_hash, connector_id, connector_rev, person, verifier_sealed, redirect_uri, issuer, created_at, expires_at
 `
 
 // Single use: the row is gone once read. The caller checks person and expiry.
@@ -351,7 +351,6 @@ func (q *Queries) TakeConnectorOAuthState(ctx context.Context, stateHash []byte)
 		&i.ConnectorID,
 		&i.ConnectorRev,
 		&i.Person,
-		&i.Subject,
 		&i.VerifierSealed,
 		&i.RedirectUri,
 		&i.Issuer,

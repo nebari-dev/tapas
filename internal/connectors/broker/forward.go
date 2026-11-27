@@ -24,7 +24,7 @@ type invalidator interface {
 func (b *Broker) forward(ctx context.Context, c *call) *sdk.CallToolResult {
 	res, err := b.c.Forwarder.CallTool(ctx, client.Target{URL: c.conn.URL}, c.bearer, c.tool, c.args)
 	if inv, ok := b.c.Tokens.(invalidator); ok && errors.Is(err, client.ErrUnauthorized) {
-		if ierr := inv.Invalidate(ctx, c.conn, subject(c.caller, c.conn), c.bearer); ierr == nil {
+		if ierr := inv.Invalidate(ctx, c.conn, c.caller.Principal.ID, c.bearer); ierr == nil {
 			if bearer, terr := b.bearer(ctx, c.caller, c.conn); terr == nil {
 				c.bearer = bearer
 				res, err = b.c.Forwarder.CallTool(ctx, client.Target{URL: c.conn.URL}, c.bearer, c.tool, c.args)

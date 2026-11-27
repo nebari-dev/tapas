@@ -98,7 +98,7 @@ func TestEachOutcomeWritesOneRow(t *testing.T) {
 		{name: "policy denies proposing", o: options{policy: &phased{deny: policy.PhasePropose}}, caller: proposing(writer()), tool: "fake__post", args: `{}`, allowed: false,
 			detail: map[string]any{"tool": "post", "mode": "write", "outcome": "denied_policy", "policy": "deny"}},
 		{name: "denied_token", caller: app, tool: "fake__echo", args: `{}`, allowed: false, noID: true,
-			detail: map[string]any{"tool": "echo", "outcome": "denied_token", "agent": "helper-1", "credential": ""}},
+			detail: map[string]any{"tool": "echo", "outcome": "denied_token", "agent": "helper-1"}},
 		{name: "denied_authz", caller: bob, tool: "fake__echo", args: `{}`, allowed: false,
 			detail: map[string]any{"tool": "echo", "outcome": "denied_authz"}},
 		{name: "denied_policy", o: options{policy: denyAll{&seen}}, caller: alice(), tool: "fake__echo", args: `{}`, allowed: false,
@@ -135,7 +135,7 @@ func TestEachOutcomeWritesOneRow(t *testing.T) {
 			}
 			want := map[string]any{
 				"tool": "", "mode": "", "outcome": "", "agent": "", "client": "claude-code",
-				"credential": "shared", "policy": "", "ms": float64(412),
+				"policy": "", "ms": float64(412),
 			}
 			maps.Copy(want, tc.detail)
 			var got map[string]any

@@ -49,9 +49,9 @@ func (c Caller) MayUseConnectors() bool {
 	return c.Token.ID != "" && (!c.Token.Workload() || c.Token.App != nil && c.Token.Job == "" && c.AgentApp)
 }
 
-// TokenSource gives the bearer a connector's calls carry for subject (the
-// person, or "" for a company-wide connection). An error wrapping
-// ErrNotConnected means there is no usable connection.
+// TokenSource gives the bearer a connector's calls carry for subject, the
+// person whose own connection it is. An error wrapping ErrNotConnected
+// means there is no usable connection (always for subject "").
 type TokenSource interface {
 	Token(ctx context.Context, c Connector, subject string) (string, error)
 }

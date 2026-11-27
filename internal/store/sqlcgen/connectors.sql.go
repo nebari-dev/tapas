@@ -24,7 +24,7 @@ func (q *Queries) DeleteConnector(ctx context.Context, id string) (int64, error)
 }
 
 const getConnector = `-- name: GetConnector :one
-SELECT id, slug, name, catalog_id, url, auth_mode, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors WHERE id = $1
+SELECT id, slug, name, catalog_id, url, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors WHERE id = $1
 `
 
 func (q *Queries) GetConnector(ctx context.Context, id string) (Connector, error) {
@@ -36,7 +36,6 @@ func (q *Queries) GetConnector(ctx context.Context, id string) (Connector, error
 		&i.Name,
 		&i.CatalogID,
 		&i.Url,
-		&i.AuthMode,
 		&i.Enabled,
 		&i.OauthRegistration,
 		&i.OauthClientID,
@@ -59,7 +58,7 @@ func (q *Queries) GetConnector(ctx context.Context, id string) (Connector, error
 }
 
 const getConnectorBySlug = `-- name: GetConnectorBySlug :one
-SELECT id, slug, name, catalog_id, url, auth_mode, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors WHERE slug = $1
+SELECT id, slug, name, catalog_id, url, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors WHERE slug = $1
 `
 
 func (q *Queries) GetConnectorBySlug(ctx context.Context, slug string) (Connector, error) {
@@ -71,7 +70,6 @@ func (q *Queries) GetConnectorBySlug(ctx context.Context, slug string) (Connecto
 		&i.Name,
 		&i.CatalogID,
 		&i.Url,
-		&i.AuthMode,
 		&i.Enabled,
 		&i.OauthRegistration,
 		&i.OauthClientID,
@@ -94,10 +92,10 @@ func (q *Queries) GetConnectorBySlug(ctx context.Context, slug string) (Connecto
 }
 
 const insertConnector = `-- name: InsertConnector :execrows
-INSERT INTO connectors (id, slug, name, catalog_id, url, auth_mode, enabled, oauth_registration, oauth_client_id,
+INSERT INTO connectors (id, slug, name, catalog_id, url, enabled, oauth_registration, oauth_client_id,
     oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups,
     tool_modes, tools, rev, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 ON CONFLICT (slug) DO NOTHING
 `
 
@@ -107,7 +105,6 @@ type InsertConnectorParams struct {
 	Name                    string
 	CatalogID               string
 	Url                     string
-	AuthMode                string
 	Enabled                 bool
 	OauthRegistration       string
 	OauthClientID           string
@@ -132,7 +129,6 @@ func (q *Queries) InsertConnector(ctx context.Context, arg InsertConnectorParams
 		arg.Name,
 		arg.CatalogID,
 		arg.Url,
-		arg.AuthMode,
 		arg.Enabled,
 		arg.OauthRegistration,
 		arg.OauthClientID,
@@ -155,7 +151,7 @@ func (q *Queries) InsertConnector(ctx context.Context, arg InsertConnectorParams
 }
 
 const listConnectors = `-- name: ListConnectors :many
-SELECT id, slug, name, catalog_id, url, auth_mode, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors ORDER BY slug
+SELECT id, slug, name, catalog_id, url, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors ORDER BY slug
 `
 
 func (q *Queries) ListConnectors(ctx context.Context) ([]Connector, error) {
@@ -173,7 +169,6 @@ func (q *Queries) ListConnectors(ctx context.Context) ([]Connector, error) {
 			&i.Name,
 			&i.CatalogID,
 			&i.Url,
-			&i.AuthMode,
 			&i.Enabled,
 			&i.OauthRegistration,
 			&i.OauthClientID,
@@ -206,7 +201,7 @@ func (q *Queries) ListConnectors(ctx context.Context) ([]Connector, error) {
 }
 
 const listEnabledConnectors = `-- name: ListEnabledConnectors :many
-SELECT id, slug, name, catalog_id, url, auth_mode, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors WHERE enabled ORDER BY slug
+SELECT id, slug, name, catalog_id, url, enabled, oauth_registration, oauth_client_id, oauth_client_secret_sealed, oauth_authorize_url, oauth_token_url, oauth_revoke_url, scopes, allowed_groups, tool_modes, tools, rev, created_at, updated_at, oauth_issuer, oauth_server, oauth_server_moved FROM connectors WHERE enabled ORDER BY slug
 `
 
 func (q *Queries) ListEnabledConnectors(ctx context.Context) ([]Connector, error) {
@@ -224,7 +219,6 @@ func (q *Queries) ListEnabledConnectors(ctx context.Context) ([]Connector, error
 			&i.Name,
 			&i.CatalogID,
 			&i.Url,
-			&i.AuthMode,
 			&i.Enabled,
 			&i.OauthRegistration,
 			&i.OauthClientID,
@@ -336,17 +330,16 @@ func (q *Queries) SetConnectorTools(ctx context.Context, arg SetConnectorToolsPa
 }
 
 const updateConnector = `-- name: UpdateConnector :execrows
-UPDATE connectors SET name = $1, url = $2, auth_mode = $3, enabled = $4, oauth_registration = $5, oauth_client_id = $6,
-    oauth_client_secret_sealed = $7, oauth_authorize_url = $8, oauth_token_url = $9, oauth_revoke_url = $10,
-    scopes = $11, allowed_groups = $12, tool_modes = $13, oauth_issuer = $14, oauth_server = $15,
-    oauth_server_moved = $16, rev = $17, updated_at = $18
-WHERE id = $19 AND rev = $20
+UPDATE connectors SET name = $1, url = $2, enabled = $3, oauth_registration = $4, oauth_client_id = $5,
+    oauth_client_secret_sealed = $6, oauth_authorize_url = $7, oauth_token_url = $8, oauth_revoke_url = $9,
+    scopes = $10, allowed_groups = $11, tool_modes = $12, oauth_issuer = $13, oauth_server = $14,
+    oauth_server_moved = $15, rev = $16, updated_at = $17
+WHERE id = $18 AND rev = $19
 `
 
 type UpdateConnectorParams struct {
 	Name                    string
 	Url                     string
-	AuthMode                string
 	Enabled                 bool
 	OauthRegistration       string
 	OauthClientID           string
@@ -371,7 +364,6 @@ func (q *Queries) UpdateConnector(ctx context.Context, arg UpdateConnectorParams
 	result, err := q.db.ExecContext(ctx, updateConnector,
 		arg.Name,
 		arg.Url,
-		arg.AuthMode,
 		arg.Enabled,
 		arg.OauthRegistration,
 		arg.OauthClientID,

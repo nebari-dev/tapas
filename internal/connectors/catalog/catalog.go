@@ -42,7 +42,6 @@ type Entry struct {
 	// URL is the vendor's hosted MCP server; empty when there is none to
 	// name and the admin fills it in.
 	URL            string                         `json:"url"`
-	AuthMode       connectors.AuthMode            `json:"authMode"`
 	Scopes         []string                       `json:"scopes"`
 	ToolModes      map[string]connectors.ToolMode `json:"toolModes"`
 	OAuthEndpoints string                         `json:"oauthEndpoints"`
@@ -64,7 +63,7 @@ type Endpoints struct {
 // no OAuth client, which the admin adds.
 func (e Entry) Connector() connectors.Connector {
 	return connectors.Connector{
-		Slug: e.Slug, Name: e.Name, CatalogID: e.ID, URL: e.URL, AuthMode: e.AuthMode,
+		Slug: e.Slug, Name: e.Name, CatalogID: e.ID, URL: e.URL,
 		OAuth:  connectors.OAuth{AuthorizeURL: e.OAuth.AuthorizeURL, TokenURL: e.OAuth.TokenURL, RevokeURL: e.OAuth.RevokeURL},
 		Scopes: slices.Clone(e.Scopes), AllowedGroups: []string{}, ToolModes: maps.Clone(e.ToolModes),
 	}

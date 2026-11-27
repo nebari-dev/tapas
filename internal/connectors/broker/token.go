@@ -25,13 +25,14 @@ func (b *Broker) token(ctx context.Context, c *call) *sdk.CallToolResult {
 	return nil
 }
 
-// bearer is the bearer for caller's calls to conn; ErrNotConnected without
-// a token source or a connection.
+// bearer is the bearer for caller's calls to conn, from the caller's own
+// connection; ErrNotConnected without a token source, a person or a
+// connection.
 func (b *Broker) bearer(ctx context.Context, caller connectors.Caller, conn connectors.Connector) (string, error) {
-	if b.c.Tokens == nil {
+	if b.c.Tokens == nil || caller.Principal.ID == "" {
 		return "", connectors.ErrNotConnected
 	}
-	bearer, err := b.c.Tokens.Token(ctx, conn, subject(caller, conn))
+	bearer, err := b.c.Tokens.Token(ctx, conn, caller.Principal.ID)
 	if err != nil && !errors.Is(err, connectors.ErrNotConnected) {
 		slog.Error("open a connector's token", "connector", conn.Slug, "err", err)
 	}

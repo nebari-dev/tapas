@@ -87,13 +87,13 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	row, err := db.Connectors().Create(ctx, alice, store.Connector{
-		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", AuthMode: "user", Enabled: true,
+		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", Enabled: true,
 	}, func(string) ([]byte, error) { return nil, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := &fixture{db: db, oauth: &fakeOAuth{}}
-	f.conn = connectors.Connector{ID: row.ID, Slug: row.Slug, Name: row.Name, URL: row.URL, AuthMode: connectors.AuthUser, Rev: row.Rev}
+	f.conn = connectors.Connector{ID: row.ID, Slug: row.Slug, Name: row.Name, URL: row.URL, Rev: row.Rev}
 	f.cfg = vault.Config{DB: db, Seal: key, OAuth: f.oauth}
 	f.v = vault.New(f.cfg)
 	return f
@@ -345,18 +345,43 @@ func TestDeleteRevokesThenDeletes(t *testing.T) {
 	}
 }
 
-// Every connection to a connector goes, the company-wide one included.
+// Every connection to a connector goes.
 func TestDeleteForConnector(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	f.put(t, "alice", vault.Tokens{Access: "a1", Expiry: time.Now().Add(time.Hour)})
-	f.put(t, "", vault.Tokens{Access: "a2", Expiry: time.Now().Add(time.Hour)})
+	f.put(t, "bob", vault.Tokens{Access: "a2", Expiry: time.Now().Add(time.Hour)})
 	if err := f.v.DeleteForConnector(ctx, alice, f.conn); err != nil {
 		t.Fatal(err)
 	}
 	left, err := f.v.ForConnector(ctx, f.conn.ID)
 	if err != nil || len(left) != 0 || len(f.oauth.revoked) != 2 {
 		t.Fatalf("left %+v, %v; revoked %v", left, err, f.oauth.revoked)
+	}
+}
+
+// Every connection is one person's own: none is stored without a person,
+// and a stray row with no person (one left from before, sealed and
+// otherwise valid) is never used, listed or disconnected.
+func TestAConnectionWithNoPersonIsNeverUsed(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	if err := f.v.Put(ctx, alice, f.conn, "", vault.Tokens{Access: "a1"}); err == nil {
+		t.Fatal("Put with no person stored a connection")
+	}
+	f.put(t, "alice", vault.Tokens{Access: "stray-sentinel", Expiry: time.Now().Add(time.Hour)})
+	storetest.Exec(t, f.db, `UPDATE connector_connections SET subject = '' WHERE subject = 'alice'`)
+	if got, err := f.v.Token(ctx, f.conn, ""); !errors.Is(err, connectors.ErrNotConnected) || got != "" {
+		t.Fatalf("Token with no person = %q, %v; want ErrNotConnected", got, err)
+	}
+	if err := f.v.Invalidate(ctx, f.conn, "", "stray-sentinel"); !errors.Is(err, connectors.ErrNotConnected) {
+		t.Fatalf("Invalidate with no person = %v, want ErrNotConnected", err)
+	}
+	if all, err := f.v.ForConnector(ctx, f.conn.ID); err != nil || len(all) != 0 {
+		t.Fatalf("ForConnector = %+v, %v; want the stray row left out", all, err)
+	}
+	if err := f.v.Delete(ctx, alice, f.conn, ""); !errors.Is(err, connectors.ErrNotConnected) {
+		t.Fatalf("Delete with no person = %v, want ErrNotConnected", err)
 	}
 }
 

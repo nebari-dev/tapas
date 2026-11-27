@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nebari-dev/javo/internal/connectors"
 	"github.com/nebari-dev/javo/internal/connectors/catalog"
 )
 
@@ -43,7 +42,7 @@ func TestAllReturnsACopy(t *testing.T) {
 func TestLoadRefusesABadEntry(t *testing.T) {
 	entry := func(fields string) string {
 		base := map[string]string{
-			"id": `"fake"`, "slug": `"fake"`, "name": `"Fake"`, "url": `"https://mcp.example.org/mcp"`, "authMode": `"user"`,
+			"id": `"fake"`, "slug": `"fake"`, "name": `"Fake"`, "url": `"https://mcp.example.org/mcp"`,
 			"oauthEndpoints": `"discovered"`, "setup": `"Paste a client."`, "docs": `"https://docs.example.org/mcp"`,
 		}
 		for _, kv := range strings.Split(fields, ";") {
@@ -69,7 +68,6 @@ func TestLoadRefusesABadEntry(t *testing.T) {
 		"bad slug":              entry(`slug="google-gmail"`),
 		"http url":              entry(`url="http://mcp.example.org/mcp"`),
 		"bad mode":              entry(`toolModes={"echo":"maybe"}`),
-		"bad auth mode":         entry(`authMode="anyone"`),
 		"no setup":              entry(`setup=-`),
 		"no docs":               entry(`docs=-`),
 		"static without urls":   entry(`oauthEndpoints="static"`),
@@ -97,7 +95,7 @@ func TestAnEntryBecomesAValidConnector(t *testing.T) {
 		if err := c.Validate(nil); err != nil {
 			t.Errorf("%s: %v", e.ID, err)
 		}
-		if c.CatalogID != e.ID || c.Enabled || c.AuthMode != connectors.AuthUser && c.AuthMode != connectors.AuthShared {
+		if c.CatalogID != e.ID || c.Enabled {
 			t.Errorf("%s: %+v", e.ID, c)
 		}
 	}

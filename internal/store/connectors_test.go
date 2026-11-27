@@ -13,7 +13,7 @@ import (
 
 func newConnector(slug string) store.Connector {
 	return store.Connector{
-		Slug: slug, Name: "Fake " + slug, CatalogID: "", URL: "https://mcp.example.org/" + slug, AuthMode: "user",
+		Slug: slug, Name: "Fake " + slug, CatalogID: "", URL: "https://mcp.example.org/" + slug,
 		Enabled: true, OAuthRegistration: "static", OAuthClientID: "client-1",
 		Scopes: []string{"read", "write"}, AllowedGroups: []string{"sales"},
 		ToolModes: map[string]string{"echo": "read", "post": "write"},

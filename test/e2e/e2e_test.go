@@ -25,7 +25,8 @@
 //
 // Most tests sign in as a local account of their own (newUser) and run in
 // parallel (go test -parallel). The ones that restart or reconfigure the
-// server, change a shared account or measure timings run alone, before them.
+// server, change an account other tests sign in with or measure timings run
+// alone, before them.
 //
 // The HTTP client resolves every *.localhost name to 127.0.0.1 itself, so
 // no DNS setup is needed for the kind hosts.

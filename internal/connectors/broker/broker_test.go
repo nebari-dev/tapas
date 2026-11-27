@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ var (
 	admin = model.Actor{Person: "admin"}
 )
 
-const bearer = "tok-shared"
+const bearer = "tok-1"
 
 type fixture struct {
 	db   *store.Store
@@ -60,7 +61,7 @@ func newFixture(t *testing.T, o options) *fixture {
 	reg := registry.New(registry.Config{DB: db, Seal: key, InternalHosts: []string{"127.0.0.1"}})
 	fake := connectorstest.NewConnector(t, bearer)
 	conn, err := reg.Create(ctx, admin, registry.Input{
-		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
+		Slug: "fake", Name: "Fake", URL: fake.URL, Enabled: true,
 		AllowedGroups: []string{"sales"}, ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	})
 	if err != nil {
@@ -130,7 +131,7 @@ func TestToolsAreNamespacedAndMarkedByTheAdminsModes(t *testing.T) {
 		t.Errorf("post %+v %+v", post, post.Annotations)
 	}
 	in := registry.Input{
-		Slug: "fake", Name: "Fake", URL: f.fake.URL, AuthMode: connectors.AuthShared, Enabled: true, Rev: f.conn.Rev,
+		Slug: "fake", Name: "Fake", URL: f.fake.URL, Enabled: true, Rev: f.conn.Rev,
 		AllowedGroups: []string{"sales"}, ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead, "post": connectors.ToolOff},
 	}
 	if _, err := f.reg.Update(ctx, admin, f.conn.ID, in); err != nil {
@@ -157,7 +158,7 @@ func TestTheUpstreamListIsCachedPerRevision(t *testing.T) {
 		t.Fatalf("listed %d times", n)
 	}
 	in := registry.Input{
-		Slug: "fake", Name: "Renamed", URL: f.fake.URL, AuthMode: connectors.AuthShared, Enabled: true, Rev: f.conn.Rev,
+		Slug: "fake", Name: "Renamed", URL: f.fake.URL, Enabled: true, Rev: f.conn.Rev,
 		AllowedGroups: []string{"sales"}, ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}
 	if _, err := f.reg.Update(ctx, admin, f.conn.ID, in); err != nil {
@@ -265,7 +266,7 @@ func TestUnusableConnectorsLookLikeUnknownTools(t *testing.T) {
 		}
 	}
 	in := registry.Input{
-		Slug: "fake", Name: "Fake", URL: f.fake.URL, AuthMode: connectors.AuthShared, Enabled: false, Rev: f.conn.Rev,
+		Slug: "fake", Name: "Fake", URL: f.fake.URL, Enabled: false, Rev: f.conn.Rev,
 		AllowedGroups: []string{"sales"}, ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}
 	if _, err := f.reg.Update(ctx, admin, f.conn.ID, in); err != nil {
@@ -390,7 +391,7 @@ func TestAFailingConnectorIsLeftOutOfTheList(t *testing.T) {
 	f := newFixture(t, options{})
 	broken := connectorstest.NewConnector(t, "other-token")
 	if _, err := f.reg.Create(ctx, admin, registry.Input{
-		Slug: "broken", Name: "Broken", URL: broken.URL, AuthMode: connectors.AuthShared, Enabled: true, AllowedGroups: []string{"*"},
+		Slug: "broken", Name: "Broken", URL: broken.URL, Enabled: true, AllowedGroups: []string{"*"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +407,7 @@ func TestATimeoutIsAToolError(t *testing.T) {
 	reg := registry.New(registry.Config{DB: db, Seal: key, InternalHosts: []string{"127.0.0.1"}})
 	fake := connectorstest.NewConnector(t, bearer)
 	if _, err := reg.Create(ctx, admin, registry.Input{
-		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthUser, Enabled: true, AllowedGroups: []string{"sales"},
+		Slug: "fake", Name: "Fake", URL: fake.URL, Enabled: true, AllowedGroups: []string{"sales"},
 		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}); err != nil {
 		t.Fatal(err)
@@ -468,5 +469,50 @@ func TestA401RefreshesTheTokenAndRetriesOnce(t *testing.T) {
 	}
 	if len(src.invalidated) != 2 {
 		t.Fatalf("invalidated %v", src.invalidated)
+	}
+}
+
+// perPerson is a token source with a token for some subjects only; it
+// records whose token was asked for.
+type perPerson struct {
+	mu     sync.Mutex
+	tokens map[string]string
+	asked  []string
+}
+
+func (p *perPerson) Token(_ context.Context, _ connectors.Connector, subject string) (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.asked = append(p.asked, subject)
+	if t, ok := p.tokens[subject]; ok {
+		return t, nil
+	}
+	return "", connectors.ErrNotConnected
+}
+
+// A call always uses the caller's own connection: one with no person, left
+// from before, is never asked for, so someone who did not connect is not
+// connected.
+func TestACallUsesTheCallersOwnConnection(t *testing.T) {
+	t.Parallel()
+	tokens := &perPerson{tokens: map[string]string{"alice": bearer, "": bearer}}
+	f := newFixture(t, options{tokens: tokens})
+	bob := alice()
+	bob.Principal.ID, bob.Token = "bob", token.Token{ID: "t-2", Owner: "bob"}
+	if tools := names(f.b.Tools(ctx, bob)); len(tools) != 0 {
+		t.Fatalf("bob, not connected, sees tools %v", tools)
+	}
+	if res := call(t, f, bob, "fake__echo", `{"text":"hi"}`); !res.IsError || !strings.Contains(text(t, res), "connect") {
+		t.Fatalf("bob's call = %+v, want not connected", res)
+	}
+	if res := call(t, f, alice(), "fake__echo", `{"text":"hi"}`); res.IsError {
+		t.Fatalf("alice's call = %+v", res)
+	}
+	tokens.mu.Lock()
+	defer tokens.mu.Unlock()
+	for _, s := range tokens.asked {
+		if s != "alice" && s != "bob" {
+			t.Fatalf("asked for the token of %q; want only the caller's own (%v)", s, tokens.asked)
+		}
 	}
 }

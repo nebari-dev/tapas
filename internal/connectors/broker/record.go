@@ -47,9 +47,6 @@ type callDetail struct {
 	// Agent is the coding agent app's object name, "" for a personal token.
 	Agent  string `json:"agent"`
 	Client string `json:"client"`
-	// Credential is whose connection the connector uses: "user" or
-	// "shared"; "" when the connector was not found.
-	Credential string `json:"credential"`
 	// Plan is the plan a write became.
 	Plan string `json:"plan,omitempty"`
 	// Policy is the policy's effect; "" when it was not asked.
@@ -89,7 +86,7 @@ func auditRow(c *call, now time.Time) store.AuditEvent {
 	who, via := store.ActorStrings(model.Actor{Person: c.caller.Principal.ID, Token: c.caller.Token.ID})
 	d := callDetail{
 		Tool: c.tool, Mode: string(c.mode), Outcome: c.outcome, Client: c.caller.Client,
-		Credential: string(c.conn.AuthMode), Plan: c.plan, Policy: string(c.policy), Ms: now.Sub(c.started).Milliseconds(),
+		Plan: c.plan, Policy: string(c.policy), Ms: now.Sub(c.started).Milliseconds(),
 	}
 	if app := c.caller.Token.App; app != nil {
 		d.Agent = app.Name

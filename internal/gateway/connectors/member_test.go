@@ -16,20 +16,15 @@ import (
 )
 
 type myConnector struct {
-	ID, Slug, Name, AuthMode, Status, ConnectURL, ConnectedAt, CatalogID string
-	Connected                                                            bool
-	Tools                                                                []struct{ Name, Mode string }
+	ID, Slug, Name, Status, ConnectURL, ConnectedAt, CatalogID string
+	Connected                                                  bool
+	Tools                                                      []struct{ Name, Mode string }
 }
 
 type adminView struct {
 	adminConnector
 	Connections int
-	Shared      *struct {
-		Connected   bool
-		ConnectedBy string
-		Status      string
-	}
-	Tools []struct{ Name string }
+	Tools       []struct{ Name string }
 }
 
 // oauthFixture is a gateway with connectors on, reaching a fake connector
@@ -51,13 +46,13 @@ func newOAuthFixture(t *testing.T) *oauthFixture {
 	return &oauthFixture{Fixture: f, as: as, mcp: connectorstest.NewOAuthConnector(t, as), admin: f.Session(apitest.AdminID, "javo-admins")}
 }
 
-// create adds a connector in mode at the fake, for the sales group, and
-// returns its id.
-func (f *oauthFixture) create(t *testing.T, mode string) string {
+// create adds a connector at the fake, for the sales group, and returns
+// its id.
+func (f *oauthFixture) create(t *testing.T) string {
 	t.Helper()
-	body := fmt.Sprintf(`{"slug":"fake","name":"Fake","url":%q,"authMode":%q,"enabled":true,
+	body := fmt.Sprintf(`{"slug":"fake","name":"Fake","url":%q,"enabled":true,
 		"oauth":{"clientId":%q,"clientSecret":%q},"allowedGroups":["sales"],"toolModes":{"echo":"read"}}`,
-		f.mcp.URL, mode, connectorstest.ClientID, connectorstest.ClientSecret)
+		f.mcp.URL, connectorstest.ClientID, connectorstest.ClientSecret)
 	w := f.Do("POST", "/api/admin/connectors", body, f.admin)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", w.Code, w.Body)
@@ -107,12 +102,12 @@ func (f *oauthFixture) mine(t *testing.T, c *http.Cookie) []myConnector {
 func TestAMembersListNamesEachConnectorsCatalogueEntry(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	body := fmt.Sprintf(`{"catalogId":"github","slug":"gh","name":"Code","url":%q,"authMode":"user","enabled":true,
+	body := fmt.Sprintf(`{"catalogId":"github","slug":"gh","name":"Code","url":%q,"enabled":true,
 		"oauth":{"clientId":%q,"clientSecret":%q},"allowedGroups":["sales"]}`, f.mcp.URL, connectorstest.ClientID, connectorstest.ClientSecret)
 	if w := f.Do("POST", "/api/admin/connectors", body, f.admin); w.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", w.Code, w.Body)
 	}
-	f.create(t, "user")
+	f.create(t)
 	got := map[string]string{}
 	for _, c := range f.mine(t, f.Session(apitest.AliceID, "sales")) {
 		got[c.Slug] = c.CatalogID
@@ -127,7 +122,7 @@ func TestAMembersListNamesEachConnectorsCatalogueEntry(t *testing.T) {
 func TestAPersonConnectsAndDisconnects(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	id := f.create(t, "user")
+	id := f.create(t)
 	alice, carol := f.Session(apitest.AliceID, "sales"), f.Session(apitest.MemberID, "sales")
 
 	if got := f.mine(t, alice); len(got) != 1 || got[0].Connected || got[0].ConnectURL != "https://tapas.example.org/settings/connections" {
@@ -155,7 +150,7 @@ func TestAPersonConnectsAndDisconnects(t *testing.T) {
 	if got := f.mine(t, carol); got[0].Connected {
 		t.Fatalf("carol sees alice's connection: %+v", got)
 	}
-	if v := apitest.Decode[adminView](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin)); v.Connections != 1 || v.Shared != nil {
+	if v := apitest.Decode[adminView](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin)); v.Connections != 1 {
 		t.Fatalf("admin view %+v", v)
 	}
 
@@ -179,7 +174,7 @@ func TestAPersonConnectsAndDisconnects(t *testing.T) {
 func TestNoSignInStartsAfterTheAuthorizationServerMoved(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	id := f.create(t, "user")
+	id := f.create(t)
 	alice := f.Session(apitest.AliceID, "sales")
 	if w := f.Do("POST", "/api/connectors/oauth/complete", f.start(t, "/api/connectors/"+id+"/connect", alice), alice); w.Code != http.StatusOK {
 		t.Fatalf("complete: %d %s", w.Code, w.Body)
@@ -208,7 +203,7 @@ func TestNoSignInStartsAfterTheAuthorizationServerMoved(t *testing.T) {
 func TestASignInFinishesOnlyFromItsConnectorsPage(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	id := f.create(t, "user")
+	id := f.create(t)
 	alice := f.Session(apitest.AliceID, "sales")
 	body := strings.Replace(f.start(t, "/api/connectors/"+id+"/connect", alice), `"slug":"fake"`, `"slug":"other"`, 1)
 	w := f.Do("POST", "/api/connectors/oauth/complete", body, alice)
@@ -225,7 +220,7 @@ func TestASignInFinishesOnlyFromItsConnectorsPage(t *testing.T) {
 func TestOutsidersCannotConnect(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	id := f.create(t, "user")
+	id := f.create(t)
 	carol := f.Session(apitest.MemberID, "marketing")
 	if got := f.mine(t, carol); len(got) != 0 {
 		t.Fatalf("an outsider lists %+v", got)
@@ -240,50 +235,35 @@ func TestOutsidersCannotConnect(t *testing.T) {
 	}
 }
 
-// An admin connects the one account a shared connector uses, refreshes
-// its tool snapshot with it, and disconnects it. Members cannot.
-func TestAnAdminConnectsASharedAccount(t *testing.T) {
+// An admin takes a new snapshot of a connector's tools with their own
+// connection: before connecting there is none to list them with. A member
+// cannot.
+func TestAnAdminRefreshesToolsWithTheirOwnConnection(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	id := f.create(t, "shared")
+	id := f.create(t)
 	alice := f.Session(apitest.AliceID, "sales")
-	if w := f.Do("POST", "/api/connectors/"+id+"/connect", "", alice); w.Code != http.StatusNotFound {
-		t.Fatalf("a member connects a shared connector: %d %s", w.Code, w.Body)
+	admin := f.Session(apitest.AdminID, "javo-admins", "sales")
+	refresh := "/api/admin/connectors/" + id + "/tools/refresh"
+	if w := f.Do("POST", refresh, "", alice); w.Code != http.StatusForbidden {
+		t.Fatalf("a member refreshes: %d %s", w.Code, w.Body)
 	}
-	if w := f.Do("POST", "/api/admin/connectors/"+id+"/connect", "", alice); w.Code != http.StatusForbidden {
-		t.Fatalf("a member on the admin route: %d %s", w.Code, w.Body)
-	}
-	if w := f.Do("POST", "/api/admin/connectors/"+id+"/tools/refresh", "", f.admin); w.Code != http.StatusConflict {
+	if w := f.Do("POST", refresh, "", admin); w.Code != http.StatusConflict {
 		t.Fatalf("refresh before connecting: %d %s", w.Code, w.Body)
 	}
-	body := f.start(t, "/api/admin/connectors/"+id+"/connect", f.admin)
-	if w := f.Do("POST", "/api/connectors/oauth/complete", body, f.admin); w.Code != http.StatusOK {
+	if w := f.Do("POST", "/api/connectors/oauth/complete", f.start(t, "/api/connectors/"+id+"/connect", admin), admin); w.Code != http.StatusOK {
 		t.Fatalf("complete: %d %s", w.Code, w.Body)
 	}
-	v := apitest.Decode[adminView](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin))
-	if v.Connections != 1 || v.Shared == nil || !v.Shared.Connected || v.Shared.ConnectedBy != apitest.AdminID || v.Shared.Status != "active" {
-		t.Fatalf("admin view %+v %+v", v, v.Shared)
-	}
-	if got := f.mine(t, alice); len(got) != 1 || !got[0].Connected {
-		t.Fatalf("alice's list of a connected shared connector: %+v", got)
-	}
-
-	w := f.Do("POST", "/api/admin/connectors/"+id+"/tools/refresh", "", f.admin)
+	w := f.Do("POST", refresh, "", admin)
 	if w.Code != http.StatusOK {
 		t.Fatalf("refresh: %d %s", w.Code, w.Body)
 	}
-	if v := apitest.Decode[adminView](t, w); len(v.Tools) != 2 {
-		t.Fatalf("tools %+v", v.Tools)
+	if v := apitest.Decode[adminView](t, w); len(v.Tools) != 2 || v.Connections != 1 {
+		t.Fatalf("after the refresh %+v", v)
 	}
-	if got := f.mine(t, alice); len(got[0].Tools) != 2 || got[0].Tools[0].Name != "fake__echo" || got[0].Tools[0].Mode != "read" {
-		t.Fatalf("alice's tools %+v", got[0].Tools)
-	}
-
-	if w := f.Do("DELETE", "/api/admin/connectors/"+id+"/connection", "", f.admin); w.Code != http.StatusNoContent {
-		t.Fatalf("disconnect: %d %s", w.Code, w.Body)
-	}
-	if v := apitest.Decode[adminView](t, f.Do("GET", "/api/admin/connectors/"+id, "", f.admin)); v.Connections != 0 || v.Shared == nil || v.Shared.Connected {
-		t.Fatalf("after disconnecting %+v", v)
+	// alice sees the tools, but is not connected by the admin's account.
+	if got := f.mine(t, alice); len(got) != 1 || got[0].Connected || len(got[0].Tools) != 2 || got[0].Tools[0].Name != "fake__echo" || got[0].Tools[0].Mode != "read" {
+		t.Fatalf("alice's list %+v", got)
 	}
 }
 
@@ -291,7 +271,7 @@ func TestAnAdminConnectsASharedAccount(t *testing.T) {
 func TestDeletingAConnectorRevokesItsConnections(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	id := f.create(t, "user")
+	id := f.create(t)
 	alice := f.Session(apitest.AliceID, "sales")
 	if w := f.Do("POST", "/api/connectors/oauth/complete", f.start(t, "/api/connectors/"+id+"/connect", alice), alice); w.Code != http.StatusOK {
 		t.Fatalf("complete: %d %s", w.Code, w.Body)
@@ -312,15 +292,13 @@ func TestDeletingAConnectorRevokesItsConnections(t *testing.T) {
 func TestSignInRoutesAreForBrowserSessionsOnly(t *testing.T) {
 	t.Parallel()
 	f := newOAuthFixture(t)
-	id := f.create(t, "user")
+	id := f.create(t)
 	tok := f.NewToken(f.LoginAlice(), `{"name":"agent","scope":"read-write"}`).Token
 	only := reasons.Msg(reasons.MsgConnectorSessionOnly)
 	for _, r := range []struct{ method, path, body string }{
 		{"POST", "/api/connectors/" + id + "/connect", ""},
 		{"POST", "/api/connectors/oauth/complete", `{"slug":"fake","state":"s","code":"c"}`},
 		{"DELETE", "/api/connectors/" + id + "/connection", ""},
-		{"POST", "/api/admin/connectors/" + id + "/connect", ""},
-		{"DELETE", "/api/admin/connectors/" + id + "/connection", ""},
 	} {
 		if w := f.Bearer(r.method, r.path, r.body, tok, nil); w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), only) {
 			t.Errorf("%s %s with a token: %d %s", r.method, r.path, w.Code, w.Body)
@@ -344,8 +322,6 @@ func TestMemberRoutesAnswerConnectorsOffWhenOff(t *testing.T) {
 		{"POST", "/api/connectors/c-1/connect", "", alice},
 		{"POST", "/api/connectors/oauth/complete", `{"slug":"fake","state":"s","code":"c"}`, alice},
 		{"DELETE", "/api/connectors/c-1/connection", "", alice},
-		{"POST", "/api/admin/connectors/c-1/connect", "", admin},
-		{"DELETE", "/api/admin/connectors/c-1/connection", "", admin},
 		{"POST", "/api/admin/connectors/c-1/tools/refresh", "", admin},
 	} {
 		w := f.Do(r.method, r.path, r.body, r.c)

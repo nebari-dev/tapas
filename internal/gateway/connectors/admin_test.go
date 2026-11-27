@@ -13,9 +13,9 @@ import (
 const secret = "client-secret-sentinel-5d1c"
 
 type adminConnector struct {
-	ID, Rev, CatalogID, Slug, Name, URL, AuthMode string
-	Enabled                                       bool
-	OAuth                                         struct {
+	ID, Rev, CatalogID, Slug, Name, URL string
+	Enabled                             bool
+	OAuth                               struct {
 		ClientID, Registration, AuthorizeURL, TokenURL string
 		SecretStored                                   bool
 	}
@@ -34,7 +34,7 @@ func fixture(t *testing.T, on bool) *apitest.Fixture {
 	return apitest.New(t, apitest.Options{Connectors: on, PublicURL: "https://tapas.example.org"})
 }
 
-const fakeBody = `{"slug":"fake","name":"Fake","url":"https://mcp.example.org/mcp","authMode":"user","enabled":true,
+const fakeBody = `{"slug":"fake","name":"Fake","url":"https://mcp.example.org/mcp","enabled":true,
 	"oauth":{"clientId":"client-1","clientSecret":"` + secret + `"},"scopes":["read"],"allowedGroups":["sales"],
 	"toolModes":{"echo":"read","post":"write"}}`
 

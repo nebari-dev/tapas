@@ -105,14 +105,14 @@ func hashState(state string) []byte {
 	return sum[:]
 }
 
-// Start begins person's sign-in to c, for subject's connection (person, or
-// "" for the company's), and returns the vendor's address to send them to.
+// Start begins person's sign-in to c, for their own connection, and returns
+// the vendor's address to send them to.
 // Who may do so is the caller's to check. The first sign-in pins c's
 // authorization server; a later one is connectors.ErrServerMoved when the
 // MCP server names another since. With no client on c, one is registered
 // when the server allows it (actor is on the audit log for both), else it
 // is connectors.ErrNeedsClient.
-func (s *Service) Start(ctx context.Context, actor model.Actor, c connectors.Connector, person, subject string) (string, error) {
+func (s *Service) Start(ctx context.Context, actor model.Actor, c connectors.Connector, person string) (string, error) {
 	if s.redirectURI(c.Slug) == "" {
 		return "", errors.New("oauth: no redirect address: set the platform's public URL (mcp.publicURL)")
 	}
@@ -136,7 +136,7 @@ func (s *Service) Start(ctx context.Context, actor model.Actor, c connectors.Con
 	}
 	now := s.c.Now()
 	if err := s.c.DB.ConnectorConnections().StartOAuth(ctx, store.ConnectorOAuthState{
-		StateHash: hash, ConnectorID: c.ID, ConnectorRev: c.Rev, Person: person, Subject: subject, VerifierSealed: sealed,
+		StateHash: hash, ConnectorID: c.ID, ConnectorRev: c.Rev, Person: person, VerifierSealed: sealed,
 		RedirectURI: s.redirectURI(c.Slug), Issuer: e.issuer, CreatedAt: now, ExpiresAt: now.Add(StateTTL),
 	}); err != nil {
 		return "", err
@@ -247,7 +247,7 @@ func (s *Service) Complete(ctx context.Context, person, slug, state, code, iss s
 	if err != nil {
 		return vault.Grant{}, err
 	}
-	return vault.Grant{Connector: c, Subject: st.Subject, Tokens: t}, nil
+	return vault.Grant{Connector: c, Tokens: t}, nil
 }
 
 // Refresh trades refresh for new tokens at c's token endpoint. A refusal

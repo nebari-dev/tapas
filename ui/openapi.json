@@ -253,13 +253,6 @@
               "null"
             ]
           },
-          "authMode": {
-            "enum": [
-              "user",
-              "shared"
-            ],
-            "type": "string"
-          },
           "catalogId": {
             "type": "string"
           },
@@ -296,10 +289,6 @@
               "null"
             ]
           },
-          "shared": {
-            "$ref": "#/components/schemas/SharedConnection",
-            "description": "The account everyone's calls use; only in shared mode"
-          },
           "slug": {
             "type": "string"
           },
@@ -334,7 +323,6 @@
           "slug",
           "name",
           "url",
-          "authMode",
           "enabled",
           "oauth",
           "scopes",
@@ -1162,13 +1150,6 @@
       "CatalogEntry": {
         "additionalProperties": false,
         "properties": {
-          "authMode": {
-            "enum": [
-              "user",
-              "shared"
-            ],
-            "type": "string"
-          },
           "docs": {
             "description": "The vendor's documentation of its MCP server",
             "type": "string"
@@ -1221,7 +1202,6 @@
           "slug",
           "name",
           "url",
-          "authMode",
           "scopes",
           "toolModes",
           "oauthEndpoints",
@@ -1436,14 +1416,6 @@
               "array",
               "null"
             ]
-          },
-          "authMode": {
-            "description": "user: each person connects their own account; shared: one account an admin connects, used for everyone allowed",
-            "enum": [
-              "user",
-              "shared"
-            ],
-            "type": "string"
           },
           "catalogId": {
             "description": "The catalogue entry this starts from; what is left out is taken from it. Fixed once created",
@@ -3547,14 +3519,6 @@
       "MyConnector": {
         "additionalProperties": false,
         "properties": {
-          "authMode": {
-            "description": "user: you connect your own account; shared: an admin connected one account for everyone",
-            "enum": [
-              "user",
-              "shared"
-            ],
-            "type": "string"
-          },
           "catalogId": {
             "description": "The catalogue entry it was made from, for its vendor's logo; empty for a custom one",
             "type": "string"
@@ -3564,7 +3528,7 @@
             "type": "string"
           },
           "connected": {
-            "description": "A connection exists (yours, or the shared one)",
+            "description": "You connected your account",
             "type": "boolean"
           },
           "connectedAt": {
@@ -3604,7 +3568,6 @@
           "slug",
           "catalogId",
           "name",
-          "authMode",
           "connected",
           "connectUrl",
           "tools"
@@ -4949,29 +4912,6 @@
           "url",
           "owner",
           "via"
-        ],
-        "type": "object"
-      },
-      "SharedConnection": {
-        "additionalProperties": false,
-        "properties": {
-          "connected": {
-            "type": "boolean"
-          },
-          "connectedBy": {
-            "description": "The admin who connected it",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "active",
-              "needs_reauth"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "connected"
         ],
         "type": "object"
       },
@@ -8160,7 +8100,7 @@
         ]
       },
       "put": {
-        "description": "rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again. A new auth mode disconnects everyone too.",
+        "description": "rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again.",
         "operationId": "adminUpdateConnector",
         "parameters": [
           {
@@ -8261,207 +8201,9 @@
         ]
       }
     },
-    "/api/admin/connectors/{id}/connect": {
-      "post": {
-        "description": "Only for connectors in shared mode. Everything done through it appears at the vendor as this account: connect a service account.",
-        "operationId": "adminConnectConnector",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "maxLength": 64,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizeURL"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "502": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          }
-        },
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "summary": "Start connecting the account everyone's calls use (platform admins, browser session only)",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/api/admin/connectors/{id}/connection": {
-      "delete": {
-        "operationId": "adminDisconnectConnector",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "maxLength": 64,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "summary": "Disconnect the account everyone's calls use (platform admins, browser session only)",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
     "/api/admin/connectors/{id}/tools/refresh": {
       "post": {
-        "description": "Lists the tools at the connector's MCP server with the shared connection, or for a user-mode connector with your own.",
+        "description": "Lists the tools at the connector's MCP server with your own connection to it.",
         "operationId": "adminRefreshConnectorTools",
         "parameters": [
           {
@@ -10263,7 +10005,7 @@
     },
     "/api/connectors/{id}/connect": {
       "post": {
-        "description": "Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback/{slug}, which finishes with POST /api/connectors/oauth/complete. Only for connectors in user mode.",
+        "description": "Answers the vendor's sign-in address. The vendor sends the browser back to /settings/connections/callback/{slug}, which finishes with POST /api/connectors/oauth/complete.",
         "operationId": "connectConnector",
         "parameters": [
           {

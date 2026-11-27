@@ -37,7 +37,7 @@ func newRegistry(t *testing.T) (*registry.Registry, *store.Store) {
 
 func fakeInput() registry.Input {
 	return registry.Input{
-		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", AuthMode: connectors.AuthUser, Enabled: true,
+		Slug: "fake", Name: "Fake", URL: "https://mcp.example.org/mcp", Enabled: true,
 		ClientID: "client-1", ClientSecret: secret, Scopes: []string{"read"}, AllowedGroups: []string{"sales"},
 		ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}
@@ -204,7 +204,7 @@ func TestCreateFromACatalogueEntryFillsWhatIsNotGiven(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.Slug != "gdrive" || c.CatalogID != "google-drive" || !strings.HasPrefix(c.URL, "https://") || c.OAuth.TokenURL == "" ||
-		len(c.Scopes) == 0 || len(c.ToolModes) == 0 || c.AuthMode != connectors.AuthUser || c.Enabled {
+		len(c.Scopes) == 0 || len(c.ToolModes) == 0 || c.Enabled {
 		t.Fatalf("Create from the catalogue = %+v", c)
 	}
 	// What the admin gives wins over the entry.
@@ -340,31 +340,6 @@ func TestAMoveRemovesAConnectionStoredWhileItWasSaved(t *testing.T) {
 	}
 	if left, err := db.ConnectorConnections().ForConnector(ctx, c.ID); err != nil || len(left) != 0 {
 		t.Fatalf("connections after the move: %+v, %v", left, err)
-	}
-}
-
-// Switching whose account a connector uses drops what was connected, so
-// switching back later does not revive an old company-wide (or personal)
-// connection nobody chose again. It keeps the client secret.
-func TestAnAuthModeChangeForgetsConnections(t *testing.T) {
-	t.Parallel()
-	f := &forgetter{}
-	r := newRegistryWith(t, f)
-	in := fakeInput()
-	in.AuthMode = connectors.AuthShared
-	c, err := r.Create(ctx, alice, in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	in.ClientSecret = ""
-	for _, mode := range []connectors.AuthMode{connectors.AuthUser, connectors.AuthShared} {
-		in.Rev, in.AuthMode = c.Rev, mode
-		if c, err = r.Update(ctx, alice, c.ID, in); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if len(f.forgot) != 2 || !c.OAuth.SecretStored {
-		t.Fatalf("forgot %v, secret stored %v", f.forgot, c.OAuth.SecretStored)
 	}
 }
 

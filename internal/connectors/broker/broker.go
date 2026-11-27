@@ -142,15 +142,6 @@ func (b *Broker) run(ctx context.Context, c *call) *sdk.CallToolResult {
 	return errorResult(c, outcomeUpstreamError, "The connector gave no answer.")
 }
 
-// subject is whose connection a call to conn uses: the person's own, or
-// the company-wide one.
-func subject(caller connectors.Caller, conn connectors.Connector) string {
-	if conn.AuthMode == connectors.AuthShared {
-		return ""
-	}
-	return caller.Principal.ID
-}
-
 // errorResult is a tool error with text, ending c with outcome.
 func errorResult(c *call, outcome, text string) *sdk.CallToolResult {
 	c.outcome = outcome

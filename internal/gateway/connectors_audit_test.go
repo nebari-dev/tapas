@@ -25,7 +25,7 @@ func TestConnectorCallsAuditAndLogNoSecrets(t *testing.T) {
 	fake := connectorstest.NewConnector(t, "tok-"+sentinel)
 	f := newConnectorsFixture(t, "tok-"+sentinel)
 	if _, err := f.Connectors.Create(context.Background(), model.Actor{Person: "alice"}, registry.Input{
-		Slug: "fake", Name: "Fake", URL: fake.URL, AuthMode: connectors.AuthShared, Enabled: true,
+		Slug: "fake", Name: "Fake", URL: fake.URL, Enabled: true,
 		AllowedGroups: []string{"*"}, ToolModes: map[string]connectors.ToolMode{"echo": connectors.ToolRead},
 	}); err != nil {
 		t.Fatal(err)

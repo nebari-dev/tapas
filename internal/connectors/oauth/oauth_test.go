@@ -59,7 +59,7 @@ func setup(t *testing.T, o connectorstest.AuthServerOptions, in func(*registry.I
 	}
 	f.reg = registry.New(registry.Config{DB: f.db, Seal: key, InternalHosts: loopback})
 	input := registry.Input{
-		Slug: "fake", Name: "Fake", URL: f.mcp.URL, AuthMode: connectors.AuthUser, Enabled: true,
+		Slug: "fake", Name: "Fake", URL: f.mcp.URL, Enabled: true,
 		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret, Scopes: []string{"read", "write"},
 		AllowedGroups: []string{"*"},
 	}
@@ -90,7 +90,7 @@ func (f *fixture) signIn(t *testing.T, person string) (authorize url.Values, bac
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err := f.svc.Start(ctx, model.Actor{Person: person}, conn, person, person)
+	u, err := f.svc.Start(ctx, model.Actor{Person: person}, conn, person)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -136,8 +136,8 @@ func TestCodeFlowWithDiscoveryAndAPastedClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.Connector.ID != f.conn.ID || g.Subject != "alice" || g.Tokens.Refresh == "" || g.Tokens.Expiry.IsZero() {
-		t.Fatalf("Complete = %+v %+v", g.Connector.ID, g.Subject)
+	if g.Connector.ID != f.conn.ID || g.Tokens.Refresh == "" || g.Tokens.Expiry.IsZero() {
+		t.Fatalf("Complete = %+v", g.Connector.ID)
 	}
 	if !f.as.Valid(g.Tokens.Access, f.mcp.URL) {
 		t.Fatal("the access token is not one the vendor issued for the connector")
@@ -187,7 +187,7 @@ func TestDynamicRegistration(t *testing.T) {
 func TestNoClientAndNoRegistrationNeedsAClient(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{NoRegistration: true}, func(in *registry.Input) { in.ClientID, in.ClientSecret = "", "" })
-	if _, err := f.svc.Start(ctx, alice, f.conn, "alice", "alice"); !errors.Is(err, connectors.ErrNeedsClient) {
+	if _, err := f.svc.Start(ctx, alice, f.conn, "alice"); !errors.Is(err, connectors.ErrNeedsClient) {
 		t.Fatalf("Start = %v, want ErrNeedsClient", err)
 	}
 }
@@ -197,7 +197,7 @@ func TestStaticEndpoints(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	in := registry.Input{
-		Name: "Fake", URL: f.mcp.URL, AuthMode: connectors.AuthUser, Enabled: true,
+		Name: "Fake", URL: f.mcp.URL, Enabled: true,
 		ClientID: connectorstest.ClientID, ClientSecret: connectorstest.ClientSecret, AllowedGroups: []string{"*"},
 		AuthorizeURL: f.as.URL + "/authorize", TokenURL: f.as.URL + "/token", RevokeURL: f.as.URL + "/revoke", Rev: f.conn.Rev,
 	}
@@ -226,13 +226,13 @@ func TestStaticEndpointsWithoutAClientNeedAClient(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{}, nil)
 	conn, err := f.reg.Update(ctx, alice, f.conn.ID, registry.Input{
-		Name: "Fake", URL: f.mcp.URL, AuthMode: connectors.AuthUser, Enabled: true, AllowedGroups: []string{"*"},
+		Name: "Fake", URL: f.mcp.URL, Enabled: true, AllowedGroups: []string{"*"},
 		AuthorizeURL: f.as.URL + "/authorize", TokenURL: f.as.URL + "/token", Rev: f.conn.Rev,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Start(ctx, alice, conn, "alice", "alice"); !errors.Is(err, connectors.ErrNeedsClient) {
+	if _, err := f.svc.Start(ctx, alice, conn, "alice"); !errors.Is(err, connectors.ErrNeedsClient) {
 		t.Fatalf("Start = %v, want ErrNeedsClient", err)
 	}
 }
@@ -361,7 +361,7 @@ func TestServerWithoutS256IsRefused(t *testing.T) {
 	t.Parallel()
 	f := setup(t, connectorstest.AuthServerOptions{PlainOnly: true}, nil)
 	var oe *connectors.OAuthError
-	if _, err := f.svc.Start(ctx, alice, f.conn, "alice", "alice"); !errors.As(err, &oe) || oe.Code != connectors.CodeNoPKCE {
+	if _, err := f.svc.Start(ctx, alice, f.conn, "alice"); !errors.As(err, &oe) || oe.Code != connectors.CodeNoPKCE {
 		t.Fatalf("Start = %v, want %s", err, connectors.CodeNoPKCE)
 	}
 }
@@ -478,7 +478,7 @@ func TestTheAuthorizationServerIsPinnedAtTheFirstSignIn(t *testing.T) {
 	if other.Exchanges()+other.Refreshes() != 0 || len(other.Revocations()) != 0 {
 		t.Fatal("a code or token went to the newly named server")
 	}
-	if _, err := replica.Start(ctx, alice, conn, "carol", "carol"); !errors.Is(err, connectors.ErrServerMoved) {
+	if _, err := replica.Start(ctx, alice, conn, "carol"); !errors.Is(err, connectors.ErrServerMoved) {
 		t.Fatalf("Start after the server moved = %v, want ErrServerMoved", err)
 	}
 	conn = f.get(t)
@@ -488,7 +488,7 @@ func TestTheAuthorizationServerIsPinnedAtTheFirstSignIn(t *testing.T) {
 
 	// Saving it again needs the secret, then pins the new server.
 	in := registry.Input{
-		Name: conn.Name, URL: conn.URL, AuthMode: conn.AuthMode, Enabled: true, ClientID: conn.OAuth.ClientID,
+		Name: conn.Name, URL: conn.URL, Enabled: true, ClientID: conn.OAuth.ClientID,
 		Scopes: conn.Scopes, AllowedGroups: conn.AllowedGroups, Rev: conn.Rev,
 	}
 	var fe *connectors.FieldError
@@ -499,7 +499,7 @@ func TestTheAuthorizationServerIsPinnedAtTheFirstSignIn(t *testing.T) {
 	if conn, err = f.reg.Update(ctx, alice, conn.ID, in); err != nil {
 		t.Fatal(err)
 	}
-	u, err := replica.Start(ctx, alice, conn, "carol", "carol")
+	u, err := replica.Start(ctx, alice, conn, "carol")
 	if err != nil || !strings.HasPrefix(u, other.URL+"/authorize?") {
 		t.Fatalf("Start after the save = %q, %v", u, err)
 	}

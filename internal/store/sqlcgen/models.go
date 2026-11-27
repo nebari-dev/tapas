@@ -163,7 +163,6 @@ type Connector struct {
 	Name                    string
 	CatalogID               string
 	Url                     string
-	AuthMode                string
 	Enabled                 bool
 	OauthRegistration       string
 	OauthClientID           string
@@ -205,7 +204,6 @@ type ConnectorOauthState struct {
 	ConnectorID    string
 	ConnectorRev   string
 	Person         string
-	Subject        string
 	VerifierSealed []byte
 	RedirectUri    string
 	Issuer         string

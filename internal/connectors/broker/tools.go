@@ -81,7 +81,7 @@ func offered(conn connectors.Connector, t *sdk.Tool) *sdk.Tool {
 
 // upstream is conn's own tool list, from the cache when fresh.
 func (b *Broker) upstream(ctx context.Context, caller connectors.Caller, conn connectors.Connector, bearer string) ([]*sdk.Tool, error) {
-	key := cacheKey{id: conn.ID, rev: conn.Rev, subject: subject(caller, conn)}
+	key := cacheKey{id: conn.ID, rev: conn.Rev, subject: caller.Principal.ID}
 	if tools, ok := b.cache.get(key); ok {
 		return tools, nil
 	}

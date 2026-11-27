@@ -1,6 +1,6 @@
 // Package connectors is the HTTP API of connectors: the platform admins'
-// routes that add, change and remove them and connect a shared account,
-// and the routes people connect their own accounts with. The routes are
+// routes that add, change and remove them, and the routes people connect
+// their own accounts with: every connection is one person's own. The routes are
 // registered in every build; without connectors (always so in a binary
 // built with the tag local) they answer 409.
 package connectors
@@ -55,7 +55,6 @@ type ConnectorInput struct {
 	Slug          string            `json:"slug,omitempty" maxLength:"31" doc:"Short name, the prefix of its tools (slug__tool): 2 to 31 lowercase letters and digits. Fixed once created"`
 	Name          string            `json:"name,omitempty" maxLength:"100"`
 	URL           string            `json:"url,omitempty" maxLength:"2048" doc:"The MCP server's https address"`
-	AuthMode      string            `json:"authMode,omitempty" enum:"user,shared" doc:"user: each person connects their own account; shared: one account an admin connects, used for everyone allowed"`
 	Enabled       bool              `json:"enabled,omitempty"`
 	OAuth         OAuthInput        `json:"oauth,omitempty"`
 	Scopes        []string          `json:"scopes,omitempty" maxItems:"50" doc:"OAuth scopes asked for"`
@@ -91,7 +90,6 @@ type AdminConnector struct {
 	Slug          string            `json:"slug"`
 	Name          string            `json:"name"`
 	URL           string            `json:"url"`
-	AuthMode      string            `json:"authMode" enum:"user,shared"`
 	Enabled       bool              `json:"enabled"`
 	OAuth         AdminOAuth        `json:"oauth"`
 	Scopes        []string          `json:"scopes"`
@@ -99,16 +97,8 @@ type AdminConnector struct {
 	ToolModes     map[string]string `json:"toolModes"`
 	Tools         []ToolView        `json:"tools" doc:"The last snapshot of the server's tool list"`
 	RedirectURI   string            `json:"redirectUri,omitempty" doc:"This connector's own OAuth redirect address: paste it at the vendor"`
-	Shared        *SharedConnection `json:"shared,omitempty" doc:"The account everyone's calls use; only in shared mode"`
 	Connections   int               `json:"connections" doc:"How many accounts are connected"`
 	UpdatedAt     time.Time         `json:"updatedAt"`
-}
-
-// SharedConnection is the one connection of a shared connector.
-type SharedConnection struct {
-	Connected   bool   `json:"connected"`
-	ConnectedBy string `json:"connectedBy,omitempty" doc:"The admin who connected it"`
-	Status      string `json:"status,omitempty" enum:"active,needs_reauth"`
 }
 
 // CatalogEntry is one entry of the built-in catalogue.
@@ -117,7 +107,6 @@ type CatalogEntry struct {
 	Slug           string            `json:"slug"`
 	Name           string            `json:"name"`
 	URL            string            `json:"url" doc:"The vendor's hosted MCP server; empty: the admin fills it in"`
-	AuthMode       string            `json:"authMode" enum:"user,shared"`
 	Scopes         []string          `json:"scopes"`
 	ToolModes      map[string]string `json:"toolModes"`
 	OAuthEndpoints string            `json:"oauthEndpoints" enum:"discovered,static"`
@@ -172,7 +161,7 @@ func (a *API) Register(api huma.API) {
 		out.Body.Items, out.Body.RedirectURIPrefix = []CatalogEntry{}, connectors.RedirectURI(a.PublicURL, "")
 		for _, e := range catalog.All() {
 			out.Body.Items = append(out.Body.Items, CatalogEntry{
-				ID: e.ID, Slug: e.Slug, Name: e.Name, URL: e.URL, AuthMode: string(e.AuthMode), Scopes: nonNil(e.Scopes),
+				ID: e.ID, Slug: e.Slug, Name: e.Name, URL: e.URL, Scopes: nonNil(e.Scopes),
 				ToolModes: modes(e.ToolModes), OAuthEndpoints: e.OAuthEndpoints, OAuth: e.OAuth, Setup: e.Setup, Docs: e.Docs,
 			})
 		}
@@ -243,7 +232,7 @@ func (a *API) Register(api huma.API) {
 	authn.RegisterAdmin(api, a.Roles, huma.Operation{
 		OperationID: "adminUpdateConnector", Method: http.MethodPut, Path: base + "/{id}",
 		Summary:     "Change a connector (platform admins)",
-		Description: "rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again. A new auth mode disconnects everyone too.",
+		Description: "rev must be the connector's current rev (409 otherwise). A new address (any change), new OAuth endpoints, a new client id, or saving a connector whose authorization server moved (oauth.serverMoved) need the client secret again when one is stored, and disconnect everyone who connected; the next sign-in pins the authorization server again.",
 		Errors:      []int{http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity},
 	}, func(ctx context.Context, in *updateInput) (*connectorOutput, error) {
 		if a.Registry == nil {
@@ -274,7 +263,7 @@ func (a *API) Register(api huma.API) {
 		return nil, nil
 	})
 
-	a.registerShared(api, base)
+	a.registerRefresh(api, base)
 	a.registerMember(api)
 }
 
@@ -299,7 +288,7 @@ func failed(what string, err error, slug string) error {
 
 func registryInput(b ConnectorInput) registry.Input {
 	in := registry.Input{
-		CatalogID: b.CatalogID, Slug: b.Slug, Name: b.Name, URL: b.URL, AuthMode: connectors.AuthMode(b.AuthMode), Enabled: b.Enabled,
+		CatalogID: b.CatalogID, Slug: b.Slug, Name: b.Name, URL: b.URL, Enabled: b.Enabled,
 		ClientID: b.OAuth.ClientID, ClientSecret: b.OAuth.ClientSecret,
 		AuthorizeURL: b.OAuth.AuthorizeURL, TokenURL: b.OAuth.TokenURL, RevokeURL: b.OAuth.RevokeURL,
 		Scopes: b.Scopes, AllowedGroups: b.AllowedGroups, Rev: b.Rev,
@@ -313,8 +302,8 @@ func registryInput(b ConnectorInput) registry.Input {
 	return in
 }
 
-// adminView is c as an admin sees it, with how many accounts are connected
-// and, for a shared connector, its one connection.
+// adminView is c as an admin sees it, with how many people connected their
+// accounts.
 func (a *API) adminView(ctx context.Context, c connectors.Connector) (AdminConnector, error) {
 	v := a.view(c)
 	if a.Vault == nil {
@@ -325,18 +314,12 @@ func (a *API) adminView(ctx context.Context, c connectors.Connector) (AdminConne
 		return v, problem.Internal("list connections", err)
 	}
 	v.Connections = len(all)
-	if c.AuthMode == connectors.AuthShared {
-		v.Shared = &SharedConnection{}
-		if conn, ok := find(all, c.ID); ok && conn.Subject == "" {
-			v.Shared = &SharedConnection{Connected: true, ConnectedBy: conn.ConnectedBy, Status: conn.Status}
-		}
-	}
 	return v, nil
 }
 
 func (a *API) view(c connectors.Connector) AdminConnector {
 	v := AdminConnector{
-		ID: c.ID, Rev: c.Rev, CatalogID: c.CatalogID, Slug: c.Slug, Name: c.Name, URL: c.URL, AuthMode: string(c.AuthMode), Enabled: c.Enabled,
+		ID: c.ID, Rev: c.Rev, CatalogID: c.CatalogID, Slug: c.Slug, Name: c.Name, URL: c.URL, Enabled: c.Enabled,
 		OAuth: AdminOAuth{
 			ClientID: c.OAuth.ClientID, SecretStored: c.OAuth.SecretStored, Registration: c.OAuth.Registration,
 			AuthorizeURL: c.OAuth.AuthorizeURL, TokenURL: c.OAuth.TokenURL, RevokeURL: c.OAuth.RevokeURL,
