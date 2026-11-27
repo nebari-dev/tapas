@@ -21,6 +21,14 @@ Each person has a daily allowance of model tokens (per UTC day). Every token a c
 
 When your admin gives coding agents a model, or you stored your own key in **Settings > Secrets > AI agent**, the search palette offers **Build with pi: <your words>**. It starts a new pi app named after your request, gives pi your request as its first prompt, and opens the app's page; **Open** shows pi at work in its terminal. pi starts in your home folder, or in the folder your request names (such as `~/projects/sales-dashboard`) when it exists. It can write code there, deploy it as an app or a job, wait for it to run and read the startup logs when it fails. It cannot give an app secrets or API access, share it, or touch an app or job that holds a secret: it asks you to do that, or proposes a change for you to approve. The first prompt runs only on the app's first start.
 
+## Memories
+
+When your admin turns memory on and gives coding agents a model, the agents you start (such as pi) remember lasting things you tell them: your name and role, the tools and languages you prefer, how you like answers or code written, and standing instructions. They do not keep what a task was about, code, file contents, errors or command output. The next time you write to an agent, what is relevant is added to its prompt, even in a different app or conversation.
+
+To save something on purpose, start a message with `remember that ...` (or `remember: ...`), for example `remember that I prefer Polars over pandas`. It is stored as you wrote it. Text with a Social Security number is never stored.
+
+See what is remembered under **Settings > Memories**, newest first, and delete any of it with **Delete**; agents stop recalling it. The page says so when memory is off. Memories are yours alone: other people and their agents never see or recall them, and Tapas has no page that shows them to admins. (Whoever holds the memory service's admin key can read its store; see Limits on the [admin Memory page](/admin/memory/).) An agent running on your own key from **Settings > Secrets > AI agent** does not use or learn memories.
+
 ## Coding agents (MCP)
 
 Agents such as Claude Code or Cursor can work with Tapas through its MCP endpoint at `/mcp` on the Tapas address. MCP needs no model and is on unless your admin turned it off.
