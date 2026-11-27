@@ -469,6 +469,12 @@ func (s *TemplateSpec) Validate() error {
 			break
 		}
 	}
+	for k := range s.ProxyHeaders {
+		if IsViewerHeader(k) {
+			v.add("spec.proxyHeaders", "proxyHeaders may not set "+ViewerHeaderPrefix+" headers: the gateway sets them to name the viewer")
+			break
+		}
+	}
 	if s.Environment != "" && !environmentName.MatchString(s.Environment) {
 		v.add("spec.environment", "must be a folder name: at most 63 lowercase letters, digits and dashes, starting with a letter or digit")
 	}

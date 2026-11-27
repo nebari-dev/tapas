@@ -336,6 +336,8 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			for k, v := range backend.Headers {
 				pr.Out.Header[k] = slices.Clone(v)
 			}
+			// Last, so neither the client nor a template can name the viewer.
+			setViewer(pr.Out, who)
 		},
 		Transport: p.transport,
 		ModifyResponse: func(resp *http.Response) error {

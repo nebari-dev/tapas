@@ -34,6 +34,8 @@ A shared app runs as you, so the people you share it with can do whatever the ap
 
 An app with [API access](/using/api/) also lets them call the Tapas API as you; the Sharing tab says so too.
 
+**A shared app learns who opens it.** Tapas tells the app the signed-in viewer's Tapas name, username, email, display name and groups (see [who is viewing](/using/apps/#who-is-viewing)), so whoever wrote the app's code can see them. Visitors who are not signed in stay anonymous.
+
 **A shared app sees your files read-only.** While an app is shared at any level above Private, it can read your home folder and group folders but not change them, so nobody you share it with can change the files your other apps and jobs run. Its caches (`~/.cache`) and `/tmp` stay writable. Changing an app's sharing between Private and any other level restarts it. Give an app that must write files to others a private copy, or keep it private.
 
 ## A known limitation: apps share one address
